@@ -106,10 +106,17 @@ Page({
             ctx.fillRect(0, 0, size4, size4)
             ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
             const imageData = ctx.getImageData(0, 0, size4, size4)
-            // 平滑管线：中值滤波去噪 → 4×4 块平均 → CIELAB 匹配 → 孤立点平滑
+            // 平滑管线 v2：中值滤波去噪 → 双线性降采样到 N → CIELAB 匹配 → 孤立点平滑
+            // 用双线性降采样而非块平均，保留眼镜/耳机等细线条与物体边界
             const filtered = pattern.medianFilter(imageData.data, size4, size4)
-            const rgbArr = pattern.averageBlocks(filtered, size4, 4)
-            let grid = pattern.mapRgb(rgbArr, size, color.buildPalette(setKey))
+            const id = ctx.createImageData(size4, size4)
+            id.data.set(filtered)
+            ctx.putImageData(id, 0, 0)
+            const canvasN = wx.createOffscreenCanvas({ type: '2d', width: size, height: size })
+            const ctxN = canvasN.getContext('2d')
+            ctxN.drawImage(canvas, 0, 0, size4, size4, 0, 0, size, size)
+            const imageDataN = ctxN.getImageData(0, 0, size, size)
+            let grid = pattern.mapRgbGrid(imageDataN, size, color.buildPalette(setKey))
             grid = pattern.denoiseGrid(grid)
             done(resolve, grid)
           } catch (e) {

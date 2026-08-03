@@ -1,4 +1,11 @@
 // miniprogram/page/crop/index.js
+const MIN_SIZE = 40 // 裁剪框最小边长 px
+const HIT = 24 // 命中边/角的阈值 px
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v))
+}
+
 Page({
   data: {
     sourcePath: '',
@@ -7,9 +14,7 @@ Page({
     frameW: 0,
     frameH: 0,
     frameX: 0,
-    frameY: 0,
-    wPct: 100,
-    hPct: 100
+    frameY: 0
   },
 
   onLoad() {
@@ -22,7 +27,7 @@ Page({
     this.source = src
     const sys = wx.getSystemInfoSync()
     const stageW = sys.windowWidth - 32
-    const stageH = sys.windowHeight - 64 - 220
+    const stageH = sys.windowHeight - 64 - 180
     const scale = Math.min(stageW / src.width, stageH / src.height, 1)
     const imgW = Math.max(40, Math.round(src.width * scale))
     const imgH = Math.max(40, Math.round(src.height * scale))
@@ -37,44 +42,102 @@ Page({
     })
   },
 
-  onWChanging(e) {
-    this.setSize('w', e.detail.value)
-  },
-  onWChange(e) {
-    this.setSize('w', e.detail.value)
-  },
-  onHChanging(e) {
-    this.setSize('h', e.detail.value)
-  },
-  onHChange(e) {
-    this.setSize('h', e.detail.value)
+  onReady() {
+    this.createSelectorQuery()
+      .select('#cropArea')
+      .boundingClientRect()
+      .exec((res) => {
+        this.areaRect = (res && res[0]) || null
+      })
   },
 
-  setSize(axis, pct) {
+  onFrameTouchStart(e) {
+    const t = e.touches && e.touches[0]
+    if (!t) return
     const d = this.data
-    const newW = Math.max(40, Math.round((d.imgW * pct) / 100))
-    const newH = Math.max(40, Math.round((d.imgH * pct) / 100))
-    const cx = d.frameX + d.frameW / 2
-    const cy = d.frameY + d.frameH / 2
-    const w = axis === 'w' ? newW : d.frameW
-    const h = axis === 'h' ? newH : d.frameH
-    const x = Math.max(0, Math.min(d.imgW - w, Math.round(cx - w / 2)))
-    const y = Math.max(0, Math.min(d.imgH - h, Math.round(cy - h / 2)))
+    const rect = this.areaRect || { left: 0, top: 0 }
+    const lx = t.clientX - rect.left - d.frameX
+    const ly = t.clientY - rect.top - d.frameY
+    const nearLeft = lx <= HIT
+    const nearRight = lx >= d.frameW - HIT
+    const nearTop = ly <= HIT
+    const nearBottom = ly >= d.frameH - HIT
+    if (nearLeft || nearRight || nearTop || nearBottom) {
+      this._drag = {
+        mode: 'resize',
+        startX: t.clientX,
+        startY: t.clientY,
+        ox: d.frameX,
+        oy: d.frameY,
+        ow: d.frameW,
+        oh: d.frameH,
+        left: nearLeft,
+        right: nearRight,
+        top: nearTop,
+        bottom: nearBottom
+      }
+    } else {
+      this._drag = {
+        mode: 'move',
+        startX: t.clientX,
+        startY: t.clientY,
+        ox: d.frameX,
+        oy: d.frameY
+      }
+    }
+  },
+
+  onFrameTouchMove(e) {
+    const drag = this._drag
+    const t = e.touches && e.touches[0]
+    if (!drag || !t) return
+    const d = this.data
+    const dx = t.clientX - drag.startX
+    const dy = t.clientY - drag.startY
+    if (drag.mode === 'move') {
+      const x = clamp(drag.ox + dx, 0, d.imgW - d.frameW)
+      const y = clamp(drag.oy + dy, 0, d.imgH - d.frameH)
+      this.setData({ frameX: Math.round(x), frameY: Math.round(y) })
+      return
+    }
+    let x = drag.ox
+    let y = drag.oy
+    let w = drag.ow
+    let h = drag.oh
+    if (drag.left) {
+      w = drag.ow - dx
+      x = drag.ox + dx
+      if (w < MIN_SIZE) {
+        w = MIN_SIZE
+        x = drag.ox + drag.ow - MIN_SIZE
+      }
+    } else if (drag.right) {
+      w = Math.min(drag.ow + dx, d.imgW - x)
+      if (w < MIN_SIZE) w = MIN_SIZE
+    }
+    if (drag.top) {
+      h = drag.oh - dy
+      y = drag.oy + dy
+      if (h < MIN_SIZE) {
+        h = MIN_SIZE
+        y = drag.oy + drag.oh - MIN_SIZE
+      }
+    } else if (drag.bottom) {
+      h = Math.min(drag.oh + dy, d.imgH - y)
+      if (h < MIN_SIZE) h = MIN_SIZE
+    }
+    x = clamp(x, 0, d.imgW - w)
+    y = clamp(y, 0, d.imgH - h)
     this.setData({
-      frameW: w,
-      frameH: h,
-      frameX: x,
-      frameY: y,
-      wPct: axis === 'w' ? pct : d.wPct,
-      hPct: axis === 'h' ? pct : d.hPct
+      frameX: Math.round(x),
+      frameY: Math.round(y),
+      frameW: Math.round(w),
+      frameH: Math.round(h)
     })
   },
 
-  onFrameChange(e) {
-    const d = e.detail
-    if (d && typeof d.x === 'number' && typeof d.y === 'number') {
-      this.setData({ frameX: d.x, frameY: d.y })
-    }
+  onFrameTouchEnd() {
+    this._drag = null
   },
 
   cancel() {
@@ -130,10 +193,10 @@ Page({
                   wx.showToast({ title: '裁剪失败', icon: 'none' })
                 }
               })
-            } catch (e) {
+            } catch (err) {
               wx.hideLoading()
               wx.showToast({ title: '裁剪失败', icon: 'none' })
-              console.error(e)
+              console.error(err)
             }
           }
           img.onerror = () => {
@@ -141,10 +204,10 @@ Page({
             wx.showToast({ title: '图片加载失败', icon: 'none' })
           }
           img.src = src.path
-        } catch (e) {
+        } catch (err) {
           wx.hideLoading()
           wx.showToast({ title: '裁剪失败', icon: 'none' })
-          console.error(e)
+          console.error(err)
         }
       })
   }

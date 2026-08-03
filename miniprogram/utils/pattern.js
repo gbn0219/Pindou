@@ -126,48 +126,6 @@ function medianFilter(data, w, h) {
   return out
 }
 
-function averageBlocks(data4, size4, block) {
-  const size = size4 / block
-  const rgb = []
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      let sr = 0
-      let sg = 0
-      let sb = 0
-      for (let dy = 0; dy < block; dy++) {
-        for (let dx = 0; dx < block; dx++) {
-          const i = ((r * block + dy) * size4 + (c * block + dx)) * 4
-          if (data4[i + 3] < 128) {
-            sr += 255
-            sg += 255
-            sb += 255
-          } else {
-            sr += data4[i]
-            sg += data4[i + 1]
-            sb += data4[i + 2]
-          }
-        }
-      }
-      const n = block * block
-      rgb.push([Math.round(sr / n), Math.round(sg / n), Math.round(sb / n)])
-    }
-  }
-  return rgb
-}
-
-function mapRgb(rgbArr, size, palette) {
-  const grid = []
-  for (let r = 0; r < size; r++) {
-    const row = []
-    for (let c = 0; c < size; c++) {
-      const rgb = rgbArr[r * size + c]
-      row.push(color.nearestColor(rgb[0], rgb[1], rgb[2], palette).code)
-    }
-    grid.push(row)
-  }
-  return grid
-}
-
 function denoiseGrid(grid) {
   const size = grid.length
   const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]]
@@ -215,7 +173,5 @@ module.exports = {
   GAP,
   EXPORT_CELL,
   medianFilter,
-  averageBlocks,
-  mapRgb,
   denoiseGrid
 }

@@ -1,32 +1,29 @@
 <view class="page">
-  <view class="stage" id="stage">
-    <movable-area class="crop-area" id="cropArea" style="width: {{imgW}}px; height: {{imgH}}px;">
+  <view class="stage">
+    <view class="crop-area" id="cropArea" style="width: {{imgW}}px; height: {{imgH}}px;">
       <image class="crop-img" src="{{sourcePath}}" style="width: {{imgW}}px; height: {{imgH}}px;" mode="aspectFill" />
-      <movable-view
+      <view
         class="crop-frame"
-        direction="all"
-        x="{{frameX}}"
-        y="{{frameY}}"
-        style="width: {{frameW}}px; height: {{frameH}}px;"
-        bindchange="onFrameChange"
+        style="left: {{frameX}}px; top: {{frameY}}px; width: {{frameW}}px; height: {{frameH}}px;"
+        catchtouchstart="onFrameTouchStart"
+        catchtouchmove="onFrameTouchMove"
+        catchtouchend="onFrameTouchEnd"
       >
-        <view class="frame-corner frame-corner--tl"></view>
-        <view class="frame-corner frame-corner--tr"></view>
-        <view class="frame-corner frame-corner--bl"></view>
-        <view class="frame-corner frame-corner--br"></view>
-      </movable-view>
-    </movable-area>
+        <view class="crop-grid"></view>
+        <view class="handle handle--tl"></view>
+        <view class="handle handle--tr"></view>
+        <view class="handle handle--bl"></view>
+        <view class="handle handle--br"></view>
+        <view class="handle handle--l"></view>
+        <view class="handle handle--r"></view>
+        <view class="handle handle--t"></view>
+        <view class="handle handle--b"></view>
+      </view>
+    </view>
   </view>
 
   <view class="controls">
-    <view class="slider-row">
-      <text class="slider-label">宽</text>
-      <slider class="slider" min="40" max="100" value="{{wPct}}" bindchanging="onWChanging" bindchange="onWChange" />
-    </view>
-    <view class="slider-row">
-      <text class="slider-label">高</text>
-      <slider class="slider" min="40" max="100" value="{{hPct}}" bindchanging="onHChanging" bindchange="onHChange" />
-    </view>
+    <view class="hint">拖动框内部移动，拖动四边或四角调整大小</view>
     <view class="actions">
       <button class="btn btn--soft" hover-class="btn--pressed" bindtap="cancel">取消</button>
       <button class="btn btn--primary" hover-class="btn--pressed" bindtap="confirm">完成</button>

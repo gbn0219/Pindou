@@ -7,7 +7,7 @@
 当前包含四个页面（均在主包，无分包、无 tabBar）：
 
 1. 主页面 `miniprogram/page/index/index`：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成按钮
-2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动 + 宽/高滑块），完成后返回主页面，最终图纸仍为方形网格
+2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动框内部移动位置，拖动四边/四角调整大小），完成后返回主页面，最终图纸仍为方形网格
 3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 
@@ -36,7 +36,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 ## 数据与算法约定
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
-- 像素化流程（已启用方案 A 平滑）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ `getImageData` → **3×3 中值滤波去噪**（`medianFilter`）→ **4×4 块平均**（`averageBlocks`）→ **CIELAB 最近色匹配**（`mapRgb`，只输出当前套装内色号）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动。
+- 像素化流程（方案 A v2，保边界）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **3×3 中值滤波去噪**（`medianFilter`）→ **双线性降采样到 N**（保留眼镜/耳机等细线条与物体边界，不做破坏边界的块平均）→ **CIELAB 最近色匹配**（`mapRgbGrid`，只输出当前套装内色号）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动。
 - **AI 卡通化**：仅预留代码调用位（`page/index/index.js` 的 generate 内注释），本期无 UI 入口、不接 API；接入时建议云函数 + 第三方模型。
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath }`，展示/修改页共享，不持久化
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
