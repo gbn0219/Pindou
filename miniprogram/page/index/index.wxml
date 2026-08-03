@@ -17,6 +17,45 @@
   </view>
 
   <view class="card section">
+    <view class="section-title">生成方式</view>
+    <view class="chip-row">
+      <view
+        class="chip {{mode === 'photo' ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="photo"
+        bindtap="pickMode"
+      >照片还原</view>
+      <view
+        class="chip {{mode === 'ai' ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="ai"
+        bindtap="pickMode"
+      >AI 生成</view>
+    </view>
+  </view>
+
+  <view class="card section" wx:if="{{mode === 'ai'}}">
+    <view class="section-title">风格</view>
+    <view class="chip-row chip-row--wrap">
+      <view
+        wx:for="{{styles}}"
+        wx:key="key"
+        class="chip chip--auto {{selectedStyle === item.key && !customStyle ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="{{item.key}}"
+        bindtap="pickStyle"
+      >{{item.name}}</view>
+    </view>
+    <input
+      class="style-input"
+      placeholder="或输入自定义风格，如：赛博朋克霓虹"
+      value="{{customStyle}}"
+      bindinput="onCustomStyleInput"
+    />
+    <view class="section-hint">留空使用所选示例，填写后以自定义为准</view>
+  </view>
+
+  <view class="card section">
     <view class="section-title">色系</view>
     <view class="chip-row">
       <view
@@ -36,12 +75,13 @@
       <view
         wx:for="{{boardSizes}}"
         wx:key="*this"
-        class="chip {{size === item ? 'chip--on' : ''}}"
-        hover-class="chip--pressed"
+        class="chip {{size === item ? 'chip--on' : ''}} {{mode === 'ai' && item !== 52 ? 'chip--disabled' : ''}}"
+        hover-class="{{mode === 'ai' && item !== 52 ? '' : 'chip--pressed'}}"
         data-value="{{item}}"
         bindtap="pickSize"
       >{{item}}×{{item}}</view>
     </view>
+    <view class="section-hint" wx:if="{{mode === 'ai'}}">AI 生成仅支持 52×52</view>
   </view>
 
   <button

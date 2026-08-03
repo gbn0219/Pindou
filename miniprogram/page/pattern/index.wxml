@@ -8,6 +8,10 @@
       <text class="meta-label">拼豆盘</text>
       <text class="meta-value">{{size}}×{{size}}</text>
     </view>
+    <view class="meta-item">
+      <text class="meta-label">生成方式</text>
+      <text class="meta-value">{{mode === 'ai' ? 'AI 生成 · ' + style : '照片还原'}}</text>
+    </view>
   </view>
 
   <view class="canvas-shell card">
@@ -35,7 +39,6 @@
 
   <view class="action-bar">
     <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
-    <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="aiOptimize">AI 优化</button>
     <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
   </view>
 </view>
