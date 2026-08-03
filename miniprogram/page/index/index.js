@@ -60,25 +60,37 @@ Page({
 
   buildGrid(imagePath, size, setKey) {
     return new Promise((resolve, reject) => {
-      const canvas = wx.createOffscreenCanvas({ type: '2d', width: size, height: size })
-      const ctx = canvas.getContext('2d')
-      const img = canvas.createImage()
-      img.onload = () => {
-        try {
-          const scale = Math.min(size / img.width, size / img.height)
-          const dw = img.width * scale
-          const dh = img.height * scale
-          ctx.fillStyle = '#ffffff'
-          ctx.fillRect(0, 0, size, size)
-          ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh)
-          const imageData = ctx.getImageData(0, 0, size, size)
-          resolve(pattern.mapRgbGrid(imageData, size, color.buildPalette(setKey)))
-        } catch (e) {
-          reject(e)
-        }
+      let settled = false
+      const done = (fn, arg) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        fn(arg)
       }
-      img.onerror = () => reject(new Error('image load failed'))
-      img.src = imagePath
+      const timer = setTimeout(() => done(reject, new Error('image load timeout')), 15000)
+      try {
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: size, height: size })
+        const ctx = canvas.getContext('2d')
+        const img = canvas.createImage()
+        img.onload = () => {
+          try {
+            const scale = Math.min(size / img.width, size / img.height)
+            const dw = img.width * scale
+            const dh = img.height * scale
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, size, size)
+            ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh)
+            const imageData = ctx.getImageData(0, 0, size, size)
+            done(resolve, pattern.mapRgbGrid(imageData, size, color.buildPalette(setKey)))
+          } catch (e) {
+            done(reject, e)
+          }
+        }
+        img.onerror = () => done(reject, new Error('image load failed'))
+        img.src = imagePath
+      } catch (e) {
+        done(reject, e)
+      }
     })
   }
 })
