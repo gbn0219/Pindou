@@ -8,6 +8,13 @@
   padding: var(--space-sm) var(--space-md) 0;
   box-sizing: border-box;
 }
+.card {
+  background: var(--color-paper);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+}
 
 .top-bar {
   display: flex;

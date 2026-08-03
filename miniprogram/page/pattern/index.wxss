@@ -4,6 +4,19 @@
 .page {
   padding: var(--space-md) var(--space-md) calc(180rpx + 48rpx);
 }
+.card {
+  background: var(--color-paper);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md);
+}
+.section-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: var(--space-sm);
+}
 
 .meta {
   display: flex;
