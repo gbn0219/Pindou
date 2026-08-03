@@ -2,11 +2,7 @@
 @import "../../styles/tokens.wxss";
 
 .page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-sm) var(--space-md) 0;
-  box-sizing: border-box;
+  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
 }
 .card {
   background: var(--color-paper);
@@ -31,15 +27,14 @@
 }
 
 .canvas-shell {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: var(--space-sm);
 }
 .canvas-area {
-  flex: 1;
-  min-height: 400rpx;
+  width: 100%;
+  height: 620rpx;
+  min-height: 620rpx;
   border-radius: var(--radius-input);
   background: var(--color-paper-2);
   overflow: hidden;
