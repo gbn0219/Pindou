@@ -21,7 +21,7 @@
 
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
-- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `DASHSCOPE_API_KEY`，开发者工具需勾选"不校验合法域名"，仅本机开发用）
+- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `DASHSCOPE_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开）
 - `cloud`：云函数 `ai-generate-pattern`
 
 后端以 **OpenAI 兼容接口**（`/compatible-mode/v1/chat/completions`）调用多模态模型（默认 `qwen3-vl-plus`，`DASHSCOPE_MODEL` 可覆盖）：
@@ -49,6 +49,7 @@ miniprogram/
   utils/color.js              sRGB→CIELAB、最近色匹配、按套装构建调色板（纯函数，node 可测）
   utils/pattern.js            网格映射/计数/canvas 绘制 + 照片还原采样（averageBlocks / mapRgb / countColors / renderGrid，node 可测）
   utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、grid 校验（node 可测）
+  utils/image.js              图片加载工具（唯一临时路径绕过 iOS createImage 缓存，带超时+重试）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
   data/colors.js              运行时数据模块（与 colors.json 同源；小程序 require JSON 不可靠，运行时统一加载 .js）
   styles/tokens.wxss          Hum 设计令牌（色彩/字号/间距/动效，各页面 @import）
@@ -77,11 +78,11 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 修改页触摸定位：`col = floor(touch.x / this.data.scale / (CELL+GAP))`，`scale` 初始等于 `initScale`，双指缩放由 `bindscale` 更新；真机坐标换算若有偏差以真机实测为准
 - 编号显示：展示/修改页默认铺满视图**隐藏编号**（纯色图预览清晰）；放大到每格 ≥13.6px（scale ≥0.65）自动显示编号；导出图固定带编号
 - 导出：临时把 canvas 分辨率切成 `EXPORT_CELL=16`（104 格 → 1767px，规避部分设备 2048px 画布上限），导出后恢复展示分辨率
-- 修改页绘制带"节点未就绪自动重试"（onReady/onShow 触发），改动渲染逻辑时保持该兜底
+- 修改页绘制带"节点未就绪/尺寸为 0 自动重试"（最多 8 次，120ms 间隔）；movable-view 关闭位置动画（`animation="{{false}}"`）且不使用 `out-of-bounds`，避免初始定位把画布带出视野；改动渲染逻辑时保持该兜底
 
 ## 验证
 
-- 运行单测：`node tests/color.test.js && node tests/pattern.test.js`
+- 运行单测：`node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js`
 - 新增/修改 JS 一律执行 `node --check <file>`；JSON 用 `node -e "JSON.parse(...)"` 校验
 - 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证三个页面
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
