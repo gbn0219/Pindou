@@ -21,7 +21,7 @@
 
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
-- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `DASHSCOPE_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开）
+- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `DASHSCOPE_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开；若报 ERR_ADDRESS_UNREACHABLE 说明不在同一局域网（公司/校园网常见 AP 隔离），改用手机热点：手机开热点 → 电脑连热点 → 按启动日志的新 IP 更新 localUrl）
 - `cloud`：云函数 `ai-generate-pattern`
 
 后端以 **OpenAI 兼容接口**（`/compatible-mode/v1/chat/completions`）调用多模态模型（默认 `qwen3-vl-plus`，`DASHSCOPE_MODEL` 可覆盖）：

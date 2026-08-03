@@ -57,11 +57,16 @@ function callLocal(ai, data) {
       },
       fail: (err) => {
         const msg = (err && err.errMsg) || '本地 AI 服务请求失败'
+        const lower = msg.toLowerCase()
         let tip = ''
-        if (msg.indexOf('domain') >= 0 || msg.indexOf('url') >= 0) {
+        if (lower.indexOf('domain') >= 0 || lower.indexOf('url') >= 0) {
           tip = '（请在开发者工具勾选"不校验合法域名"或重新打开项目）'
-        } else if (msg.indexOf('refused') >= 0 || msg.indexOf('connect') >= 0) {
-          tip = '（请确认已运行 node tools/ai-generate-server.js；真机调试时 config.localUrl 需为电脑局域网 IP）'
+        } else if (
+          lower.indexOf('refused') >= 0 ||
+          lower.indexOf('connect') >= 0 ||
+          lower.indexOf('unreachable') >= 0
+        ) {
+          tip = '（请确认已运行 node tools/ai-generate-server.js；真机需与电脑同一 Wi-Fi 或连电脑热点，config.localUrl 填电脑当前 IP）'
         }
         reject(new Error(msg + tip))
       }
