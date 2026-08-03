@@ -39,6 +39,8 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 像素化流程（平滑方案 v4，保线保色）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **格子代表色采样**（`dominantBlocks`：默认取 4×4 块平均色忠实还原原图；仅当块内亮度对比度 ≥200 且少数簇占比 ≥40% 时取少数簇多数拼豆色，保住眼镜/耳机等细线）→ **CIELAB 最近色匹配**（`mapRgb`，只输出当前套装内色号）→ **相似色区域合并**（`mergeGrid`：BFS，色距 ≤12 归并为区域多数色号，去量化杂色且不糊边界）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动，AI 卡通化入口预留。
 - **AI 卡通化**：仅预留代码调用位（`page/index/index.js` 的 generate 内注释），本期无 UI 入口、不接 API；接入时建议云函数 + 第三方模型。
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath }`，展示/修改页共享，不持久化
+- AI 优化图纸（展示页"AI 优化"按钮）：把当前图纸渲染成纯色 PNG（base64）→ 云函数 `ai-optimize-pattern` 调用千问图像编辑模型（提示词要求：保留物体/人物及五官边界、尽量黑色描边、平滑内部颜色、提高辨识度、不加文字）→ 结果上传云存储返回 fileID → 前端下载后重新走 `dominantBlocks → mapRgb → mergeGrid → denoiseGrid` 生成新图纸并刷新展示。按次计费，前端有确认弹窗
+- AI 卡通化（原图卡通化）是另一独立功能，本期未实现
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
 
 ## 前端要点（canvas 相关，改动前先理解）
@@ -56,7 +58,8 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 新增/修改 JS 一律执行 `node --check <file>`；JSON 用 `node -e "JSON.parse(...)"` 校验
 - 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证三个页面
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
-- 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"；本项目暂未使用云函数
+- 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"
+- 云函数 `ai-optimize-pattern` 需配置环境变量：`DASHSCOPE_API_KEY`（阿里云百炼密钥，必填）、`DASHSCOPE_MODEL`（可选，默认 `qwen-image-2.0-pro`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置
 
 ## 工作准则
 

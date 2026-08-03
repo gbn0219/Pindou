@@ -106,6 +106,117 @@ Page({
     })
   },
 
+  aiOptimize() {
+    if (this.aiBusy) return
+    wx.showModal({
+      title: 'AI 优化图纸',
+      content: '将当前图纸发送给云端 AI 优化（保留边界、平滑内部颜色），约需 20 秒并按次计费，继续吗？',
+      confirmText: '开始优化',
+      success: (r) => {
+        if (!r.confirm) return
+        this.aiBusy = true
+        wx.showLoading({ title: 'AI 优化中…', mask: true })
+        this.renderGridToBase64(this.pattern.grid)
+          .then((imageBase64) =>
+            wx.cloud.callFunction({ name: 'ai-optimize-pattern', data: { imageBase64 } })
+          )
+          .then((res) => {
+            const out = res && res.result
+            if (!out || !out.fileID) {
+              throw new Error((out && out.error) || 'AI 优化失败')
+            }
+            return wx.cloud.downloadFile({ fileID: out.fileID })
+          })
+          .then((dl) => this.reprocess(dl.tempFilePath))
+          .then((grid) => {
+            this.pattern.grid = grid
+            this.updateLegend()
+            this.codeShown = false
+            this.redraw()
+            wx.hideLoading()
+            wx.showToast({ title: 'AI 优化完成', icon: 'success' })
+          })
+          .catch((e) => {
+            wx.hideLoading()
+            console.error('aiOptimize error', e)
+            wx.showModal({
+              title: 'AI 优化失败',
+              content:
+                (e && e.message) || '请确认云函数 ai-optimize-pattern 已部署且配置了 DASHSCOPE_API_KEY',
+              showCancel: false
+            })
+          })
+          .then(() => {
+            this.aiBusy = false
+          })
+      }
+    })
+  },
+
+  renderGridToBase64(grid) {
+    return new Promise((resolve, reject) => {
+      try {
+        const size = grid.length
+        const cell = 10
+        const px = size * cell
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
+        const ctx = canvas.getContext('2d')
+        pattern.renderGrid(ctx, grid, this.palette, { cellSize: cell, gap: 0, code: false })
+        wx.canvasToTempFilePath({
+          canvas,
+          fileType: 'png',
+          success: (res) => {
+            const fs = wx.getFileSystemManager()
+            fs.readFile({
+              filePath: res.tempFilePath,
+              encoding: 'base64',
+              success: (r) => resolve('data:image/png;base64,' + r.data),
+              fail: reject
+            })
+          },
+          fail: reject
+        })
+      } catch (e) {
+        reject(e)
+      }
+    })
+  },
+
+  reprocess(src) {
+    return new Promise((resolve, reject) => {
+      const p = this.pattern
+      const size = p.size
+      const size4 = size * 4
+      try {
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: size4, height: size4 })
+        const ctx = canvas.getContext('2d')
+        const img = canvas.createImage()
+        img.onload = () => {
+          try {
+            const scale = Math.min(size4 / img.width, size4 / img.height)
+            const dw = img.width * scale
+            const dh = img.height * scale
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, size4, size4)
+            ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
+            const imageData = ctx.getImageData(0, 0, size4, size4)
+            const rgbArr = pattern.dominantBlocks(imageData.data, size4, size, 4, this.palette)
+            let grid = pattern.mapRgb(rgbArr, size, this.palette)
+            grid = pattern.mergeGrid(grid, this.palette, 12)
+            grid = pattern.denoiseGrid(grid)
+            resolve(grid)
+          } catch (e) {
+            reject(e)
+          }
+        }
+        img.onerror = () => reject(new Error('结果图片加载失败'))
+        img.src = src
+      } catch (e) {
+        reject(e)
+      }
+    })
+  },
+
   goEdit() {
     wx.navigateTo({ url: '/page/pattern-edit/index' })
   },

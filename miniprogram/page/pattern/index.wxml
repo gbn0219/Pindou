@@ -35,6 +35,7 @@
 
   <view class="action-bar">
     <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
+    <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="aiOptimize">AI 优化</button>
     <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
   </view>
 </view>
