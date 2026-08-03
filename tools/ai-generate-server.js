@@ -1,9 +1,10 @@
 // 本地 AI 生成代理服务（开发用，无需部署云函数）
 // 用法：node tools/ai-generate-server.js（读取项目根目录 .env 中的 DASHSCOPE_API_KEY，默认端口 8787）
-// 小程序端在开发者工具勾选"不校验合法域名"后，通过 config.aiGenerate.localUrl 调用本服务。
+// 小程序端在开发者工具勾选“不校验合法域名”后，通过 config.aiGenerate.localUrl 调用本服务。
 const http = require('http')
 const https = require('https')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 
 const CHAT_HOST = 'dashscope.aliyuncs.com'
@@ -20,6 +21,17 @@ function loadEnv() {
     }
   }
   return env
+}
+
+function lanAddresses() {
+  const list = []
+  const nets = os.networkInterfaces()
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) list.push(net.address)
+    }
+  }
+  return list
 }
 
 function postJson(host, pathname, payload, apiKey, timeoutMs) {
@@ -67,7 +79,7 @@ function buildColorTable(colors) {
 function buildSystemPrompt(size, style, colors) {
   const total = size * size
   return (
-    '你是拼豆图纸生成器。用户会给你一张真实图片，你需要根据图片内容生成一张 ' + size + '×' + size + ' 的拼豆图纸。\n' +
+    '你是拼豆图纸生成器。用户会给你一张真实图片，你需要根据图片内容生成一张' + size + '×' + size + ' 的拼豆图纸。\n' +
     '要求：\n' +
     '1) 图纸内容与图片一致（人物/物体的轮廓、五官、姿态、位置关系），以拼豆色块表达；\n' +
     '2) 风格：' + style + '；\n' +
@@ -134,7 +146,7 @@ async function generate(apiKey, model, data) {
     throw new Error('请求缺少 imageBase64 或 colors')
   }
   const userText =
-    '请把这张图片生成为 ' + size + '×' + size + ' 拼豆图纸（风格：' + data.style + '），并调用 submit_pixel_pattern 提交。'
+    '请把这张图片生成' + size + '×' + size + ' 拼豆图纸（风格：' + data.style + '），并调用 submit_pixel_pattern 提交。'
   const payload = {
     model,
     messages: [
@@ -220,6 +232,12 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('AI 生成代理服务已启动: http://127.0.0.1:' + PORT)
+  const lans = lanAddresses()
+  if (lans.length) {
+    console.log('真机调试 localUrl（手机与电脑同一 Wi-Fi）: ' + lans.map((ip) => 'http://' + ip + ':' + PORT).join(' 或 '))
+  } else {
+    console.log('未检测到局域网 IP，真机调试请手动填写电脑 IP 到 config.localUrl')
+  }
   console.log('API Key 已配置: ' + (API_KEY ? '是' : '否（请填写 .env 中的 DASHSCOPE_API_KEY）'))
   console.log('模型: ' + MODEL)
 })
