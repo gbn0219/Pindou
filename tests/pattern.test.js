@@ -61,7 +61,7 @@ const line = [
 pattern.denoiseGrid(line, palette)
 assert.strictEqual(line[1][1], 'A4', '1 格宽竖线应保持不变')
 
-// ---- 平滑优化 v3 ----
+// ---- 平滑优化 v4 ----
 
 function fakeBlock(px) {
   const data = []
@@ -73,16 +73,24 @@ const db = pattern.dominantBlocks
 // dominantBlocks：均匀块取该颜色；全透明块按白色处理
 let blockPx = []
 for (let i = 0; i < 16; i++) blockPx.push([0, 0, 255, 255])
-assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [0, 0, 255], '均匀块应取该颜色')
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4, palette)[0], [0, 0, 255], '均匀块应取该颜色')
 blockPx = []
 for (let i = 0; i < 16; i++) blockPx.push([0, 0, 0, 0])
-assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [255, 255, 255], '全透明块应按白色处理')
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4, palette)[0], [255, 255, 255], '全透明块应按白色处理')
 
-// dominantBlocks：75% 白 + 25% 深色（高对比度少数簇）→ 保留深色细节（眼镜框场景）
+// dominantBlocks：75% 白 + 25% 深色（少数簇不足 40%）→ 取块平均色，不偏离原图
 blockPx = []
 for (let i = 0; i < 12; i++) blockPx.push([255, 255, 255, 255])
 for (let i = 0; i < 4; i++) blockPx.push([40, 40, 40, 255])
-assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [40, 40, 40], '高对比少数簇应保留细线细节')
+const avgMixed = db(fakeBlock(blockPx), 4, 1, 4, palette)[0]
+assert.strictEqual(avgMixed[0] > 180, true, '少数簇不足时应取块平均色')
+assert.strictEqual(avgMixed[1] > 180, true, '少数簇不足时应取块平均色')
+
+// dominantBlocks：50% 白 + 50% 深色（高对比度且少数簇 >= 40%）→ 保留深色细节（眼镜框场景）
+blockPx = []
+for (let i = 0; i < 8; i++) blockPx.push([255, 255, 255, 255])
+for (let i = 0; i < 8; i++) blockPx.push([40, 40, 40, 255])
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4, palette)[0], [40, 40, 40], '高对比少数簇应保留细线细节')
 
 // dominantBlocks：多数白 + 少数相近浅灰（低对比度）→ 取多数簇，不产生杂色
 blockPx = []
@@ -126,4 +134,4 @@ pattern.mergeGrid(farGrid, palette, 12)
 assert.strictEqual(farGrid[0][1], farB, '明显不同的边界颜色不应被合并')
 assert.strictEqual(farGrid[1][0], farB, '明显不同的边界颜色不应被合并')
 
-console.log('pattern.test.js 平滑优化 v3 用例通过 ✓')
+console.log('pattern.test.js 平滑优化 v4 用例通过 ✓')

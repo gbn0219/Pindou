@@ -12,7 +12,7 @@
 
   <view class="canvas-shell card">
     <movable-area class="canvas-area" id="canvasArea" scale-area>
-      <movable-view class="canvas-view" direction="all" scale out-of-bounds scale-min="0.14" scale-max="4" scale-value="{{initScale}}" x="{{viewX}}" y="{{viewY}}" style="width: {{canvasPx}}px; height: {{canvasPx}}px;">
+      <movable-view class="canvas-view" direction="all" scale out-of-bounds scale-min="0.14" scale-max="4" scale-value="{{initScale}}" x="{{viewX}}" y="{{viewY}}" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindscale="onScale">
         <canvas type="2d" id="patternCanvas" class="pattern-canvas" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" />
       </movable-view>
     </movable-area>

@@ -2,6 +2,8 @@
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 
+const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号（默认铺满视图隐藏编号，避免乱码感）
+
 Page({
   data: {
     set: '221',
@@ -23,6 +25,7 @@ Page({
     }
     this.pattern = p
     this.palette = color.buildPalette(p.set)
+    this.codeShown = false
     this.setData({ set: p.set, size: p.size })
   },
 
@@ -77,10 +80,30 @@ Page({
         pattern.renderGrid(ctx, p.grid, this.palette, {
           cellSize: pattern.CELL,
           gap: pattern.GAP,
-          code: true
+          code: this.codeShown
         })
         this.canvas = canvas
       })
+  },
+
+  onScale(e) {
+    const show = e.detail.scale >= CODE_MIN_SCALE
+    if (show !== this.codeShown) {
+      this.codeShown = show
+      this.redraw()
+    }
+  },
+
+  redraw() {
+    const canvas = this.canvas
+    if (!canvas) return
+    const p = this.pattern
+    const ctx = canvas.getContext('2d')
+    pattern.renderGrid(ctx, p.grid, this.palette, {
+      cellSize: pattern.CELL,
+      gap: pattern.GAP,
+      code: this.codeShown
+    })
   },
 
   goEdit() {
@@ -124,7 +147,7 @@ Page({
     pattern.renderGrid(ctx, p.grid, this.palette, {
       cellSize: pattern.CELL,
       gap: pattern.GAP,
-      code: true
+      code: this.codeShown
     })
   },
 

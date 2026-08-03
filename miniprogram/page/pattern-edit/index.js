@@ -2,6 +2,8 @@
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 
+const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号
+
 const FAMILY_LABELS = {
   A: '黄橙',
   B: '绿',
@@ -71,6 +73,7 @@ Page({
   draw() {
     const p = this.pattern
     if (!p) return
+    this.codeShown = false
     this.createSelectorQuery()
       .select('#canvasArea')
       .boundingClientRect()
@@ -103,7 +106,7 @@ Page({
             pattern.renderGrid(ctx, p.grid, this.palette, {
               cellSize: pattern.CELL,
               gap: pattern.GAP,
-              code: true,
+              code: this.codeShown,
               highlight: this.highlight
             })
             this.canvas = canvas
@@ -116,7 +119,23 @@ Page({
   },
 
   onScale(e) {
-    this.setData({ scale: e.detail.scale })
+    const s = e.detail.scale
+    this.setData({ scale: s })
+    const show = s >= CODE_MIN_SCALE
+    if (show !== this.codeShown) {
+      this.codeShown = show
+      this.redrawCanvas()
+    }
+  },
+
+  redrawCanvas() {
+    if (!this.canvas || !this.ctx) return
+    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
+      cellSize: pattern.CELL,
+      gap: pattern.GAP,
+      code: this.codeShown,
+      highlight: this.highlight
+    })
   },
 
   onTouchStart(e) {

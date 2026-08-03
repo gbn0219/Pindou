@@ -106,9 +106,9 @@ Page({
             ctx.fillRect(0, 0, size4, size4)
             ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
             const imageData = ctx.getImageData(0, 0, size4, size4)
-            // 平滑管线 v3：对比度感知主色采样（保留细线边界）→ CIELAB 映射 → 相似色区域合并 → 孤立点清理
-            const rgbArr = pattern.dominantBlocks(imageData.data, size4, size, 4)
+            // 平滑管线 v4：块平均为主（忠实原图色）+ 高对比细线保留 → CIELAB 映射 → 相似色区域合并 → 孤立点清理
             const palette = color.buildPalette(setKey)
+            const rgbArr = pattern.dominantBlocks(imageData.data, size4, size, 4, palette)
             let grid = pattern.mapRgb(rgbArr, size, palette)
             grid = pattern.mergeGrid(grid, palette, 12)
             grid = pattern.denoiseGrid(grid)

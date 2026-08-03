@@ -36,7 +36,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 ## 数据与算法约定
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
-- 像素化流程（平滑方案 v3，保边界）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **对比度感知主色采样**（`dominantBlocks`：每 4×4 块按亮度分暗/亮两簇，少数簇占比 ≥25% 且两簇 RGB 色差 ≥60 时取少数簇中心色，保住眼镜/耳机等细线；否则取多数簇中心色保持色块纯净）→ **CIELAB 最近色匹配**（`mapRgb`，只输出当前套装内色号）→ **相似色区域合并**（`mergeGrid`：BFS，色距 ≤12 归并为区域多数色号，去量化杂色且不糊边界）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动，AI 卡通化入口预留。
+- 像素化流程（平滑方案 v4，保线保色）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **格子代表色采样**（`dominantBlocks`：默认取 4×4 块平均色忠实还原原图；仅当块内亮度对比度 ≥200 且少数簇占比 ≥40% 时取少数簇多数拼豆色，保住眼镜/耳机等细线）→ **CIELAB 最近色匹配**（`mapRgb`，只输出当前套装内色号）→ **相似色区域合并**（`mergeGrid`：BFS，色距 ≤12 归并为区域多数色号，去量化杂色且不糊边界）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动，AI 卡通化入口预留。
 - **AI 卡通化**：仅预留代码调用位（`page/index/index.js` 的 generate 内注释），本期无 UI 入口、不接 API；接入时建议云函数 + 第三方模型。
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath }`，展示/修改页共享，不持久化
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
@@ -46,6 +46,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 展示页与修改页的 canvas 位于 `movable-area > movable-view(scale)` 内，用于缩放/拖动查看 52~104 格的大图纸
 - **必须**同时给 movable-view 和 canvas 设置显式 CSS 宽高（数据字段 `canvasPx`），否则画布会缩在左上角；初始缩放 `initScale` 与位移 `viewX/viewY` 由页面 JS 测量展示区后计算（铺满并居中），见两个页面各自的 `drawPattern()` / `draw()`
 - 修改页触摸定位：`col = floor(touch.x / this.data.scale / (CELL+GAP))`，`scale` 初始等于 `initScale`，双指缩放由 `bindscale` 更新；真机坐标换算若有偏差以真机实测为准
+- 编号显示：展示/修改页默认铺满视图**隐藏编号**（纯色图预览清晰）；放大到每格 ≥13.6px（scale ≥0.65）自动显示编号；导出图固定带编号
 - 导出：临时把 canvas 分辨率切成 `EXPORT_CELL=16`（104 格 → 1767px，规避部分设备 2048px 画布上限），导出后恢复展示分辨率
 - 修改页绘制带"节点未就绪自动重试"（onReady/onShow 触发），改动渲染逻辑时保持该兜底
 

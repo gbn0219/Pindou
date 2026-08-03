@@ -115,13 +115,13 @@ function lum(r, g, b) {
 }
 
 /**
- * 对比度感知的主色采样：把 size4×size4 源图上每个 block×block 像素块
- * 压缩为一个代表色，返回 size×size 的 RGB 数组。
- * 块内先按亮度分暗/亮两簇：若少数簇占比 >= 25% 且两簇色差足够大
- * （如浅色脸上的深色眼镜框），取少数簇中心色以保留细线细节；
- * 否则取多数簇中心色，保持色块纯净。
+ * 格子代表色采样：把 size4×size4 源图上每个 block×block 像素块压缩为一个
+ * 代表色，返回 size×size 的 RGB 数组。
+ * 默认取块平均色（忠实还原原图颜色）；仅当块内亮度对比度 >= 200 且
+ * 少数簇占比 >= 40% 时，取少数簇中出现最多的拼豆色号对应的像素色，
+ * 保住眼镜框/耳机线等细线。透明像素按白处理。
  */
-function dominantBlocks(data, size4, size, block) {
+function dominantBlocks(data, size4, size, block, palette) {
   const rgbArr = []
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -136,41 +136,56 @@ function dominantBlocks(data, size4, size, block) {
         rgbArr.push([255, 255, 255])
         continue
       }
-      let meanL = 0
-      for (const p of pixels) meanL += lum(p[0], p[1], p[2])
-      meanL /= pixels.length
-      const dark = []
-      const bright = []
+      let minL = 255
+      let maxL = 0
       for (const p of pixels) {
-        if (lum(p[0], p[1], p[2]) < meanL) dark.push(p)
-        else bright.push(p)
+        const l = lum(p[0], p[1], p[2])
+        if (l < minL) minL = l
+        if (l > maxL) maxL = l
       }
-      const centroid = (arr) => {
-        const out = [0, 0, 0]
-        for (const p of arr) {
-          out[0] += p[0]
-          out[1] += p[1]
-          out[2] += p[2]
+      if (maxL - minL >= 200) {
+        const mid = (maxL + minL) / 2
+        const dark = []
+        const bright = []
+        for (const p of pixels) {
+          if (lum(p[0], p[1], p[2]) < mid) dark.push(p)
+          else bright.push(p)
         }
-        return [out[0] / arr.length, out[1] / arr.length, out[2] / arr.length]
+        const minority = dark.length <= bright.length ? dark : bright
+        if (minority.length / pixels.length >= 0.4) {
+          const cnt = {}
+          for (const p of minority) {
+            const code = color.nearestColor(p[0], p[1], p[2], palette).code
+            cnt[code] = (cnt[code] || 0) + 1
+          }
+          let bestCode = null
+          let bestCount = 0
+          for (const k of Object.keys(cnt)) {
+            if (cnt[k] > bestCount) {
+              bestCount = cnt[k]
+              bestCode = k
+            }
+          }
+          const bestPx = minority.find(
+            (p) => color.nearestColor(p[0], p[1], p[2], palette).code === bestCode
+          )
+          if (bestPx) {
+            rgbArr.push([bestPx[0], bestPx[1], bestPx[2]])
+            continue
+          }
+        }
       }
-      let pick
-      if (dark.length === 0 || bright.length === 0) {
-        pick = centroid(pixels)
-      } else {
-        const small = dark.length <= bright.length ? dark : bright
-        const big = dark.length <= bright.length ? bright : dark
-        const sc = centroid(small)
-        const bc = centroid(big)
-        const contrast = Math.sqrt(
-          (sc[0] - bc[0]) * (sc[0] - bc[0]) +
-          (sc[1] - bc[1]) * (sc[1] - bc[1]) +
-          (sc[2] - bc[2]) * (sc[2] - bc[2])
-        )
-        if (small.length / pixels.length >= 0.25 && contrast >= 60) pick = sc
-        else pick = bc
+      const out = [0, 0, 0]
+      for (const p of pixels) {
+        out[0] += p[0]
+        out[1] += p[1]
+        out[2] += p[2]
       }
-      rgbArr.push([Math.round(pick[0]), Math.round(pick[1]), Math.round(pick[2])])
+      rgbArr.push([
+        Math.round(out[0] / pixels.length),
+        Math.round(out[1] / pixels.length),
+        Math.round(out[2] / pixels.length)
+      ])
     }
   }
   return rgbArr
