@@ -201,14 +201,25 @@ Page({
               reject(new Error((r.data && r.data.error) || '本地 AI 服务响应异常'))
             }
           },
-          fail: reject
+          fail: (err) => {
+            const msg = (err && err.errMsg) || '本地 AI 服务请求失败'
+            let tip = ''
+            if (msg.indexOf('domain') >= 0 || msg.indexOf('url') >= 0) {
+              tip = '（请在开发者工具勾选"不校验合法域名"或重新打开项目）'
+            }
+            reject(new Error(msg + tip))
+          }
         })
       })
     }
-    return wx.cloud.callFunction({
-      name: 'ai-optimize-pattern',
-      data: { imageBase64, originalImageBase64 }
-    })
+    return wx.cloud
+      .callFunction({
+        name: 'ai-optimize-pattern',
+        data: { imageBase64, originalImageBase64 }
+      })
+      .catch((err) => {
+        throw new Error((err && err.errMsg) || '云函数调用失败')
+      })
   },
 
   saveBase64ToFile(dataUrl) {
