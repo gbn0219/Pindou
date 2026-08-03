@@ -2,6 +2,7 @@
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const ai = require('../../utils/ai.js')
+const image = require('../../utils/image.js')
 
 const AI_SIZE = 52 // AI 生成仅支持 52×52
 
@@ -100,19 +101,19 @@ Page({
     }
   },
 
-  generateByPhoto() {
+  async generateByPhoto() {
     this.setData({ generating: true })
     wx.showLoading({ title: '生成中…', mask: true })
-    this.buildGrid(this.data.imagePath, this.data.size, this.data.set)
-      .then((grid) => this.finish(grid, 'photo', ''))
-      .catch((err) => {
-        wx.hideLoading()
-        wx.showToast({ title: '生成失败，请换一张图', icon: 'none' })
-        console.error(err)
-      })
-      .then(() => {
-        this.setData({ generating: false })
-      })
+    try {
+      const grid = await this.buildGrid(this.data.imagePath, this.data.size, this.data.set)
+      this.finish(grid, 'photo', '')
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: '生成失败，请换一张图', icon: 'none' })
+      console.error(err)
+    } finally {
+      this.setData({ generating: false })
+    }
   },
 
   generateByAi() {
@@ -123,38 +124,38 @@ Page({
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
-        this.setData({ generating: true })
-        wx.showLoading({ title: 'AI 生成中…', mask: true })
-        ai.compressToBase64(this.data.imagePath)
-          .then((imageBase64) =>
-            ai.callAiGenerate({
-              imageBase64,
-              size: AI_SIZE,
-              set: this.data.set,
-              style
-            })
-          )
-          .then((resp) => {
-            const palette = color.buildPalette(this.data.set)
-            const grid = ai.parseGridResponse(resp.grid, AI_SIZE, palette.map((i) => i.code))
-            this.finish(grid, 'ai', style)
-          })
-          .catch((err) => {
-            wx.hideLoading()
-            wx.showModal({
-              title: 'AI 生成失败',
-              content:
-                (err && err.message) ||
-                '请确认本地服务已启动（node tools/ai-generate-server.js）或云函数已部署并配置 DASHSCOPE_API_KEY',
-              showCancel: false
-            })
-            console.error(err)
-          })
-          .then(() => {
-            this.setData({ generating: false })
-          })
+        this.runAiGenerate(style)
       }
     })
+  },
+
+  async runAiGenerate(style) {
+    this.setData({ generating: true })
+    wx.showLoading({ title: 'AI 生成中…', mask: true })
+    try {
+      const imageBase64 = await ai.compressToBase64(this.data.imagePath)
+      const resp = await ai.callAiGenerate({
+        imageBase64,
+        size: AI_SIZE,
+        set: this.data.set,
+        style
+      })
+      const palette = color.buildPalette(this.data.set)
+      const grid = ai.parseGridResponse(resp.grid, AI_SIZE, palette.map((i) => i.code))
+      this.finish(grid, 'ai', style)
+    } catch (err) {
+      wx.hideLoading()
+      wx.showModal({
+        title: 'AI 生成失败',
+        content:
+          (err && err.message) ||
+          '请确认本地服务已启动（node tools/ai-generate-server.js）或云函数已部署并配置 DASHSCOPE_API_KEY',
+        showCancel: false
+      })
+      console.error(err)
+    } finally {
+      this.setData({ generating: false })
+    }
   },
 
   finish(grid, mode, style) {
@@ -170,44 +171,21 @@ Page({
     wx.navigateTo({ url: '/page/pattern/index' })
   },
 
-  buildGrid(imagePath, size, setKey) {
-    return new Promise((resolve, reject) => {
-      let settled = false
-      const done = (fn, arg) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        fn(arg)
-      }
-      const timer = setTimeout(() => done(reject, new Error('image load timeout')), 15000)
-      try {
-        const size4 = size * 4
-        const canvas = wx.createOffscreenCanvas({ type: '2d', width: size4, height: size4 })
-        const ctx = canvas.getContext('2d')
-        const img = canvas.createImage()
-        img.onload = () => {
-          try {
-            const scale = Math.min(size4 / img.width, size4 / img.height)
-            const dw = img.width * scale
-            const dh = img.height * scale
-            ctx.fillStyle = '#ffffff'
-            ctx.fillRect(0, 0, size4, size4)
-            ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
-            const imageData = ctx.getImageData(0, 0, size4, size4)
-            // 照片还原：4N 画布 → 4×4 块平均 → CIELAB 最近色，不做任何平滑/合并/去噪
-            const palette = color.buildPalette(setKey)
-            const rgbArr = pattern.averageBlocks(imageData.data, size4, size, 4)
-            const grid = pattern.mapRgb(rgbArr, size, palette)
-            done(resolve, grid)
-          } catch (e) {
-            done(reject, e)
-          }
-        }
-        img.onerror = () => done(reject, new Error('image load failed'))
-        img.src = imagePath
-      } catch (e) {
-        done(reject, e)
-      }
-    })
+  async buildGrid(imagePath, size, setKey) {
+    const size4 = size * 4
+    const canvas = wx.createOffscreenCanvas({ type: '2d', width: size4, height: size4 })
+    const ctx = canvas.getContext('2d')
+    const img = await image.loadImageOnce(canvas, imagePath)
+    const scale = Math.min(size4 / img.width, size4 / img.height)
+    const dw = img.width * scale
+    const dh = img.height * scale
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size4, size4)
+    ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
+    const imageData = ctx.getImageData(0, 0, size4, size4)
+    // 照片还原：4N 画布 → 4×4 块平均 → CIELAB 最近色，不做任何平滑/合并/去噪
+    const palette = color.buildPalette(setKey)
+    const rgbArr = pattern.averageBlocks(imageData.data, size4, size, 4)
+    return pattern.mapRgb(rgbArr, size, palette)
   }
 })

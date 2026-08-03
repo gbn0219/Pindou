@@ -5,50 +5,40 @@
  */
 const config = require('../config')
 const color = require('./color')
+const image = require('./image')
 
 const MAX_SIZE = 768 // 原图压缩边长 px
 const TIMEOUT = 120000
 
-function compressToBase64(src, maxSize) {
+async function compressToBase64(src, maxSize) {
   const px = maxSize || MAX_SIZE
-  return new Promise((resolve, reject) => {
-    try {
-      const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
-      const ctx = canvas.getContext('2d')
-      const img = canvas.createImage()
-      img.onload = () => {
-        try {
-          const scale = Math.min(px / img.width, px / img.height)
-          const dw = img.width * scale
-          const dh = img.height * scale
-          ctx.fillStyle = '#ffffff'
-          ctx.fillRect(0, 0, px, px)
-          ctx.drawImage(img, (px - dw) / 2, (px - dh) / 2, dw, dh)
-          wx.canvasToTempFilePath({
-            canvas,
-            fileType: 'jpg',
-            quality: 0.85,
-            success: (res) => {
-              const fs = wx.getFileSystemManager()
-              fs.readFile({
-                filePath: res.tempFilePath,
-                encoding: 'base64',
-                success: (r) => resolve('data:image/jpeg;base64,' + r.data),
-                fail: reject
-              })
-            },
-            fail: reject
-          })
-        } catch (e) {
-          reject(e)
-        }
-      }
-      img.onerror = () => reject(new Error('原图加载失败'))
-      img.src = src
-    } catch (e) {
-      reject(e)
-    }
+  const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
+  const ctx = canvas.getContext('2d')
+  const img = await image.loadImageOnce(canvas, src)
+  const scale = Math.min(px / img.width, px / img.height)
+  const dw = img.width * scale
+  const dh = img.height * scale
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, px, px)
+  ctx.drawImage(img, (px - dw) / 2, (px - dh) / 2, dw, dh)
+  const tempFilePath = await new Promise((resolve, reject) => {
+    wx.canvasToTempFilePath({
+      canvas,
+      fileType: 'jpg',
+      quality: 0.85,
+      success: (res) => resolve(res.tempFilePath),
+      fail: reject
+    })
   })
+  const base64 = await new Promise((resolve, reject) => {
+    wx.getFileSystemManager().readFile({
+      filePath: tempFilePath,
+      encoding: 'base64',
+      success: (r) => resolve(r.data),
+      fail: reject
+    })
+  })
+  return 'data:image/jpeg;base64,' + base64
 }
 
 function callLocal(ai, data) {
@@ -70,6 +60,8 @@ function callLocal(ai, data) {
         let tip = ''
         if (msg.indexOf('domain') >= 0 || msg.indexOf('url') >= 0) {
           tip = '（请在开发者工具勾选"不校验合法域名"或重新打开项目）'
+        } else if (msg.indexOf('refused') >= 0 || msg.indexOf('connect') >= 0) {
+          tip = '（请确认已运行 node tools/ai-generate-server.js；真机调试时 config.localUrl 需为电脑局域网 IP）'
         }
         reject(new Error(msg + tip))
       }
@@ -110,8 +102,8 @@ function buildColorTable(setKey) {
 }
 
 /**
- * 校验 AI 返回的扁平色号数组（行优先）并转为二维 grid。
- * 数量必须恰好 size×size，色号大小写归一且必须属于当前套装。
+ * 校验 AI 返回的拼豆色号数组（行优先）并转为二维 grid。
+ * 数量必须恰好 size×size，色号大小写归一并必须属于当前套装。
  */
 function parseGridResponse(rawGrid, size, setCodes) {
   const total = size * size
