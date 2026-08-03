@@ -39,7 +39,7 @@
 }
 .canvas-area {
   flex: 1;
-  min-height: 0;
+  min-height: 400rpx;
   border-radius: var(--radius-input);
   background: var(--color-paper-2);
   overflow: hidden;

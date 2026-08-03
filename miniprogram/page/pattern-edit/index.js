@@ -63,7 +63,7 @@ Page({
   },
 
   onShow() {
-    if (this.pattern && !this.canvas) this.draw()
+    if (this.pattern && this.canvas) this.draw()
   },
 
   onReady() {
@@ -80,38 +80,42 @@ Page({
       .select('#editCanvas')
       .fields({ node: true, size: true })
       .exec((res) => {
+        const area = res && res[0]
+        const canvas = res && res[1] && res[1].node
+        if (!canvas || !area || !area.width || !area.height) {
+          // 布局尚未成型（尺寸为 0）或节点未就绪时重试，避免用无效尺寸把画布放到视野外
+          this.retryDraw = (this.retryDraw || 0) + 1
+          if (this.retryDraw <= 8) setTimeout(() => this.draw(), 120)
+          return
+        }
+        this.retryDraw = 0
         try {
-          if (!res || !res[1] || !res[1].node) {
-            this.retryDraw = (this.retryDraw || 0) + 1
-            if (this.retryDraw <= 3) setTimeout(() => this.draw(), 120)
-            return
-          }
-          this.retryDraw = 0
-          const area = res[0]
-          const canvas = res[1].node
           const total = p.size * (pattern.CELL + pattern.GAP) - pattern.GAP
-          const areaW = (area && area.width) || 300
-          const areaH = (area && area.height) || 300
+          const areaW = area.width
+          const areaH = area.height
           const initScale = Math.max(0.14, Math.min(1, Math.min(areaW, areaH) / total))
-          this.setData({
-            canvasPx: total,
-            viewX: (areaW - total) / 2,
-            viewY: (areaH - total) / 2,
-            initScale: Number(initScale.toFixed(3)),
-            scale: Number(initScale.toFixed(3))
-          }, () => {
-            canvas.width = total
-            canvas.height = total
-            const ctx = canvas.getContext('2d')
-            pattern.renderGrid(ctx, p.grid, this.palette, {
-              cellSize: pattern.CELL,
-              gap: pattern.GAP,
-              code: this.codeShown,
-              highlight: this.highlight
-            })
-            this.canvas = canvas
-            this.ctx = ctx
-          })
+          this.setData(
+            {
+              canvasPx: total,
+              viewX: (areaW - total) / 2,
+              viewY: (areaH - total) / 2,
+              initScale: Number(initScale.toFixed(3)),
+              scale: Number(initScale.toFixed(3))
+            },
+            () => {
+              canvas.width = total
+              canvas.height = total
+              const ctx = canvas.getContext('2d')
+              pattern.renderGrid(ctx, p.grid, this.palette, {
+                cellSize: pattern.CELL,
+                gap: pattern.GAP,
+                code: this.codeShown,
+                highlight: this.highlight
+              })
+              this.canvas = canvas
+              this.ctx = ctx
+            }
+          )
         } catch (err) {
           console.error('draw error', err)
         }
