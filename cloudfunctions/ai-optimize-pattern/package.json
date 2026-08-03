@@ -1,9 +1,0 @@
-{
-  "name": "ai-optimize-pattern",
-  "version": "1.0.0",
-  "description": "AI 优化拼豆图纸：调用千问图像编辑模型后上传云存储",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "~2.6.3"
-  }
-}
