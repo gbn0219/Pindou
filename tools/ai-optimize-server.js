@@ -130,6 +130,8 @@ const server = http.createServer((req, res) => {
     return
   }
   if (req.method === 'POST' && req.url === '/ai-optimize') {
+    const t0 = Date.now()
+    console.log('[ai-optimize] 收到请求')
     let body = ''
     req.on('data', (c) => {
       body += c
@@ -156,9 +158,11 @@ const server = http.createServer((req, res) => {
       try {
         const imageBase64 = await optimize(API_KEY, data.imageBase64, data.originalImageBase64, data.prompt)
         res.end(JSON.stringify({ imageBase64 }))
+        console.log('[ai-optimize] 成功，耗时', ((Date.now() - t0) / 1000).toFixed(1) + 's')
       } catch (e) {
         res.statusCode = 500
         res.end(JSON.stringify({ error: e.message }))
+        console.error('[ai-optimize] 失败，耗时', ((Date.now() - t0) / 1000).toFixed(1) + 's:', e.message)
       }
     })
     return
