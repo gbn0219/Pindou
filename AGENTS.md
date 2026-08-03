@@ -16,12 +16,13 @@
 
 ```
 miniprogram/
-  app.json                    页面注册（仅 3 页）
+  app.json                    页面注册（4 页）
   page/index/                 主页面
+  page/crop/                  裁剪页
   page/pattern/               展示页
   page/pattern-edit/          修改页
   utils/color.js              sRGB→CIELAB、最近色匹配、按套装构建调色板（纯函数，node 可测）
-  utils/pattern.js            网格映射/计数/canvas 绘制（mapRgbGrid / countColors 纯函数可测）
+  utils/pattern.js            网格映射/计数/canvas 绘制 + 平滑纯函数（mapRgbGrid / countColors / medianFilter / averageBlocks / mapRgb / denoiseGrid，node 可测）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
   data/colors.js              运行时数据模块（与 colors.json 同源；小程序 require JSON 不可靠，运行时统一加载 .js）
   styles/tokens.wxss          Hum 设计令牌（色彩/字号/间距/动效，各页面 @import）
@@ -34,7 +35,8 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 ## 数据与算法约定
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
-- 像素化流程：主页面用 `wx.createOffscreenCanvas` 按 **contain** 方式把图片缩放到 N×N（白底补齐、透明像素按白）→ `getImageData` → **CIELAB 最近色匹配**，只允许输出当前所选套装内的色号；不做抖动
+- 像素化流程（已启用方案 A 平滑）：选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ `getImageData` → **3×3 中值滤波去噪**（`medianFilter`）→ **4×4 块平均**（`averageBlocks`）→ **CIELAB 最近色匹配**（`mapRgb`，只输出当前套装内色号）→ **孤立点平滑**（`denoiseGrid`，仅修正与四邻都不同且 3/4 同色的杂色点）。不做抖动。
+- **AI 卡通化**：仅预留代码调用位（`page/index/index.js` 的 generate 内注释），本期无 UI 入口、不接 API；接入时建议云函数 + 第三方模型。
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath }`，展示/修改页共享，不持久化
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
 
