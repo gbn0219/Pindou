@@ -4,11 +4,12 @@
 
 拼豆图纸生成微信小程序：用户导入一张图片 →（可选 AI 卡通化，本期未做）→ 像素化并映射到拼豆标准色 → 生成、展示、修改、导出拼豆图纸。
 
-当前只包含三个页面（均在主包，无分包、无 tabBar）：
+当前包含四个页面（均在主包，无分包、无 tabBar）：
 
 1. 主页面 `miniprogram/page/index/index`：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成按钮
-2. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改
-3. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
+2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动 + 宽/高滑块），完成后返回主页面，最终图纸仍为方形网格
+3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改
+4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 
 ## 技术栈与目录
 
