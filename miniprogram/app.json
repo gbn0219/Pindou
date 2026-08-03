@@ -1,5 +1,8 @@
 {
   "pages": [
+    "page/index/index",
+    "page/pattern/index",
+    "page/pattern-edit/index",
     "page/component/index",
     "page/API/index",
     "page/cloud/index",

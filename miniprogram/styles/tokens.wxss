@@ -1,0 +1,107 @@
+/* Hallmark · genre: playful · macrostructure: Workbench · theme: Hum · enrichment: none
+ * nav: N/A（微信小程序无站点导航） · footer: N/A（微信小程序无站点页脚）
+ * 适配说明：WXSS 对 oklch() 支持不确定 → 已换算为 hex；小程序无法加载 Web 字体 → 系统圆体栈
+ */
+page {
+  --color-paper: #f7f5ec;
+  --color-paper-2: #eeebdf;
+  --color-paper-3: #e5e1d3;
+  --color-ink: #12171b;
+  --color-ink-2: #4d5660;
+  --color-neutral: #7a8189;
+  --color-rule: #d1cec3;
+  --color-accent: #f6ce00;
+  --color-accent-deep: #e6b900;
+  --color-accent-2: #009fef;
+  --color-accent-2-deep: #0086d4;
+  --color-accent-3: #ff3a5d;
+  --color-mint: #66da85;
+  --color-lavender: #c28efb;
+  --color-focus: #007cca;
+  --color-accent-ink: #12171b;
+  --color-bead-bg: #ffffff;
+  --color-shadow: rgba(18, 23, 27, 0.12);
+  --color-cast: rgba(230, 185, 0, 0.45);
+  --font-display: "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body: "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-label: "SF Mono", Consolas, monospace;
+  --space-3xs: 4rpx;
+  --space-2xs: 8rpx;
+  --space-xs: 16rpx;
+  --space-sm: 24rpx;
+  --space-md: 32rpx;
+  --space-lg: 48rpx;
+  --space-xl: 80rpx;
+  --space-2xl: 128rpx;
+  --text-xs: 20rpx;
+  --text-sm: 26rpx;
+  --text-base: 32rpx;
+  --text-md: 40rpx;
+  --text-lg: 50rpx;
+  --text-xl: 62rpx;
+  --radius-card: 40rpx;
+  --radius-input: 24rpx;
+  --radius-pill: 999rpx;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+  --z-raised: 10;
+  --z-sticky: 200;
+  --z-modal: 400;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96rpx;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: 600;
+  font-family: var(--font-body);
+  border: 0;
+  line-height: 1;
+}
+.btn::after {
+  border: 0;
+}
+.btn--primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  box-shadow: 0 8rpx 0 0 var(--color-accent-deep), 0 12rpx 24rpx -6rpx var(--color-cast);
+  transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
+}
+.btn--primary.btn--pressed {
+  transform: translateY(6rpx);
+  box-shadow: 0 2rpx 0 0 var(--color-accent-deep), 0 4rpx 8rpx -4rpx var(--color-cast);
+}
+.btn--primary[disabled] {
+  opacity: 0.5;
+  box-shadow: 0 8rpx 0 0 var(--color-accent-deep);
+}
+.btn--soft {
+  background: var(--color-paper-2);
+  color: var(--color-ink);
+  border: 2rpx solid var(--color-rule);
+  transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
+}
+.btn--soft.btn--pressed {
+  background: var(--color-paper-3);
+  transform: translateY(2rpx);
+}
+.btn--sm {
+  height: 72rpx;
+  padding: 0 var(--space-md);
+  font-size: var(--text-sm);
+}
+.btn--lg {
+  width: 100%;
+}
