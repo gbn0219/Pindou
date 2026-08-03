@@ -1,0 +1,40 @@
+<view class="page">
+  <view class="meta card">
+    <view class="meta-item">
+      <text class="meta-label">色系</text>
+      <text class="meta-value">{{set}} 色</text>
+    </view>
+    <view class="meta-item">
+      <text class="meta-label">拼豆盘</text>
+      <text class="meta-value">{{size}}×{{size}}</text>
+    </view>
+  </view>
+
+  <view class="canvas-shell card">
+    <movable-area class="canvas-area" scale-area>
+      <movable-view class="canvas-view" direction="all" scale scale-min="0.3" scale-max="4">
+        <canvas type="2d" id="patternCanvas" class="pattern-canvas" />
+      </movable-view>
+    </movable-area>
+    <view class="canvas-hint">双指缩放 · 拖动查看</view>
+  </view>
+
+  <view class="legend card">
+    <view class="legend-head">
+      <view class="section-title">用到的颜色</view>
+      <view class="legend-total">共 {{total}} 格</view>
+    </view>
+    <view class="legend-list">
+      <view wx:for="{{legend}}" wx:key="code" class="legend-item">
+        <view class="legend-swatch" style="background: {{item.hex}}"></view>
+        <text class="legend-code">{{item.code}}</text>
+        <text class="legend-count">× {{item.count}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="action-bar">
+    <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
+    <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
+  </view>
+</view>
