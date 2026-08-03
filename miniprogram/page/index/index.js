@@ -58,6 +58,9 @@ Page({
     if (this.data.generating || !this.data.imagePath) return
     this.setData({ generating: true })
     wx.showLoading({ title: '生成中…', mask: true })
+    // —— AI 卡通化预留位 ——
+    // 若后续接入 AI 卡通化：在此先调用 cartoonize(imagePath) 得到卡通化后的新路径再 buildGrid；
+    // 建议实现：云函数调用第三方模型（需 API Key/成本），本期不做 UI 入口、不接 API。
     this.buildGrid(this.data.imagePath, this.data.size, this.data.set)
       .then((grid) => {
         getApp().globalData.pattern = {
@@ -90,19 +93,25 @@ Page({
       }
       const timer = setTimeout(() => done(reject, new Error('image load timeout')), 15000)
       try {
-        const canvas = wx.createOffscreenCanvas({ type: '2d', width: size, height: size })
+        const size4 = size * 4
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: size4, height: size4 })
         const ctx = canvas.getContext('2d')
         const img = canvas.createImage()
         img.onload = () => {
           try {
-            const scale = Math.min(size / img.width, size / img.height)
+            const scale = Math.min(size4 / img.width, size4 / img.height)
             const dw = img.width * scale
             const dh = img.height * scale
             ctx.fillStyle = '#ffffff'
-            ctx.fillRect(0, 0, size, size)
-            ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh)
-            const imageData = ctx.getImageData(0, 0, size, size)
-            done(resolve, pattern.mapRgbGrid(imageData, size, color.buildPalette(setKey)))
+            ctx.fillRect(0, 0, size4, size4)
+            ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
+            const imageData = ctx.getImageData(0, 0, size4, size4)
+            // 平滑管线：中值滤波去噪 → 4×4 块平均 → CIELAB 匹配 → 孤立点平滑
+            const filtered = pattern.medianFilter(imageData.data, size4, size4)
+            const rgbArr = pattern.averageBlocks(filtered, size4, 4)
+            let grid = pattern.mapRgb(rgbArr, size, color.buildPalette(setKey))
+            grid = pattern.denoiseGrid(grid)
+            done(resolve, grid)
           } catch (e) {
             done(reject, e)
           }
