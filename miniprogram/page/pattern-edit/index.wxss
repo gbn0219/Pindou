@@ -45,8 +45,6 @@
   overflow: hidden;
 }
 .canvas-view {
-  width: 1px;
-  height: 1px;
 }
 .pattern-canvas {
   display: block;

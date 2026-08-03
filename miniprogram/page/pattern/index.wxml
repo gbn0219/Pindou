@@ -11,9 +11,9 @@
   </view>
 
   <view class="canvas-shell card">
-    <movable-area class="canvas-area" scale-area>
-      <movable-view class="canvas-view" direction="all" scale scale-min="0.14" scale-max="4" scale-value="0.3">
-        <canvas type="2d" id="patternCanvas" class="pattern-canvas" />
+    <movable-area class="canvas-area" id="canvasArea" scale-area>
+      <movable-view class="canvas-view" direction="all" scale out-of-bounds scale-min="0.14" scale-max="4" scale-value="{{initScale}}" x="{{viewX}}" y="{{viewY}}" style="width: {{canvasPx}}px; height: {{canvasPx}}px;">
+        <canvas type="2d" id="patternCanvas" class="pattern-canvas" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" />
       </movable-view>
     </movable-area>
     <view class="canvas-hint">双指缩放 · 拖动查看</view>

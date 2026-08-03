@@ -7,7 +7,11 @@ Page({
     set: '221',
     size: 52,
     legend: [],
-    total: 0
+    total: 0,
+    canvasPx: 0,
+    viewX: 0,
+    viewY: 0,
+    initScale: 0.3
   },
 
   onLoad() {
@@ -49,12 +53,24 @@ Page({
   drawPattern() {
     const p = this.pattern
     this.createSelectorQuery()
+      .select('#canvasArea')
+      .boundingClientRect()
       .select('#patternCanvas')
       .fields({ node: true, size: true })
       .exec((res) => {
-        if (!res || !res[0]) return
-        const canvas = res[0].node
+        if (!res || !res[1]) return
+        const area = res[0]
+        const canvas = res[1].node
         const total = p.size * (pattern.CELL + pattern.GAP) - pattern.GAP
+        const areaW = (area && area.width) || 300
+        const areaH = (area && area.height) || 300
+        const initScale = Math.max(0.14, Math.min(1, Math.min(areaW, areaH) / total))
+        this.setData({
+          canvasPx: total,
+          viewX: (areaW - total) / 2,
+          viewY: (areaH - total) / 2,
+          initScale: Number(initScale.toFixed(3))
+        })
         canvas.width = total
         canvas.height = total
         const ctx = canvas.getContext('2d')
