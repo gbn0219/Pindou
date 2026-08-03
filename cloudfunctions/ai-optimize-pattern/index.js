@@ -12,12 +12,13 @@ const GENERATION_PATH = '/api/v1/services/aigc/multimodal-generation/generation'
 const DEFAULT_MODEL = 'qwen-image-2.0-pro'
 
 const DEFAULT_PROMPT =
-  '这是一张由颜色方块组成的拼豆图纸预览图，每个色块代表一颗拼豆。请优化这张拼豆图纸：' +
-  '1) 保留并强化所有物体和人物（以及眼睛、鼻子、嘴巴、耳朵等五官）的边界，边界尽量使用黑色像素描边；' +
-  '2) 平滑每个物体内部的颜色，去除杂色和孤立噪点，使同一区域颜色统一干净；' +
-  '3) 提高整体辨识度，使图案清晰美观；' +
-  '4) 保持 1:1 方形构图、整体配色和原有人物/物体特征不变；' +
-  '5) 不要添加任何文字。输出与输入相同的方形像素图纸风格。'
+  '图1是原始图片，图2是根据图1生成的拼豆图纸预览图，每个色块代表一颗拼豆。请基于图1优化图2，制作一张高质量的拼豆图纸：' +
+  '1) 人物、物体和五官（眼睛、鼻子、嘴巴、耳朵等）的特征必须与图1保持一致，整体观感应像图1；' +
+  '2) 物体和人物边界清晰，尽量使用黑色像素描边；' +
+  '3) 平滑每个物体内部的颜色，去除杂色和孤立噪点，使同一区域颜色统一干净；' +
+  '4) 配色与图1一致；' +
+  '5) 保持 1:1 方形图纸风格；' +
+  '6) 不要添加任何文字。输出与输入相同的方形像素图纸风格。'
 
 function postJson(host, path, payload, apiKey, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -90,17 +91,17 @@ exports.main = async (event) => {
   if (!imageBase64) {
     return { error: '缺少 imageBase64 参数' }
   }
+  const originalImageBase64 = event && event.originalImageBase64
   const model = process.env.DASHSCOPE_MODEL || DEFAULT_MODEL
   const prompt = (event && event.prompt) || DEFAULT_PROMPT
+  // 图1 = 原图（基准），图2 = 当前图纸；AI 基于原图优化图纸，避免自由发挥导致不像原图
+  const reqContent = []
+  if (originalImageBase64) reqContent.push({ image: originalImageBase64 })
+  reqContent.push({ image: imageBase64 }, { text: prompt })
   const payload = {
     model,
     input: {
-      messages: [
-        {
-          role: 'user',
-          content: [{ image: imageBase64 }, { text: prompt }]
-        }
-      ]
+      messages: [{ role: 'user', content: reqContent }]
     },
     parameters: {
       prompt_extend: true,

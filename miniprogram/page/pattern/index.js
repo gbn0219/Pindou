@@ -110,24 +110,25 @@ Page({
     if (this.aiBusy) return
     wx.showModal({
       title: 'AI 优化图纸',
-      content: '将当前图纸发送给云端 AI 优化（保留边界、平滑内部颜色），约需 20 秒并按次计费，继续吗？',
+      content: '将原图与当前图纸发送给 AI 优化（保留边界、平滑内部颜色），约需 20 秒并按次计费，继续吗？',
       confirmText: '开始优化',
       success: (r) => {
         if (!r.confirm) return
         this.aiBusy = true
         wx.showLoading({ title: 'AI 优化中…', mask: true })
-        this.renderGridToBase64(this.pattern.grid)
-          .then((imageBase64) =>
-            wx.cloud.callFunction({ name: 'ai-optimize-pattern', data: { imageBase64 } })
-          )
-          .then((res) => {
-            const out = res && res.result
-            if (!out || !out.fileID) {
-              throw new Error((out && out.error) || 'AI 优化失败')
+        Promise.all([this.renderGridToBase64(this.pattern.grid), this.loadOriginalBase64()])
+          .then(([imageBase64, originalImageBase64]) => this.callAiOptimize(imageBase64, originalImageBase64))
+          .then((out) => {
+            if (!out) throw new Error('AI 优化失败')
+            if (out.fileID) {
+              return wx.cloud.downloadFile({ fileID: out.fileID }).then((dl) => dl.tempFilePath)
             }
-            return wx.cloud.downloadFile({ fileID: out.fileID })
+            if (out.imageBase64) {
+              return this.saveBase64ToFile(out.imageBase64)
+            }
+            throw new Error((out && out.error) || 'AI 优化失败')
           })
-          .then((dl) => this.reprocess(dl.tempFilePath))
+          .then((src) => this.reprocess(src))
           .then((grid) => {
             this.pattern.grid = grid
             this.updateLegend()
@@ -142,7 +143,8 @@ Page({
             wx.showModal({
               title: 'AI 优化失败',
               content:
-                (e && e.message) || '请确认云函数 ai-optimize-pattern 已部署且配置了 DASHSCOPE_API_KEY',
+                (e && e.message) ||
+                '请确认本地服务已启动（node tools/ai-optimize-server.js）或云函数已部署并配置 DASHSCOPE_API_KEY',
               showCancel: false
             })
           })
@@ -176,6 +178,98 @@ Page({
           },
           fail: reject
         })
+      } catch (e) {
+        reject(e)
+      }
+    })
+  },
+
+  callAiOptimize(imageBase64, originalImageBase64) {
+    const cfg = require('../../config')
+    const ai = (cfg && cfg.aiOptimize) || {}
+    if (ai.backend === 'local' && ai.localUrl) {
+      return new Promise((resolve, reject) => {
+        wx.request({
+          url: ai.localUrl + '/ai-optimize',
+          method: 'POST',
+          data: { imageBase64, originalImageBase64 },
+          timeout: 120000,
+          success: (r) => {
+            if (r.statusCode === 200 && r.data && r.data.imageBase64) {
+              resolve({ imageBase64: r.data.imageBase64 })
+            } else {
+              reject(new Error((r.data && r.data.error) || '本地 AI 服务响应异常'))
+            }
+          },
+          fail: reject
+        })
+      })
+    }
+    return wx.cloud.callFunction({
+      name: 'ai-optimize-pattern',
+      data: { imageBase64, originalImageBase64 }
+    })
+  },
+
+  saveBase64ToFile(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const m = dataUrl.match(/^data:image\/\w+;base64,(.+)$/)
+      if (!m) {
+        reject(new Error('AI 返回图片格式错误'))
+        return
+      }
+      const fs = wx.getFileSystemManager()
+      const filePath = wx.env.USER_DATA_PATH + '/ai_opt_' + Date.now() + '.png'
+      fs.writeFile({
+        filePath,
+        data: m[1],
+        encoding: 'base64',
+        success: () => resolve(filePath),
+        fail: reject
+      })
+    })
+  },
+
+  loadOriginalBase64() {
+    return new Promise((resolve, reject) => {
+      const src = this.pattern.imagePath
+      if (!src) {
+        resolve(null)
+        return
+      }
+      try {
+        const canvas = wx.createOffscreenCanvas({ type: '2d', width: 512, height: 512 })
+        const ctx = canvas.getContext('2d')
+        const img = canvas.createImage()
+        img.onload = () => {
+          try {
+            const scale = Math.min(512 / img.width, 512 / img.height)
+            const dw = img.width * scale
+            const dh = img.height * scale
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, 512, 512)
+            ctx.drawImage(img, (512 - dw) / 2, (512 - dh) / 2, dw, dh)
+            wx.canvasToTempFilePath({
+              canvas,
+              fileType: 'jpg',
+              quality: 0.85,
+              success: (res) => {
+                const fs = wx.getFileSystemManager()
+                fs.readFile({
+                  filePath: res.tempFilePath,
+                  encoding: 'base64',
+                  success: (r) => resolve('data:image/jpeg;base64,' + r.data),
+                  fail: reject
+                })
+              },
+              fail: reject
+            })
+          } catch (e) {
+            reject(e)
+          }
+        }
+        img.onerror = () => reject(new Error('原图加载失败'))
+        img.src = src
       } catch (e) {
         reject(e)
       }
