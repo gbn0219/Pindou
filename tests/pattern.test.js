@@ -39,3 +39,55 @@ assert.deepStrictEqual(counts, [
 assert.strictEqual(counts.reduce((s, x) => s + x.count, 0), 6, '总数应为 6')
 
 console.log('pattern.test.js 全部通过 ✓')
+
+// ---- 平滑优化 ----
+
+// 1) medianFilter：3×3 全 0 中间一个 255 → 滤波后中心变 0（椒盐噪点被去除）
+const salt = new Uint8ClampedArray(9 * 4)
+for (let i = 0; i < 9; i++) salt[i * 4 + 3] = 255
+salt[4 * 4] = 255 // 中心 R=255
+const filtered = pattern.medianFilter(salt, 3, 3)
+assert.strictEqual(filtered[4 * 4], 0, '中值滤波应去除孤立亮点')
+
+// 2) averageBlocks：4×4（block=2）左上块全红、其余全蓝 → 结果 2×2
+const blocks = new Uint8ClampedArray(4 * 4 * 4)
+for (let i = 0; i < 4 * 4; i++) {
+  const r = Math.floor(i / 4)
+  const c = i % 4
+  blocks[i * 4 + 3] = 255
+  if (r < 2 && c < 2) {
+    blocks[i * 4] = 255
+    blocks[i * 4 + 1] = 0
+    blocks[i * 4 + 2] = 0
+  } else {
+    blocks[i * 4] = 0
+    blocks[i * 4 + 1] = 0
+    blocks[i * 4 + 2] = 255
+  }
+}
+const avg = pattern.averageBlocks(blocks, 4, 2)
+assert.deepStrictEqual(avg[0], [255, 0, 0], '左上块应为纯红')
+assert.deepStrictEqual(avg[3], [0, 0, 255], '右下块应为纯蓝')
+
+// 3) mapRgb：RGB 数组 → 色号网格
+const rgbArr = [[247, 236, 92]]
+const g3 = pattern.mapRgb(rgbArr, 1, palette)
+assert.strictEqual(g3[0][0], 'A4', '精确 RGB 应映射为 A4')
+
+// 4) denoiseGrid：孤立噪点被修正，1 格宽竖线保留
+const noisy = [
+  ['A1', 'A1', 'A1', 'A1'],
+  ['A1', 'A4', 'A1', 'A1'],
+  ['A1', 'A1', 'A1', 'A1'],
+  ['A1', 'A1', 'A1', 'A1']
+]
+pattern.denoiseGrid(noisy, palette)
+assert.strictEqual(noisy[1][1], 'A1', '孤立噪点应被修正为邻色')
+
+const line = [
+  ['A1', 'A4', 'A1'],
+  ['A1', 'A4', 'A1'],
+  ['A1', 'A4', 'A1']
+]
+pattern.denoiseGrid(line, palette)
+assert.strictEqual(line[1][1], 'A4', '1 格宽竖线应保持不变')

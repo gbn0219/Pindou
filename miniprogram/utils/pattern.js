@@ -102,6 +102,110 @@ function renderGrid(ctx, grid, palette, opts) {
   return total
 }
 
+
+function medianFilter(data, w, h) {
+  const out = new Uint8ClampedArray(data.length)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      for (let ch = 0; ch < 3; ch++) {
+        const vals = []
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) vals.push(data[(ny * w + nx) * 4 + ch])
+          }
+        }
+        vals.sort((a, b) => a - b)
+        out[i + ch] = vals[Math.floor(vals.length / 2)]
+      }
+      out[i + 3] = data[i + 3]
+    }
+  }
+  return out
+}
+
+function averageBlocks(data4, size4, block) {
+  const size = size4 / block
+  const rgb = []
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      let sr = 0
+      let sg = 0
+      let sb = 0
+      for (let dy = 0; dy < block; dy++) {
+        for (let dx = 0; dx < block; dx++) {
+          const i = ((r * block + dy) * size4 + (c * block + dx)) * 4
+          if (data4[i + 3] < 128) {
+            sr += 255
+            sg += 255
+            sb += 255
+          } else {
+            sr += data4[i]
+            sg += data4[i + 1]
+            sb += data4[i + 2]
+          }
+        }
+      }
+      const n = block * block
+      rgb.push([Math.round(sr / n), Math.round(sg / n), Math.round(sb / n)])
+    }
+  }
+  return rgb
+}
+
+function mapRgb(rgbArr, size, palette) {
+  const grid = []
+  for (let r = 0; r < size; r++) {
+    const row = []
+    for (let c = 0; c < size; c++) {
+      const rgb = rgbArr[r * size + c]
+      row.push(color.nearestColor(rgb[0], rgb[1], rgb[2], palette).code)
+    }
+    grid.push(row)
+  }
+  return grid
+}
+
+function denoiseGrid(grid) {
+  const size = grid.length
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+  for (let round = 0; round < 2; round++) {
+    let changed = false
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const code = grid[r][c]
+        const nbrs = []
+        for (const d of dirs) {
+          const nr = r + d[0]
+          const nc = c + d[1]
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size) nbrs.push(grid[nr][nc])
+        }
+        if (nbrs.length < 3) continue
+        if (nbrs.every((n) => n !== code)) {
+          const count = {}
+          for (const n of nbrs) count[n] = (count[n] || 0) + 1
+          let best = null
+          let bestCount = 0
+          for (const k of Object.keys(count)) {
+            if (count[k] > bestCount) {
+              bestCount = count[k]
+              best = k
+            }
+          }
+          if (bestCount >= Math.ceil(nbrs.length * 0.75)) {
+            grid[r][c] = best
+            changed = true
+          }
+        }
+      }
+    }
+    if (!changed) break
+  }
+  return grid
+}
+
 module.exports = {
   mapRgbGrid,
   countColors,
@@ -109,5 +213,9 @@ module.exports = {
   drawCell,
   CELL,
   GAP,
-  EXPORT_CELL
+  EXPORT_CELL,
+  medianFilter,
+  averageBlocks,
+  mapRgb,
+  denoiseGrid
 }
