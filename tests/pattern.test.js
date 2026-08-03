@@ -42,12 +42,6 @@ console.log('pattern.test.js 全部通过 ✓')
 
 // ---- 平滑优化 ----
 
-// 1) medianFilter：3×3 全 0 中间一个 255 → 滤波后中心变 0（椒盐噪点被去除）
-const salt = new Uint8ClampedArray(9 * 4)
-for (let i = 0; i < 9; i++) salt[i * 4 + 3] = 255
-salt[4 * 4] = 255 // 中心 R=255
-const filtered = pattern.medianFilter(salt, 3, 3)
-assert.strictEqual(filtered[4 * 4], 0, '中值滤波应去除孤立亮点')
 
 // 4) denoiseGrid：孤立噪点被修正，1 格宽竖线保留
 const noisy = [
@@ -66,3 +60,70 @@ const line = [
 ]
 pattern.denoiseGrid(line, palette)
 assert.strictEqual(line[1][1], 'A4', '1 格宽竖线应保持不变')
+
+// ---- 平滑优化 v3 ----
+
+function fakeBlock(px) {
+  const data = []
+  for (const p of px) data.push(p[0], p[1], p[2], p[3])
+  return new Uint8ClampedArray(data)
+}
+const db = pattern.dominantBlocks
+
+// dominantBlocks：均匀块取该颜色；全透明块按白色处理
+let blockPx = []
+for (let i = 0; i < 16; i++) blockPx.push([0, 0, 255, 255])
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [0, 0, 255], '均匀块应取该颜色')
+blockPx = []
+for (let i = 0; i < 16; i++) blockPx.push([0, 0, 0, 0])
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [255, 255, 255], '全透明块应按白色处理')
+
+// dominantBlocks：75% 白 + 25% 深色（高对比度少数簇）→ 保留深色细节（眼镜框场景）
+blockPx = []
+for (let i = 0; i < 12; i++) blockPx.push([255, 255, 255, 255])
+for (let i = 0; i < 4; i++) blockPx.push([40, 40, 40, 255])
+assert.deepStrictEqual(db(fakeBlock(blockPx), 4, 1, 4)[0], [40, 40, 40], '高对比少数簇应保留细线细节')
+
+// dominantBlocks：多数白 + 少数相近浅灰（低对比度）→ 取多数簇，不产生杂色
+blockPx = []
+for (let i = 0; i < 10; i++) blockPx.push([255, 255, 255, 255])
+for (let i = 0; i < 6; i++) blockPx.push([225, 225, 225, 255])
+const lowContrast = db(fakeBlock(blockPx), 4, 1, 4)[0]
+assert.strictEqual(lowContrast[0] > 230, true, '低对比块应取多数簇（接近白）')
+
+// mapRgb：RGB 数组 → 色号网格
+const g3 = pattern.mapRgb([[247, 236, 92]], 1, palette)
+assert.strictEqual(g3[0][0], 'A4', 'mapRgb 应命中 A4')
+
+// mergeGrid：相近色（色距 <= 12）合并为区域内多数色；明显不同的边界保留
+let nearA = null
+let nearB = null
+let farA = null
+let farB = null
+outer:
+for (let i = 0; i < palette.length; i++) {
+  for (let j = i + 1; j < palette.length; j++) {
+    const a = palette[i].rgb
+    const b = palette[j].rgb
+    const d = Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+    if (!nearA && d <= 12) { nearA = palette[i].code; nearB = palette[j].code }
+    if (!farA && d > 120) { farA = palette[i].code; farB = palette[j].code }
+    if (nearA && farA) break outer
+  }
+}
+const nearGrid = [
+  [nearA, nearA, nearA],
+  [nearA, nearB, nearA],
+  [nearA, nearA, nearA]
+]
+pattern.mergeGrid(nearGrid, palette, 12)
+assert.strictEqual(nearGrid[1][1], nearA, '相近色应合并为区域多数色')
+const farGrid = [
+  [farA, farB],
+  [farB, farA]
+]
+pattern.mergeGrid(farGrid, palette, 12)
+assert.strictEqual(farGrid[0][1], farB, '明显不同的边界颜色不应被合并')
+assert.strictEqual(farGrid[1][0], farB, '明显不同的边界颜色不应被合并')
+
+console.log('pattern.test.js 平滑优化 v3 用例通过 ✓')

@@ -9,20 +9,27 @@ const CELL = 20 // 展示格边长 px
 const GAP = 1 // 格线留缝 px
 const EXPORT_CELL = 16 // 导出格边长 px（104 格 → 1767px，规避部分设备 2048px 上限）
 
-function mapRgbGrid(imageData, size, palette) {
+function mapRgb(rgbArr, size, palette) {
   const grid = []
-  const data = imageData.data
   for (let r = 0; r < size; r++) {
     const row = []
     for (let c = 0; c < size; c++) {
-      const i = (r * size + c) * 4
-      let rgb = [data[i], data[i + 1], data[i + 2]]
-      if (data[i + 3] < 128) rgb = [255, 255, 255]
+      const rgb = rgbArr[r * size + c]
       row.push(color.nearestColor(rgb[0], rgb[1], rgb[2], palette).code)
     }
     grid.push(row)
   }
   return grid
+}
+
+function mapRgbGrid(imageData, size, palette) {
+  const data = imageData.data
+  const rgbArr = []
+  for (let i = 0; i < size * size; i++) {
+    const j = i * 4
+    rgbArr.push(data[j + 3] < 128 ? [255, 255, 255] : [data[j], data[j + 1], data[j + 2]])
+  }
+  return mapRgb(rgbArr, size, palette)
 }
 
 function countColors(grid, setCodes) {
@@ -103,27 +110,129 @@ function renderGrid(ctx, grid, palette, opts) {
 }
 
 
-function medianFilter(data, w, h) {
-  const out = new Uint8ClampedArray(data.length)
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4
-      for (let ch = 0; ch < 3; ch++) {
-        const vals = []
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = x + dx
-            const ny = y + dy
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) vals.push(data[(ny * w + nx) * 4 + ch])
-          }
+function lum(r, g, b) {
+  return 0.299 * r + 0.587 * g + 0.114 * b
+}
+
+/**
+ * 对比度感知的主色采样：把 size4×size4 源图上每个 block×block 像素块
+ * 压缩为一个代表色，返回 size×size 的 RGB 数组。
+ * 块内先按亮度分暗/亮两簇：若少数簇占比 >= 25% 且两簇色差足够大
+ * （如浅色脸上的深色眼镜框），取少数簇中心色以保留细线细节；
+ * 否则取多数簇中心色，保持色块纯净。
+ */
+function dominantBlocks(data, size4, size, block) {
+  const rgbArr = []
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const pixels = []
+      for (let dy = 0; dy < block; dy++) {
+        for (let dx = 0; dx < block; dx++) {
+          const i = ((r * block + dy) * size4 + (c * block + dx)) * 4
+          if (data[i + 3] >= 128) pixels.push([data[i], data[i + 1], data[i + 2]])
         }
-        vals.sort((a, b) => a - b)
-        out[i + ch] = vals[Math.floor(vals.length / 2)]
       }
-      out[i + 3] = data[i + 3]
+      if (pixels.length === 0) {
+        rgbArr.push([255, 255, 255])
+        continue
+      }
+      let meanL = 0
+      for (const p of pixels) meanL += lum(p[0], p[1], p[2])
+      meanL /= pixels.length
+      const dark = []
+      const bright = []
+      for (const p of pixels) {
+        if (lum(p[0], p[1], p[2]) < meanL) dark.push(p)
+        else bright.push(p)
+      }
+      const centroid = (arr) => {
+        const out = [0, 0, 0]
+        for (const p of arr) {
+          out[0] += p[0]
+          out[1] += p[1]
+          out[2] += p[2]
+        }
+        return [out[0] / arr.length, out[1] / arr.length, out[2] / arr.length]
+      }
+      let pick
+      if (dark.length === 0 || bright.length === 0) {
+        pick = centroid(pixels)
+      } else {
+        const small = dark.length <= bright.length ? dark : bright
+        const big = dark.length <= bright.length ? bright : dark
+        const sc = centroid(small)
+        const bc = centroid(big)
+        const contrast = Math.sqrt(
+          (sc[0] - bc[0]) * (sc[0] - bc[0]) +
+          (sc[1] - bc[1]) * (sc[1] - bc[1]) +
+          (sc[2] - bc[2]) * (sc[2] - bc[2])
+        )
+        if (small.length / pixels.length >= 0.25 && contrast >= 60) pick = sc
+        else pick = bc
+      }
+      rgbArr.push([Math.round(pick[0]), Math.round(pick[1]), Math.round(pick[2])])
     }
   }
-  return out
+  return rgbArr
+}
+
+/**
+ * 相似色区域合并（BFS）：色距（RGB 欧氏距离）<= threshold 的相邻格子
+ * 归为同一区域，区域统一为区域内出现次数最多的色号；
+ * 用于去除量化杂色并统一内部颜色，色差明显的边界不会被合并。
+ */
+function mergeGrid(grid, palette, threshold) {
+  const size = grid.length
+  const rgbMap = {}
+  for (const item of palette) rgbMap[item.code] = item.rgb
+  const dist = (a, b) => {
+    const ca = rgbMap[a] || [0, 0, 0]
+    const cb = rgbMap[b] || [0, 0, 0]
+    const dr = ca[0] - cb[0]
+    const dg = ca[1] - cb[1]
+    const db = ca[2] - cb[2]
+    return Math.sqrt(dr * dr + dg * dg + db * db)
+  }
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+  const visited = grid.map((row) => row.map(() => false))
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (visited[r][c]) continue
+      const seed = grid[r][c]
+      const region = []
+      const queue = [[r, c]]
+      visited[r][c] = true
+      while (queue.length) {
+        const cell = queue.shift()
+        region.push(cell)
+        for (const d of dirs) {
+          const nr = cell[0] + d[0]
+          const nc = cell[1] + d[1]
+          if (nr < 0 || nr >= size || nc < 0 || nc >= size || visited[nr][nc]) continue
+          if (dist(grid[nr][nc], seed) <= threshold) {
+            visited[nr][nc] = true
+            queue.push([nr, nc])
+          }
+        }
+      }
+      if (region.length < 2) continue
+      const count = {}
+      for (const cell of region) {
+        const code = grid[cell[0]][cell[1]]
+        count[code] = (count[code] || 0) + 1
+      }
+      let best = seed
+      let bestCount = 0
+      for (const k of Object.keys(count)) {
+        if (count[k] > bestCount) {
+          bestCount = count[k]
+          best = k
+        }
+      }
+      for (const cell of region) grid[cell[0]][cell[1]] = best
+    }
+  }
+  return grid
 }
 
 function denoiseGrid(grid) {
@@ -166,12 +275,14 @@ function denoiseGrid(grid) {
 
 module.exports = {
   mapRgbGrid,
+  mapRgb,
+  dominantBlocks,
+  mergeGrid,
   countColors,
   renderGrid,
   drawCell,
   CELL,
   GAP,
   EXPORT_CELL,
-  medianFilter,
   denoiseGrid
 }
