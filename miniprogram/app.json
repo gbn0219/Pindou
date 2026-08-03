@@ -1,6 +1,7 @@
 {
   "pages": [
     "page/index/index",
+    "page/crop/index",
     "page/pattern/index",
     "page/pattern-edit/index"
   ],

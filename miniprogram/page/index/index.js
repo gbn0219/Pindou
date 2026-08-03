@@ -12,6 +12,14 @@ Page({
     generating: false
   },
 
+  onShow() {
+    const result = getApp().globalData.cropResult
+    if (result && result.path) {
+      this.setData({ imagePath: result.path })
+      delete getApp().globalData.cropResult
+    }
+  },
+
   chooseImage() {
     wx.chooseMedia({
       count: 1,
@@ -20,7 +28,20 @@ Page({
       success: (res) => {
         const file = res.tempFiles && res.tempFiles[0]
         if (!file) return
-        this.setData({ imagePath: file.tempFilePath })
+        wx.getImageInfo({
+          src: file.tempFilePath,
+          success: (info) => {
+            getApp().globalData.cropSource = {
+              path: file.tempFilePath,
+              width: info.width,
+              height: info.height
+            }
+            wx.navigateTo({ url: '/page/crop/index' })
+          },
+          fail: () => {
+            this.setData({ imagePath: file.tempFilePath })
+          }
+        })
       }
     })
   },
