@@ -19,7 +19,7 @@ Page({
     groups: [],
     selected: '',
     cellInfo: '点选颜色，再点格子涂色',
-    scale: 1
+    scale: 0.3
   },
 
   onLoad() {

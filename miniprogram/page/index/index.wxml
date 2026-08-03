@@ -6,7 +6,7 @@
 
   <view class="card import-card {{imagePath ? 'has-image' : ''}}" hover-class="import-card--pressed" bindtap="chooseImage">
     <block wx:if="{{!imagePath}}">
-      <view class="bead"></view>
+      <view class="bead" aria-hidden="true"></view>
       <view class="import-title">点击导入图片</view>
       <view class="import-sub">从相册选择，或拍一张</view>
     </block>

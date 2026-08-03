@@ -6,7 +6,7 @@
 
   <view class="canvas-shell card">
     <movable-area class="canvas-area" scale-area>
-      <movable-view class="canvas-view" direction="all" scale scale-min="0.3" scale-max="4" bindscale="onScale">
+      <movable-view class="canvas-view" direction="all" scale scale-min="0.14" scale-max="4" scale-value="0.3" bindscale="onScale">
         <canvas type="2d" id="editCanvas" class="pattern-canvas" bindtouchstart="onTouchStart" />
       </movable-view>
     </movable-area>
