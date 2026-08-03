@@ -1,0 +1,37 @@
+<view class="page">
+  <view class="top-bar">
+    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
+    <view class="cell-info">{{cellInfo}}</view>
+  </view>
+
+  <view class="canvas-shell card">
+    <movable-area class="canvas-area" scale-area>
+      <movable-view class="canvas-view" direction="all" scale scale-min="0.3" scale-max="4" bindscale="onScale">
+        <canvas type="2d" id="editCanvas" class="pattern-canvas" bindtouchstart="onTouchStart" />
+      </movable-view>
+    </movable-area>
+    <view class="canvas-hint">点选颜色后，点格子涂色</view>
+  </view>
+
+  <view class="palette">
+    <scroll-view scroll-y class="palette-scroll">
+      <view wx:for="{{groups}}" wx:for-item="group" wx:key="family" class="palette-group">
+        <view class="palette-family">{{group.family}} · {{group.label}}</view>
+        <view class="palette-boxes">
+          <view
+            wx:for="{{group.items}}"
+            wx:for-item="item"
+            wx:key="code"
+            class="palette-box {{selected === item.code ? 'palette-box--on' : ''}}"
+            hover-class="palette-box--pressed"
+            data-code="{{item.code}}"
+            bindtap="pickColor"
+          >
+            <view class="palette-swatch" style="background: {{item.hex}}"></view>
+            <text class="palette-code">{{item.code}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

@@ -1,0 +1,110 @@
+@import "../../styles/tokens.wxss";
+
+.page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-sm) var(--space-md) 0;
+  box-sizing: border-box;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-2xs) 0 var(--space-sm);
+}
+.cell-info {
+  flex: 1;
+  text-align: right;
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+}
+
+.canvas-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-sm);
+}
+.canvas-area {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius-input);
+  background: var(--color-paper-2);
+  overflow: hidden;
+}
+.canvas-view {
+  width: 1px;
+  height: 1px;
+}
+.pattern-canvas {
+  display: block;
+}
+.canvas-hint {
+  margin-top: var(--space-2xs);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--color-neutral);
+}
+
+.palette {
+  height: 44vh;
+  margin: var(--space-sm) calc(-1 * var(--space-md)) 0;
+  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
+  background: var(--color-paper);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  box-shadow: 0 -8rpx 24rpx -16rpx var(--color-shadow);
+}
+.palette-scroll {
+  height: 100%;
+}
+.palette-group {
+  margin-bottom: var(--space-md);
+}
+.palette-family {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--color-neutral);
+  margin-bottom: var(--space-xs);
+}
+.palette-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+.palette-box {
+  width: 104rpx;
+  padding: var(--space-2xs) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  border-radius: var(--radius-input);
+  background: var(--color-paper-2);
+  border: 3rpx solid transparent;
+  transition: transform var(--dur-micro) var(--ease-out), border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+}
+.palette-box--on {
+  border-color: var(--color-accent-3);
+  background: var(--color-paper);
+  box-shadow: 0 6rpx 16rpx -8rpx var(--color-shadow);
+}
+.palette-box--pressed {
+  transform: translateY(2rpx);
+}
+.palette-swatch {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  border: 2rpx solid var(--color-rule);
+  box-shadow: inset 0 -6rpx 8rpx rgba(18, 23, 27, 0.08);
+}
+.palette-code {
+  font-family: var(--font-label);
+  font-size: 18rpx;
+  color: var(--color-ink);
+}
