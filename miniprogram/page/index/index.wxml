@@ -1,0 +1,53 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">拼豆图纸</view>
+    <view class="hero-sub">一张图，变成一盒豆。</view>
+  </view>
+
+  <view class="card import-card {{imagePath ? 'has-image' : ''}}" hover-class="import-card--pressed" bindtap="chooseImage">
+    <block wx:if="{{!imagePath}}">
+      <view class="bead"></view>
+      <view class="import-title">点击导入图片</view>
+      <view class="import-sub">从相册选择，或拍一张</view>
+    </block>
+    <block wx:else>
+      <image class="import-img" src="{{imagePath}}" mode="aspectFill" />
+      <view class="import-again">重新选择</view>
+    </block>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">色系</view>
+    <view class="chip-row">
+      <view
+        wx:for="{{colorSets}}"
+        wx:key="*this"
+        class="chip {{set === item ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="{{item}}"
+        bindtap="pickSet"
+      >{{item}} 色</view>
+    </view>
+  </view>
+
+  <view class="card section">
+    <view class="section-title">拼豆盘</view>
+    <view class="chip-row">
+      <view
+        wx:for="{{boardSizes}}"
+        wx:key="*this"
+        class="chip {{size === item ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="{{item}}"
+        bindtap="pickSize"
+      >{{item}}×{{item}}</view>
+    </view>
+  </view>
+
+  <button
+    class="btn btn--primary btn--lg generate"
+    hover-class="btn--pressed"
+    disabled="{{!imagePath || generating}}"
+    bindtap="generate"
+  >{{generating ? '生成中…' : '生成图纸'}}</button>
+</view>
