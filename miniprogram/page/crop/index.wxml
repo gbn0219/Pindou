@@ -1,0 +1,37 @@
+<view class="page">
+  <view class="stage" id="stage">
+    <movable-area class="crop-area" id="cropArea" style="width: {{imgW}}px; height: {{imgH}}px;">
+      <image class="crop-img" src="{{sourcePath}}" style="width: {{imgW}}px; height: {{imgH}}px;" mode="aspectFill" />
+      <movable-view
+        class="crop-frame"
+        direction="all"
+        x="{{frameX}}"
+        y="{{frameY}}"
+        style="width: {{frameW}}px; height: {{frameH}}px;"
+        bindchange="onFrameChange"
+      >
+        <view class="frame-corner frame-corner--tl"></view>
+        <view class="frame-corner frame-corner--tr"></view>
+        <view class="frame-corner frame-corner--bl"></view>
+        <view class="frame-corner frame-corner--br"></view>
+      </movable-view>
+    </movable-area>
+  </view>
+
+  <view class="controls">
+    <view class="slider-row">
+      <text class="slider-label">宽</text>
+      <slider class="slider" min="40" max="100" value="{{wPct}}" bindchanging="onWChanging" bindchange="onWChange" />
+    </view>
+    <view class="slider-row">
+      <text class="slider-label">高</text>
+      <slider class="slider" min="40" max="100" value="{{hPct}}" bindchanging="onHChanging" bindchange="onHChange" />
+    </view>
+    <view class="actions">
+      <button class="btn btn--soft" hover-class="btn--pressed" bindtap="cancel">取消</button>
+      <button class="btn btn--primary" hover-class="btn--pressed" bindtap="confirm">完成</button>
+    </view>
+  </view>
+
+  <canvas type="2d" id="cropCanvas" class="crop-canvas" style="width: 0px; height: 0px;" />
+</view>
