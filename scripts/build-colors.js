@@ -9,6 +9,7 @@ const path = require('path')
 
 const DOC = path.join(__dirname, '..', 'docs', '拼豆标准色彩RGB与拼豆盘尺寸.md')
 const OUT = path.join(__dirname, '..', 'miniprogram', 'data', 'colors.json')
+const JS_OUT = path.join(__dirname, '..', 'miniprogram', 'data', 'colors.js')
 
 const MAIN_ROW = /^\|\s*([A-HM]\d{1,2})\s*\|\s*`?(#[0-9A-Fa-f]{6})`?\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|$/
 const SET_ROW = /^\|\s*([A-HM]\d{1,2})\s*\|\s*`?(#[0-9A-Fa-f]{6})`?\s*\|$/
@@ -68,6 +69,7 @@ assert(subset(sets['144'], sets['221']), '144 应 ⊆ 221')
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 const data = { sets, colors }
 fs.writeFileSync(OUT, JSON.stringify(data, null, 2) + '\n', 'utf8')
+fs.writeFileSync(JS_OUT, 'module.exports = ' + JSON.stringify(data, null, 2) + '\n', 'utf8')
 console.log(
   'colors.json 已生成: ' +
     Object.keys(colors).length +

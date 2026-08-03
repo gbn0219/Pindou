@@ -3,7 +3,7 @@
  * 颜色工具：sRGB → CIELAB、最近色匹配、按套装构建调色板。
  * 纯函数，可在 Node 中测试；小程序与测试共用。
  */
-const colorsData = require('../data/colors.json')
+const colorsData = require('../data/colors.js')
 
 const CACHE = {}
 
