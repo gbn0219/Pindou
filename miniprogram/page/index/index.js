@@ -23,7 +23,7 @@ Page({
     selectedStyle: 'cartoon',
     customStyle: '',
     extraReq: '', // 额外要求（不覆盖风格，如删掉画面中的某些元素）
-    aiCutout: false, // 抠出主体（背景变白）
+    aiCutout: true, // 抠出主体（背景变白），默认开启
     generating: false
   },
 
