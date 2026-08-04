@@ -135,7 +135,8 @@ AI 生成后端（保留现有双后端）：
 **列表页**
 
 - 每项卡片：左侧原始图缩略、右侧图纸图缩略；下方显示生成方式 + 风格、盘面/色系、生成时间（格式化 `YYYY-MM-DD HH:mm`）。
-- 数据：`gallery.list` 云函数按 `_openid` 倒序返回（每次 20 条，滚动加载下一批），直接返回 `fileID`；前端 `<image src="cloud://…">` 直接渲染缩略图，无需临时 URL。
+- 数据：`gallery.list` 云函数按 `_openid` 倒序、按页返回（每页 PAGE_SIZE 条，默认 10，两列网格设计为一屏内不滚动放下），返回 `{ items, total }`，`items` 直接带 `fileID`；前端 `<image src="cloud://…">` 直接渲染缩略图，无需临时 URL。
+- 分页控件：图库页整体（列表 + 分页条）不滚动、一屏放下；底部固定"上一页 + 页码条 + 下一页"，页码窗口为当前页 ±2 并固定首尾页，跳过的页码用 … 省略；点击页码 / 上一页 / 下一页跳转（首页禁用"上一页"，末页禁用"下一页"）。
 - 点击"原图"或"图纸"缩略图 → `wx.showModal` 确认"保存到相册？" → `wx.cloud.downloadFile({ fileID })` 拿到本地临时文件 → `wx.saveImageToPhotosAlbum`（含权限拒绝处理，复用展示页现有逻辑）。
 - 空态：提示"还没有图纸，去首页生成一张吧"。
 
@@ -218,7 +219,7 @@ avatars/<openid>/avatar.<jpg|png>
 
 - 数据库选型：微信云开发文档型数据库（MongoDB 兼容 NoSQL，`wx.cloud.database` / wx-server-sdk），`gallery` 集合一条记录对应一张图纸；不引入自建后端或关系型数据库。
 - 索引：`gallery` 建 `_openid + createdAt` 复合索引（云开发控制台创建），列表查询按该索引倒序；`ai_sessions` 建 `_openid + imageHash` 索引，配额查询命中索引。
-- 分页：`gallery.list` 用 `limit(20)` + `skip`（或 `createdAt` 游标）滚动加载；每用户 100 张 = 5 页，单页查询毫秒级，前端触底加载。
+- 分页：`gallery.list` 用 `limit(PAGE_SIZE)` + `skip((page - 1) * PAGE_SIZE)` 按页查询，并 `count` 总数计算 `totalPages`；每用户 100 张 / 每页 10 条 = 10 页，单页查询毫秒级。新增数据导致的翻页漂移在该量级可忽略（不做游标）。
 - 文档量估算（每用户 100 张）：`gallery` ≤ 100、`ai_sessions` ≤ 300（每图最多 3 次生成）、`orders` ≤ 100，单用户合计 ≤ 500 条；万级用户也只有百万条量级，靠索引完全够用——数据库文档数不是瓶颈。
 - 存储容量才是关键：数据库只存 `fileID`，图片二进制放云存储。原图上传前压缩到 ≤1280px JPEG（复用现有 canvas 压缩思路，估算 200~500KB/张）；图纸 PNG 为纯色块、压缩率高（估算 200~800KB/张）。每对 ≈ 0.5~1.3MB，每用户 100 张 ≈ 50~130MB。云开发存储按套餐计费、免费额度有限，正式运营按「用户数 × 100 × 单张均值」核算存储用量并升配；文档数不受影响。
 
@@ -242,7 +243,7 @@ avatars/<openid>/avatar.<jpg|png>
 | `access` | `createOrder` | `{ sessionId }` | `{ paid, orderId?, payParams? }` | mock 直接成功；wechatpay 返回支付参数 |
 | `access` | `unlock` | `{ sessionId }` | `{ ok }` | 校验订单已支付或 `freeVip` → `unlocked=true` |
 | `gallery` | `save` | `{ originalFileID, patternFileID, mode, style, size, set, sessionId? }` | `{ ok }` | 写图库记录 |
-| `gallery` | `list` | `{ skip? }` | `{ items, hasMore }` | 本人倒序分页；`items` 含 `fileID`，前端直接渲染/下载 |
+| `gallery` | `list` | `{ page, pageSize? }` | `{ items, total, totalPages }` | 本人倒序按页查询；`items` 含 `fileID`，前端直接渲染/下载 |
 
 **改造 `ai-generate-pattern`（cloud 模式）**
 
@@ -273,7 +274,7 @@ avatars/<openid>/avatar.<jpg|png>
 | `miniprogram/page/index/index.js/.wxml/.wxss` | 改 | AI 入口登录校验 + 会话参数 + 计费文案 |
 | `miniprogram/page/pattern/index.js/.wxml/.wxss` | 改 | `locked` 模式（纯色预览、禁手势、隐藏交互、三按钮）；解锁后完整模式；导出成功后入库 |
 | `miniprogram/page/profile/index.*` | 新建 | 登录、头像昵称、邀请码、图库入口 |
-| `miniprogram/page/gallery/index.*` | 新建 | 图库列表、点击保存 |
+| `miniprogram/page/gallery/index.*` | 新建 | 图库列表（分页控件：上一页/页码/下一页）、点击保存 |
 | `miniprogram/page/pattern-edit/index.*` | 不改（入口已在展示页控制） | — |
 | `miniprogram/config.js` | 不改（后端仍由 `aiGenerate.backend` 决定） | — |
 
@@ -340,6 +341,6 @@ local 模式不校验 openid/配额，仅开发联调用；任何上线环境必
    - AI 生成 3 次：第 1~3 次为锁定预览（纯色、无编号、无图例、禁手势、无导出）；第 3 次后"再生成"禁用。
    - 邀请码 `GBNLY99` 激活后：生成不限次、解锁免费、图库可入。
    - mock 支付解锁 → 完整交互（色号/缩放/修改/导出）恢复；图库出现该"原图-图纸"对，点击可保存到相册。
-   - 图库分页：数据超过 20 条时触底加载下一批，缩略图用 `fileID` 直接渲染。
+   - 图库分页：100 条数据每页 10 条共 10 页；上一页/下一页/页码跳转正确，首页禁用"上一页"、末页禁用"下一页"，缩略图用 `fileID` 直接渲染。
    - 照片还原：未登录导出正常但提示登录入库；登录后导出自动入库。
 4. 真机验证：mock 模式全流程；wechatpay 模式需商户号就绪后另行验证 `wx.requestPayment`。
