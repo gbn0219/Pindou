@@ -81,7 +81,7 @@
   </view>
 
   <view class="card section">
-    <view class="section-title">拼豆盘</view>
+    <view class="section-title">拼豆盘大小</view>
     <view class="chip-row">
       <view
         wx:for="{{boardSizes}}"

@@ -141,7 +141,7 @@ Page({
     wx.showModal({
       title: 'AI 生成图纸',
       content:
-        '将原图与风格描述发送给 AI 生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，继续吗？',
+        '将原图与风格描述发送给 AI 生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，偶发超时会自动重试，继续吗？',
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
@@ -162,7 +162,8 @@ Page({
         style,
         styleKey: this.getStyleKey(),
         cutout: this.data.aiCutout,
-        extra: this.data.extraReq.trim()
+        extra: this.data.extraReq.trim(),
+        onRetry: (used, total) => wx.showLoading({ title: '超时重试 ' + used + '/' + total, mask: true })
       })
       const grid = await ai.imageToGrid(resp.image, this.data.size, this.data.set)
       this.finish(grid, 'ai', style)

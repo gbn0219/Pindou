@@ -242,4 +242,62 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('208×208') >= 0, '提示词应使用自定义盘面尺寸')
 }
 
-console.log('ai.test.js 全部通过 ✓')
+// 云函数超时判定：仅超时类错误可重试
+{
+  assert.strictEqual(ai.isTimeoutError({ errMsg: 'cloud.callFunction:fail Error: errCode: -504002 | errMsg: FUNCTION_EXCEED_TIME_LIMIT' }), true, 'FUNCTION_EXCEED 超时应判定为可重试')
+  assert.strictEqual(ai.isTimeoutError({ errMsg: 'cloud.callFunction:fail timeout' }), true, 'timeout 应判定为可重试')
+  assert.strictEqual(ai.isTimeoutError({ errMsg: 'cloud.callFunction:fail 函数执行超时' }), true, '中文超时应判定为可重试')
+  assert.strictEqual(ai.isTimeoutError({ errMsg: 'cloud.callFunction:fail invalid api key' }), false, '缺 Key 等业务错误不应重试')
+  assert.strictEqual(ai.isTimeoutError({ message: 'AI 调用失败: 429' }), false, '限流等业务错误不应重试')
+  assert.ok(ai.CLOUD_RETRY_MAX >= 1, '应配置至少一次自动重试')
+}
+
+// 云函数超时自动重试：超时两次后成功 / 非超时错误不重试
+;(async () => {
+  const calls = []
+  global.wx = {
+    cloud: {
+      callFunction() {
+        calls.push(1)
+        if (calls.length < 3) return Promise.reject({ errMsg: 'cloud.callFunction:fail FUNCTION_EXCEED_TIME_LIMIT' })
+        return Promise.resolve({ result: { image: 'data:image/png;base64,AA==' } })
+      }
+    }
+  }
+  try {
+    const retries = []
+    const res = await ai.callAiGenerate({
+      imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '',
+      onRetry: (u, t) => retries.push([u, t])
+    })
+    assert.ok(res && res.image, '重试后应返回生成结果')
+    assert.strictEqual(calls.length, 3, '超时应自动重试到第 3 次尝试')
+    assert.deepStrictEqual(retries, [[1, 2], [2, 2]], '应上报重试进度 (1/2、2/2)')
+  } finally {
+    delete global.wx
+  }
+
+  const errCalls = []
+  global.wx = {
+    cloud: {
+      callFunction() {
+        errCalls.push(1)
+        return Promise.reject({ errMsg: 'cloud.callFunction:fail invalid api key' })
+      }
+    }
+  }
+  try {
+    await assert.rejects(
+      () => ai.callAiGenerate({ imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '' }),
+      /invalid api key/
+    )
+    assert.strictEqual(errCalls.length, 1, '非超时错误不应重试')
+  } finally {
+    delete global.wx
+  }
+
+  console.log('ai.test.js 全部通过 ✓')
+})().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

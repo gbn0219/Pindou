@@ -18,6 +18,8 @@ const MAX_SIZE = 768 // 原图压缩边长 px
 const REQUEST_TIMEOUT = 20000 // 单次 wx.request 超时
 const POLL_INTERVAL = 3000 // 轮询间隔
 const POLL_MAX_MS = 300000 // 总等待上限 5 分钟
+const CLOUD_RETRY_MAX = 2 // 云函数 60s 超时上限：超时后最多自动重试次数（总尝试 3 次）
+const CLOUD_RETRY_DELAY = 1500 // 自动重试间隔 ms
 
 async function compressToBase64(src, maxSize) {
   const px = maxSize || MAX_SIZE
@@ -118,6 +120,12 @@ function callLocal(ai, data) {
   })
 }
 
+// 云函数超时判定：仅对超时类错误自动重试；缺 Key、模型权限、限流等业务错误直接失败
+function isTimeoutError(err) {
+  const msg = String((err && (err.errMsg || err.message || err.errCode)) || '')
+  return /time\s*out|timed\s*out|time\s*limit|timelimit|超时|FUNCTION_EXCEED|504002|exceeded/i.test(msg)
+}
+
 function callAiGenerate(params) {
   const ai = (config && config.aiGenerate) || {}
   const data = {
@@ -130,18 +138,27 @@ function callAiGenerate(params) {
     cutout: !!params.cutout
   }
   if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
-  return wx.cloud
-    .callFunction({ name: 'ai-generate-pattern', data })
-    .then((res) => {
-      const result = res && res.result
-      if (!result || !result.image) {
-        throw new Error((result && result.error) || '云函数调用失败')
-      }
-      return result
-    })
-    .catch((err) => {
-      throw new Error((err && err.errMsg) || '云函数调用失败')
-    })
+  // 云函数 60s 超时上限，生成偶发超时：自动重试（最多 CLOUD_RETRY_MAX 次），避免用户手动重按
+  const onRetry = params.onRetry
+  const attempt = (left) =>
+    wx.cloud
+      .callFunction({ name: 'ai-generate-pattern', data })
+      .then((res) => {
+        const result = res && res.result
+        if (!result || !result.image) {
+          throw new Error((result && result.error) || '云函数调用失败')
+        }
+        return result
+      })
+      .catch((err) => {
+        if (left > 0 && isTimeoutError(err)) {
+          const used = CLOUD_RETRY_MAX - left + 1
+          if (onRetry) onRetry(used, CLOUD_RETRY_MAX)
+          return new Promise((resolve) => setTimeout(resolve, CLOUD_RETRY_DELAY)).then(() => attempt(left - 1))
+        }
+        throw new Error((err && err.errMsg) || '云函数调用失败')
+      })
+  return attempt(CLOUD_RETRY_MAX)
 }
 
 /**
@@ -292,4 +309,4 @@ async function imageToGrid(dataUrl, size, setKey) {
   return imageDataToGrid(imageData, img.width, img.height, size, setKey)
 }
 
-module.exports = { compressToBase64, callAiGenerate, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }
+module.exports = { compressToBase64, callAiGenerate, isTimeoutError, CLOUD_RETRY_MAX, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }
