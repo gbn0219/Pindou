@@ -1,8 +1,10 @@
 // miniprogram/page/pattern-edit/index.js
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
+const gesture = require('../../utils/gesture.js')
 
 const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号
+const MAX_HISTORY = 30 // 撤销/重做最大步数（单格修改、批量替换各算一步）
 
 const FAMILY_LABELS = {
   A: '黄橙',
@@ -16,16 +18,22 @@ const FAMILY_LABELS = {
   M: '中性'
 }
 
+const MODE_HINTS = {
+  paint: '点选颜色后，点格子涂色（单指拖动连续涂色，双指缩放/移动）',
+  replace: '先在图纸上点选源色，再到调色盘点目标色',
+  pick: '点图纸上的格子，吸取该格颜色'
+}
+
 Page({
   data: {
     groups: [],
     selected: '',
-    cellInfo: '点选颜色，再点格子涂色',
-    scale: 0.3,
-    canvasPx: 0,
-    viewX: 0,
-    viewY: 0,
-    initScale: 0.3
+    selectedHex: '',
+    mode: 'paint', // 'paint' 涂色 | 'replace' 批量换色 | 'pick' 吸取颜色
+    replaceSource: '',
+    canUndo: false,
+    canRedo: false,
+    cellInfo: MODE_HINTS.paint
   },
 
   onLoad() {
@@ -37,10 +45,16 @@ Page({
     }
     this.pattern = p
     this.palette = color.buildPalette(p.set)
+    this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
+    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes) // 白色背景连通域（不显示编号、不计色块数）
     this.highlight = null
+    this.history = [] // 撤销栈：每次修改前的网格快照，最多 MAX_HISTORY 步
+    this.redoStack = [] // 重做栈
+    const first = this.palette[0]
     this.setData({
       groups: this.buildGroups(),
-      selected: this.palette[0].code
+      selected: first.code,
+      selectedHex: first.hex
     })
   },
 
@@ -83,115 +97,389 @@ Page({
         const area = res && res[0]
         const canvas = res && res[1] && res[1].node
         if (!canvas || !area || !area.width || !area.height) {
-          // 布局尚未成型（尺寸为 0）或节点未就绪时重试，避免用无效尺寸把画布放到视野外
+          // 布局尚未成型（尺寸为 0）或节点未就绪时重试
           this.retryDraw = (this.retryDraw || 0) + 1
           if (this.retryDraw <= 8) setTimeout(() => this.draw(), 120)
           return
         }
         this.retryDraw = 0
         try {
-          const total = p.size * (pattern.CELL + pattern.GAP) - pattern.GAP
+          this.areaRect = { left: area.left || 0, top: area.top || 0 } // 触摸用视口坐标换算
+          const cell = pattern.displayCell(p.size) // 大盘面自动降低格边长，避免画布超限
+          this.cellPx = cell
+          const total = p.size * (cell + pattern.GAP) - pattern.GAP
           const areaW = area.width
           const areaH = area.height
-          const initScale = Math.max(0.14, Math.min(1, Math.min(areaW, areaH) / total))
-          this.setData(
-            {
-              canvasPx: total,
-              viewX: (areaW - total) / 2,
-              viewY: (areaH - total) / 2,
-              initScale: Number(initScale.toFixed(3)),
-              scale: Number(initScale.toFixed(3))
-            },
-            () => {
-              canvas.width = total
-              canvas.height = total
-              const ctx = canvas.getContext('2d')
-              pattern.renderGrid(ctx, p.grid, this.palette, {
-                cellSize: pattern.CELL,
-                gap: pattern.GAP,
-                code: this.codeShown,
-                highlight: this.highlight
-              })
-              this.canvas = canvas
-              this.ctx = ctx
-            }
-          )
+          // 画布 = 可视区域，内容用 ctx 变换（scale + 平移）呈现，触摸坐标无缩放歧义
+          const scale = Math.max(0.05, Math.min(1, Math.min(areaW, areaH) / total))
+          this.view = {
+            scale,
+            ox: (areaW - total * scale) / 2,
+            oy: (areaH - total * scale) / 2
+          }
+          canvas.width = areaW
+          canvas.height = areaH
+          this.canvas = canvas
+          this.ctx = canvas.getContext('2d')
+          this.drawGrid()
         } catch (err) {
           console.error('draw error', err)
         }
       })
   },
 
-  onScale(e) {
-    const s = e.detail.scale
-    this.setData({ scale: s })
-    const show = s >= CODE_MIN_SCALE
-    if (show !== this.codeShown) {
-      this.codeShown = show
-      this.redrawCanvas()
-    }
+  applyView() {
+    const v = this.view
+    if (!this.ctx || !v) return
+    this.ctx.setTransform(v.scale, 0, 0, v.scale, v.ox, v.oy)
+  },
+
+  drawGrid() {
+    if (!this.canvas || !this.ctx) return
+    // 先以单位变换清空整块画布，否则缩放/拖动后旧图残留在原位（残影）
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    this.applyView()
+    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
+      cellSize: this.cellPx || pattern.CELL,
+      gap: pattern.GAP,
+      code: this.codeShown,
+      highlight: this.highlight,
+      noCodeMask: this.bgMask
+    })
   },
 
   redrawCanvas() {
     if (!this.canvas || !this.ctx) return
-    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
-      cellSize: pattern.CELL,
-      gap: pattern.GAP,
-      code: this.codeShown,
-      highlight: this.highlight
-    })
+    this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
+    this.drawGrid()
+  },
+
+  // 触摸坐标统一换算为画布/可视区域坐标（视口坐标 - 区域左上角），避免 canvas 触摸的已知问题
+  normTouch(t) {
+    const r = this.areaRect || { left: 0, top: 0 }
+    return { x: t.clientX - r.left, y: t.clientY - r.top }
   },
 
   onTouchStart(e) {
-    const t = e.touches && e.touches[0]
+    const touches = e.touches
+    if (touches.length >= 2) {
+      // 双指：开始缩放 + 拖动（连续手势）
+      this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+      return
+    }
+    const t = touches && touches[0]
     if (!t) return
-    // 先只记录起点：拖动/缩放由 movable-view 处理，不能误涂色
-    this.tapStart = { x: t.x, y: t.y, time: Date.now(), moved: false }
+    this.pinchActive = false
+    this.pinch = null
+    this.paintStroke = false
+    this.strokePushed = false
+    const p = this.normTouch(t)
+    // 先只记录起点：涂色模式拖动超过阈值后连续涂色
+    this.tapStart = { x: p.x, y: p.y, time: Date.now(), moved: false }
+    this.tapCell = this.cellAt(p.x, p.y)
   },
 
   onTouchMove(e) {
-    if (!this.tapStart) return
-    const t = e.touches && e.touches[0]
-    if (!t) return
-    if (Math.abs(t.x - this.tapStart.x) > 16 || Math.abs(t.y - this.tapStart.y) > 16) {
+    const touches = e.touches
+    // 双指手势期间（即使只剩一指）不涂色、不跳变，等全部抬起再响应单指
+    if (this.pinchActive || touches.length >= 2) {
+      if (touches.length >= 2) {
+        if (!this.pinchActive) {
+          this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+        } else {
+          this.handlePinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+        }
+      }
+      return
+    }
+    const t = touches && touches[0]
+    if (!t || !this.tapStart) return
+    const p = this.normTouch(t)
+    if (Math.abs(p.x - this.tapStart.x) > 16 || Math.abs(p.y - this.tapStart.y) > 16) {
       this.tapStart.moved = true
+    }
+    // 涂色模式：单指拖动连续涂色（整段拖动只算一步撤销）
+    if (this.data.mode === 'paint' && this.tapStart.moved && this.tapCell) {
+      const pos = this.cellAt(p.x, p.y)
+      if (!pos) return
+      if (!this.paintStroke) {
+        this.paintStroke = true
+        this.lastPaint = { row: this.tapCell.row, col: this.tapCell.col }
+        this.paintCell(this.lastPaint.row, this.lastPaint.col, true)
+      }
+      this.paintPath(this.lastPaint, pos)
+      this.lastPaint = pos
     }
   },
 
   onTouchEnd(e) {
+    // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
+    if (e.touches && e.touches.length > 0) return
+    const wasStroke = this.paintStroke
+    this.paintStroke = false
+    this.strokePushed = false
+    this.pinchActive = false
+    this.pinch = null
+    if (wasStroke) {
+      this.tapStart = null
+      this.setData({ cellInfo: '已涂色，可撤销' })
+      return
+    }
     const start = this.tapStart
     this.tapStart = null
     if (!start || start.moved) return
     const t = e.changedTouches && e.changedTouches[0]
     if (!t) return
-    // 位移小于 16px 且 400ms 内抬起才算轻点，才涂色
-    if (Math.abs(t.x - start.x) > 16 || Math.abs(t.y - start.y) > 16 || Date.now() - start.time > 400) return
-    this.paintCell(t.x, t.y)
+    const p = this.normTouch(t)
+    // 位移小于 16px 且 400ms 内抬起才算轻点，才触发当前工具
+    if (Math.abs(p.x - start.x) > 16 || Math.abs(p.y - start.y) > 16 || Date.now() - start.time > 400) return
+    const pos = this.cellAt(p.x, p.y)
+    if (!pos) return
+    this.onCellTap(pos.row, pos.col)
   },
 
   onTouchCancel() {
     this.tapStart = null
+    this.pinch = null
+    this.pinchActive = false
+    this.paintStroke = false
+    this.strokePushed = false
   },
 
-  paintCell(x, y) {
+  startPinch(t1, t2) {
+    const dx = t1.x - t2.x
+    const dy = t1.y - t2.y
+    const v = this.view
+    this.pinch = {
+      dist: Math.sqrt(dx * dx + dy * dy),
+      midX: (t1.x + t2.x) / 2,
+      midY: (t1.y + t2.y) / 2,
+      scale: v.scale,
+      ox: v.ox,
+      oy: v.oy
+    }
+    this.pinchActive = true
+    this.tapStart = null
+    this.paintStroke = false
+    this.strokePushed = false
+  },
+
+  handlePinch(t1, t2) {
+    if (!this.pinch || !this.view) return
+    this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
+    const show = this.view.scale >= CODE_MIN_SCALE
+    if (show !== this.codeShown) {
+      this.codeShown = show
+    }
+    this.scheduleRedraw()
+  },
+
+  // 捏合期间用 rAF 合并重绘，避免每帧全量重绘把主线程占满（否则按钮会显得失灵）
+  scheduleRedraw() {
+    if (this._redrawPending) return
+    this._redrawPending = true
+    const canvas = this.canvas
+    const raf = canvas && canvas.requestAnimationFrame
+    const done = () => {
+      this._redrawPending = false
+      try {
+        this.drawGrid()
+      } catch (err) {
+        console.error('redraw error', err)
+      }
+    }
+    if (typeof raf === 'function') raf.call(canvas, done)
+    else setTimeout(done, 16)
+  },
+
+  paintPath(from, to) {
+    const dr = to.row - from.row
+    const dc = to.col - from.col
+    const steps = Math.max(Math.abs(dr), Math.abs(dc))
+    if (steps <= 0) {
+      this.paintCell(to.row, to.col, true)
+      return
+    }
+    for (let i = 1; i <= steps; i++) {
+      const r = Math.round(from.row + (dr * i) / steps)
+      const c = Math.round(from.col + (dc * i) / steps)
+      this.paintCell(r, c, true)
+    }
+  },
+
+  cellAt(x, y) {
     const p = this.pattern
-    const cell = pattern.CELL + pattern.GAP
-    const col = Math.floor(x / this.data.scale / cell)
-    const row = Math.floor(y / this.data.scale / cell)
-    if (row < 0 || col < 0 || row >= p.size || col >= p.size) return
+    const v = this.view
+    if (!v || !v.scale) return null
+    const cell = (this.cellPx || pattern.CELL) + pattern.GAP
+    const lx = (x - v.ox) / v.scale
+    const ly = (y - v.oy) / v.scale
+    const col = Math.floor(lx / cell)
+    const row = Math.floor(ly / cell)
+    if (row < 0 || col < 0 || row >= p.size || col >= p.size) return null
+    return { row, col }
+  },
 
+  onCellTap(row, col) {
+    const mode = this.data.mode
+    if (mode === 'replace') {
+      this.pickReplaceSource(row, col)
+    } else if (mode === 'pick') {
+      this.pickCell(row, col)
+    } else {
+      this.paintCell(row, col)
+    }
+  },
+
+  paintCell(row, col, isStroke) {
+    const p = this.pattern
+    const code = this.data.selected
+    if (p.grid[row][col] !== code) {
+      if (isStroke) {
+        // 拖动涂色：整段拖动只记一步撤销
+        if (!this.strokePushed) {
+          this.pushHistory()
+          this.strokePushed = true
+        }
+      } else {
+        this.pushHistory()
+      }
+      p.grid[row][col] = code
+      this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+    }
     const prev = this.highlight
-    p.grid[row][col] = this.data.selected
     this.highlight = { row, col }
-    this.setData({ cellInfo: '第 ' + (row + 1) + ' 行 · 第 ' + (col + 1) + ' 列 · ' + p.grid[row][col] })
-
-    const base = { cellSize: pattern.CELL, gap: pattern.GAP }
+    if (!isStroke) {
+      this.setData({ cellInfo: '第 ' + (row + 1) + ' 行 · 第 ' + (col + 1) + ' 列 · ' + p.grid[row][col] })
+    }
+    const base = { cellSize: this.cellPx || pattern.CELL, gap: pattern.GAP }
+    this.applyView()
     if (prev) pattern.drawCell(this.ctx, p.grid, prev.row, prev.col, this.palette, base)
     pattern.drawCell(this.ctx, p.grid, row, col, this.palette, Object.assign({}, base, { highlight: true }))
   },
 
+  // 换色模式：点图纸上的格子取源色
+  pickReplaceSource(row, col) {
+    const p = this.pattern
+    const code = p.grid[row][col]
+    this.replaceSource = code
+    this.highlight = { row, col }
+    this.setData({
+      replaceSource: code,
+      cellInfo: '已选源色 ' + code + '（' + pattern.countColor(p.grid, code) + ' 格），再点调色盘选目标色'
+    })
+    this.redrawCanvas()
+  },
+
+  // 换色模式：点调色盘颜色作为目标色，确认后全图替换
+  pickReplaceTarget(code) {
+    const p = this.pattern
+    if (!this.replaceSource) {
+      wx.showToast({ title: '先在图纸上点选源色', icon: 'none' })
+      return
+    }
+    if (code === this.replaceSource) {
+      wx.showToast({ title: '目标色与源色相同', icon: 'none' })
+      return
+    }
+    const source = this.replaceSource
+    const count = pattern.countColor(p.grid, source)
+    wx.showModal({
+      title: '批量换色',
+      content: '将图纸中所有 ' + source + '（共 ' + count + ' 格）替换为 ' + code + '？',
+      confirmText: '替换',
+      success: (r) => {
+        if (!r.confirm) return
+        this.pushHistory()
+        const replaced = pattern.replaceColor(p.grid, source, code)
+        this.highlight = null
+        this.replaceSource = ''
+        this.setData({
+          replaceSource: '',
+          selected: code,
+          selectedHex: this.hexOf(code),
+          cellInfo: '已将 ' + replaced + ' 格 ' + source + ' 替换为 ' + code
+        })
+        this.redrawCanvas()
+      }
+    })
+  },
+
+  // 吸色模式：点格子吸取该格颜色，自动回到涂色模式直接使用
+  pickCell(row, col) {
+    const p = this.pattern
+    const code = p.grid[row][col]
+    const hex = this.hexOf(code)
+    this.highlight = { row, col }
+    this.setData({
+      selected: code,
+      selectedHex: hex,
+      mode: 'paint',
+      cellInfo: '已吸取 ' + code + '（' + hex + '），可直接涂色或换色'
+    })
+    this.redrawCanvas()
+  },
+
   pickColor(e) {
-    this.setData({ selected: e.currentTarget.dataset.code })
+    const code = e.currentTarget.dataset.code
+    if (this.data.mode === 'replace') {
+      this.pickReplaceTarget(code)
+      return
+    }
+    this.setData({ selected: code, selectedHex: this.hexOf(code) })
+  },
+
+  pickEditMode(e) {
+    const mode = e.currentTarget.dataset.mode
+    this.replaceSource = ''
+    this.setData({
+      mode,
+      replaceSource: '',
+      cellInfo: MODE_HINTS[mode] || MODE_HINTS.paint
+    })
+  },
+
+  hexOf(code) {
+    const item = this.palette.find((i) => i.code === code)
+    return item ? item.hex : ''
+  },
+
+  snapshot() {
+    return this.pattern.grid.map((row) => row.slice())
+  },
+
+  pushHistory() {
+    this.history.push(this.snapshot())
+    if (this.history.length > MAX_HISTORY) this.history.shift()
+    this.redoStack = []
+    this.updateHistoryButtons()
+  },
+
+  undo() {
+    if (!this.history.length) return
+    this.redoStack.push(this.snapshot())
+    if (this.redoStack.length > MAX_HISTORY) this.redoStack.shift()
+    this.pattern.grid = this.history.pop()
+    this.highlight = null
+    this.updateHistoryButtons()
+    this.redrawCanvas()
+    this.setData({ cellInfo: '已撤销（剩余 ' + this.history.length + ' 步可撤销）' })
+  },
+
+  redo() {
+    if (!this.redoStack.length) return
+    this.history.push(this.snapshot())
+    if (this.history.length > MAX_HISTORY) this.history.shift()
+    this.pattern.grid = this.redoStack.pop()
+    this.highlight = null
+    this.updateHistoryButtons()
+    this.redrawCanvas()
+    this.setData({ cellInfo: '已重做' })
+  },
+
+  updateHistoryButtons() {
+    this.setData({ canUndo: this.history.length > 0, canRedo: this.redoStack.length > 0 })
   },
 
   finish() {

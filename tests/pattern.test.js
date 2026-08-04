@@ -38,6 +38,177 @@ assert.deepStrictEqual(counts, [
 ], '计数应按套装顺序排序')
 assert.strictEqual(counts.reduce((s, x) => s + x.count, 0), 6, '总数应为 6')
 
+// ---- countColor / replaceColor（批量换色） ----
+assert.strictEqual(pattern.countColor(g2, 'A1'), 3, 'countColor 应统计指定色号数量')
+assert.strictEqual(pattern.countColor(g2, 'A4'), 3, 'countColor 应统计指定色号数量')
+assert.strictEqual(pattern.countColor(g2, 'A9'), 0, '不存在的色号应为 0')
+{
+  const g4 = [
+    ['A1', 'A4', 'A1'],
+    ['A4', 'A1', 'A4']
+  ]
+  const n = pattern.replaceColor(g4, 'A1', 'A4')
+  assert.strictEqual(n, 3, 'replaceColor 应返回被替换的格子数')
+  assert.deepStrictEqual(
+    g4,
+    [
+      ['A4', 'A4', 'A4'],
+      ['A4', 'A4', 'A4']
+    ],
+    '所有源色格子应替换为目标色'
+  )
+}
+{
+  const g5 = [['A1', 'A1']]
+  assert.strictEqual(pattern.replaceColor(g5, 'A1', 'A1'), 0, '源色与目标色相同时不应替换')
+  assert.deepStrictEqual(g5, [['A1', 'A1']], '源色与目标色相同时网格不变')
+}
+
+// ---- findBackgroundMask（白色背景连通域） ----
+// 与画布四边连通的白色才是背景；被主体包围的白色（画面中的白色元素）不是背景
+{
+  const g = [
+    ['A1', 'W', 'W', 'A1'],
+    ['W', 'A4', 'W', 'W'],
+    ['W', 'W', 'A4', 'W'],
+    ['A1', 'W', 'W', 'A1']
+  ]
+  const mask = pattern.findBackgroundMask(g, 'W')
+  assert.deepStrictEqual(
+    mask,
+    [
+      [false, true, true, false],
+      [true, false, true, true],
+      [true, true, false, true],
+      [false, true, true, false]
+    ],
+    '连通到边界的白色才是背景，内部白色不是背景'
+  )
+}
+{
+  const g = [['W', 'W'], ['W', 'W']]
+  assert.deepStrictEqual(
+    pattern.findBackgroundMask(g, 'W'),
+    [[true, true], [true, true]],
+    '全白网格应全部视为背景'
+  )
+}
+{
+  const g = [['A4', 'A4'], ['A4', 'A4']]
+  assert.deepStrictEqual(
+    pattern.findBackgroundMask(g, 'W'),
+    [[false, false], [false, false]],
+    '无白色时不应有背景'
+  )
+}
+
+// 白色系色号：纯白/近白都算背景候选，肤色/浅色图案色不算
+{
+  const pal = color.buildPalette('221')
+  const whiteish = pattern.findWhiteishCodes(pal)
+  assert.ok(whiteish.indexOf('H1') >= 0 && whiteish.indexOf('H2') >= 0, '纯白与近白应属于白色系')
+  assert.ok(whiteish.indexOf('G1') < 0, '肤色不应属于白色系')
+  assert.ok(whiteish.indexOf('D16') < 0, '浅灰蓝不应属于白色系')
+}
+
+// 白色系集合连通域：紧贴边缘的近白也算背景；被主体完全包围的内部白色仍算画面元素
+{
+  const g = [
+    ['C', 'C', 'C', 'C', 'C'],
+    ['C', 'A4', 'A4', 'A4', 'C'],
+    ['C', 'A4', 'W', 'A4', 'C'],
+    ['C', 'A4', 'A4', 'A4', 'C'],
+    ['C', 'C', 'C', 'C', 'C']
+  ]
+  const mask = pattern.findBackgroundMask(g, ['W', 'C'])
+  assert.deepStrictEqual(mask[0][0], true, '紧贴边缘的近白应算背景')
+  assert.deepStrictEqual(mask[2][2], false, '被主体完全包围的内部白色不是背景')
+  const counts = pattern.countColors(g, ['A4', 'W', 'C'], mask)
+  const byCode = {}
+  counts.forEach((i) => {
+    byCode[i.code] = i.count
+  })
+  assert.strictEqual(byCode['A4'], 8, '主体色计入')
+  assert.strictEqual(byCode['W'], 1, '内部白色应计入')
+  assert.strictEqual(byCode['C'], undefined, '边缘近白全部为背景，不计入')
+}
+
+// ---- countColors 排除背景 ----
+{
+  const g = [
+    ['A1', 'W', 'W'],
+    ['W', 'A4', 'W'],
+    ['W', 'W', 'A1']
+  ]
+  const mask = pattern.findBackgroundMask(g, 'W')
+  const counts = pattern.countColors(g, ['A1', 'A4', 'W'], mask)
+  assert.deepStrictEqual(
+    counts,
+    [
+      { code: 'A1', count: 2 },
+      { code: 'A4', count: 1 }
+    ],
+    '背景白色不计入色块数，画面内部白色（如有）应计入'
+  )
+}
+{
+  // 画面内部的白色元素（被主体包围，不连通边缘）应计入
+  const g = [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'W', 'W', 'A4'],
+    ['A4', 'W', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4']
+  ]
+  const mask = pattern.findBackgroundMask(g, 'W')
+  assert.deepStrictEqual(mask[1][1], false, '内部白色不是背景')
+  const counts = pattern.countColors(g, ['A4', 'W'], mask)
+  assert.deepStrictEqual(counts, [{ code: 'A4', count: 13 }, { code: 'W', count: 3 }], '内部白色应计入色块数')
+}
+
+// renderGrid：白色背景格不显示编号
+{
+  const ctx = fakeCtx()
+  const g = [
+    ['A1', 'W'],
+    ['W', 'A4']
+  ]
+  const mask = pattern.findBackgroundMask(g, 'W')
+  pattern.renderGrid(ctx, g, palette, { cellSize: 16, gap: 1, code: true, noCodeMask: mask })
+  const texts = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])
+  assert.ok(texts.indexOf('A1') >= 0 && texts.indexOf('A4') >= 0, '非背景格应显示编号')
+  assert.ok(texts.indexOf('W') < 0, '白色背景格不应显示编号')
+}
+
+// ---- displayCell（大盘面自适应格边长，画布不超设备上限） ----
+{
+  // 15~208 全部尺寸的画布总边长都不超过 2048（与导出一致的安全上限）
+  for (let size = 15; size <= 208; size++) {
+    const cell = pattern.displayCell(size)
+    const total = size * (cell + pattern.GAP) - pattern.GAP
+    assert.ok(total <= 2048, '尺寸 ' + size + ' 的画布边长 ' + total + ' 不应超过 2048')
+    assert.ok(cell >= 2, '尺寸 ' + size + ' 的格边长不应小于 2')
+  }
+}
+{
+  assert.strictEqual(pattern.displayCell(52), 20, '52 盘应保持 20px 格')
+  assert.strictEqual(pattern.displayCell(78), 20, '78 盘应保持 20px 格')
+  const total208 = 208 * (pattern.displayCell(208) + pattern.GAP) - pattern.GAP
+  assert.ok(total208 <= 2048, '208 盘画布边长应不超过 2048（实际 ' + total208 + '）')
+}
+
+// 展示/修改页布局：任意 15~208 盘面都能在区域内完整显示（初始缩放 ≥0.05 且 total×scale ≤ 区域）
+{
+  const areaW = 350
+  const areaH = 310
+  for (const size of [15, 52, 78, 104, 150, 180, 208]) {
+    const cell = pattern.displayCell(size)
+    const total = size * (cell + pattern.GAP) - pattern.GAP
+    const initScale = Math.max(0.05, Math.min(1, Math.min(areaW, areaH) / total))
+    assert.ok(initScale >= 0.05, '尺寸 ' + size + ' 初始缩放不应低于下限')
+    assert.ok(total * initScale <= Math.min(areaW, areaH) + 1, '尺寸 ' + size + ' 应能完整放进区域')
+  }
+}
+
 // ---- averageBlocks（照片还原采样） ----
 
 function fakeBlock(px) {
@@ -103,13 +274,21 @@ function fakeCtx() {
   return {
     calls,
     fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: '', textBaseline: '',
+    shadowColor: '', shadowBlur: 0, shadowOffsetY: 0,
     fillRect() { calls.push(['fillRect', ...arguments]) },
     strokeRect() { calls.push(['strokeRect', ...arguments]) },
     fillText() { calls.push(['fillText', ...arguments]) },
     beginPath() {},
     moveTo() { calls.push(['moveTo', ...arguments]) },
     lineTo() { calls.push(['lineTo', ...arguments]) },
-    stroke() { calls.push(['stroke']) }
+    arcTo() { calls.push(['arcTo', ...arguments]) },
+    closePath() {},
+    arc() { calls.push(['arc', ...arguments]) },
+    stroke() { calls.push(['stroke']) },
+    fill() { calls.push(['fill']) },
+    save() {},
+    restore() {},
+    measureText(text) { return { width: String(text).length * 10 } }
   }
 }
 

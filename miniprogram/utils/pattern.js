@@ -7,20 +7,23 @@ const color = require('./color')
 
 const CELL = 20 // 展示格边长 px
 const GAP = 1 // 格线留隙 px
+const DISPLAY_MAX_DIM = 2048 // 展示画布最大边长（与导出一致的安全上限），超出时自动降低格边长
 const EXPORT_CELL = 16 // 导出格边长 px（104 格 → 1767px，规避部分设备 2048px 上限）
 const GRID_LINE_COLOR = '#ff3a5d' // 每 N 格粗网格线颜色（与示例一致）
 const GRID_LINE_WIDTH = 2 // 粗网格线宽 px
 const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单），超出时整体等比缩小
+const WHITE_RGB_MIN = 230 // 判定为"白色系"的 RGB 下限（H1 纯白、H2 近白、奶油白等）
 
 // 底部色号清单布局（导出图）
-const LEGEND_PAD = 12
-const LEGEND_TOP = 24
-const LEGEND_HEADER_H = 44
-const LEGEND_UNIT_W = 126
-const LEGEND_UNIT_H = 56
-const LEGEND_GAP = 8
-const LEGEND_SWATCH = 38
-const LEGEND_BOTTOM = 16
+const LEGEND_BG = '#f8f5ee' // 图例区米白背景（胶囊卡片风格）
+const LEGEND_PAD = 24
+const LEGEND_TOP = 20
+const LEGEND_HEADER_H = 48
+const LEGEND_UNIT_W = 170
+const LEGEND_UNIT_H = 64
+const LEGEND_GAP = 12
+const LEGEND_SWATCH = 40
+const LEGEND_BOTTOM = 24
 
 function mapRgb(rgbArr, size, palette) {
   const grid = []
@@ -45,10 +48,14 @@ function mapRgbGrid(imageData, size, palette) {
   return mapRgb(rgbArr, size, palette)
 }
 
-function countColors(grid, setCodes) {
+function countColors(grid, setCodes, excludeMask) {
   const countMap = {}
-  for (const row of grid) {
-    for (const code of row) {
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r]
+    for (let c = 0; c < row.length; c++) {
+      // excludeMask：白色背景等不计入色块数目
+      if (excludeMask && excludeMask[r] && excludeMask[r][c]) continue
+      const code = row[c]
       countMap[code] = (countMap[code] || 0) + 1
     }
   }
@@ -59,6 +66,94 @@ function countColors(grid, setCodes) {
   return Object.keys(countMap)
     .map((code) => ({ code, count: countMap[code] }))
     .sort((a, b) => (order[a.code] || 0) - (order[b.code] || 0))
+}
+
+function countColor(grid, code) {
+  let n = 0
+  for (const row of grid) {
+    for (const c of row) {
+      if (c === code) n++
+    }
+  }
+  return n
+}
+
+/**
+ * 批量换色：把 grid 中所有 fromCode 格子改为 toCode，返回被替换的格子数。
+ * 原地修改 grid；fromCode 与 toCode 相同时不做任何事。
+ */
+function replaceColor(grid, fromCode, toCode) {
+  if (fromCode === toCode) return 0
+  let n = 0
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r].length; c++) {
+      if (grid[r][c] === fromCode) {
+        grid[r][c] = toCode
+        n++
+      }
+    }
+  }
+  return n
+}
+
+/**
+ * 白色系色号：RGB 三个通道都 >= WHITE_RGB_MIN 的套装颜色（纯白 H1、近白 H2、奶油白等）。
+ * 背景不一定是纯白 H1（AI/照片背景常映射到 H2 或奶油白），需要把整组近白色都视为背景候选。
+ */
+function findWhiteishCodes(palette) {
+  return palette
+    .filter((item) => item.rgb[0] >= WHITE_RGB_MIN && item.rgb[1] >= WHITE_RGB_MIN && item.rgb[2] >= WHITE_RGB_MIN)
+    .map((item) => item.code)
+}
+
+/**
+ * 白色背景连通域：从网格四边出发 flood fill，把所有与边缘连通的白色系格子标记为背景。
+ * whiteCodes 可以是单个色号字符串或色号数组（近白色集合）。
+ * 返回 size×size 的布尔二维数组（true = 背景，不计编号、不计色块数）。
+ * 内部被主体包围的白色块（如白色衣服/高光）不是背景，不会被标记。
+ */
+function findBackgroundMask(grid, whiteCodes) {
+  const codes = Array.isArray(whiteCodes) ? whiteCodes : [whiteCodes]
+  const h = grid.length
+  const w = h ? grid[0].length : 0
+  const mask = []
+  for (let r = 0; r < h; r++) mask.push(new Array(w).fill(false))
+  if (!h || !w) return mask
+  const queue = []
+  const push = (r, c) => {
+    if (r < 0 || c < 0 || r >= h || c >= w) return
+    if (mask[r][c] || codes.indexOf(grid[r][c]) < 0) return
+    mask[r][c] = true
+    queue.push([r, c])
+  }
+  for (let c = 0; c < w; c++) {
+    push(0, c)
+    push(h - 1, c)
+  }
+  for (let r = 0; r < h; r++) {
+    push(r, 0)
+    push(r, w - 1)
+  }
+  while (queue.length) {
+    const cell = queue.pop()
+    const r = cell[0]
+    const c = cell[1]
+    push(r - 1, c)
+    push(r + 1, c)
+    push(r, c - 1)
+    push(r, c + 1)
+  }
+  return mask
+}
+
+/**
+ * 展示画布格边长：优先保持 CELL；画布总边长（size×(cell+GAP)−GAP）超过 DISPLAY_MAX_DIM
+ * 时逐级缩小格边，保证 15~208 的大盘面也能正常渲染。触摸换算必须使用返回值。
+ */
+function displayCell(size) {
+  let cell = CELL
+  while (cell > 2 && size * (cell + GAP) - GAP > DISPLAY_MAX_DIM) cell--
+  return cell
 }
 
 function cellItem(palette, code) {
@@ -79,6 +174,7 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   const cellSize = (opts && opts.cellSize) || CELL
   const gap = (opts && opts.gap) || GAP
   const showCode = opts && opts.code !== false
+  const noCode = opts && opts.noCode // 白色背景格不显示编号
   const highlight = opts && opts.highlight
   const code = grid[r][c]
   const hex = cellItem(palette, code).hex
@@ -86,7 +182,7 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   const y = r * (cellSize + gap)
   ctx.fillStyle = hex
   ctx.fillRect(x, y, cellSize, cellSize)
-  if (showCode) {
+  if (showCode && !noCode) {
     ctx.fillStyle = luminance(hex) > 150 ? '#12171b' : '#ffffff'
     ctx.font = '600 ' + Math.max(7, Math.round(cellSize * 0.45)) + 'px sans-serif'
     ctx.textAlign = 'center'
@@ -106,6 +202,7 @@ function renderGrid(ctx, grid, palette, opts) {
   const showCode = opts && opts.code !== false
   const highlight = opts && opts.highlight
   const gridEvery = opts && opts.gridEvery
+  const noCodeMask = opts && opts.noCodeMask // 白色背景格不显示编号
   const size = grid.length
   const total = size * (cellSize + gap) - gap
   ctx.fillStyle = '#ffffff'
@@ -116,6 +213,7 @@ function renderGrid(ctx, grid, palette, opts) {
         cellSize,
         gap,
         code: showCode,
+        noCode: !!(noCodeMask && noCodeMask[r] && noCodeMask[r][c]),
         highlight: !!(highlight && highlight.row === r && highlight.col === c)
       })
     }
@@ -190,8 +288,20 @@ function legendHeight(items, width) {
   return LEGEND_TOP + LEGEND_HEADER_H + rows * LEGEND_UNIT_H + (rows - 1) * LEGEND_GAP + LEGEND_BOTTOM
 }
 
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, h / 2, w / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
+}
+
 /**
- * 绘制底部色号清单：一行统计（尺寸/色数/总颗数）+ 每色一个色样单元（色块+编号+数量），自动换行。
+ * 绘制底部色号清单（胶囊卡片风格）：一行统计（尺寸/色数/总颗数）+ 米白背景上的
+ * 圆角胶囊卡片，每张卡片 = 圆形色样 + "色号 × 数量"，自动换行。
  * 返回清单区高度（不含上方图纸）。
  */
 function renderLegend(ctx, items, opts) {
@@ -202,11 +312,20 @@ function renderLegend(ctx, items, opts) {
   const totalBeads = items.reduce((s, i) => s + i.count, 0)
   const cols = legendColumns(width)
   const rows = Math.ceil(items.length / cols)
-  ctx.fillStyle = '#12171b'
-  ctx.font = '700 32px sans-serif'
+  const height = legendHeight(items, width)
+  // 清单区米白背景
+  ctx.fillStyle = LEGEND_BG
+  ctx.fillRect(0, y0, width, height)
+  // 统计行
+  ctx.fillStyle = '#333333'
+  ctx.font = '700 28px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('[' + size + 'x' + size + '/' + items.length + '色/共' + totalBeads + '颗]', LEGEND_PAD, y0 + LEGEND_TOP + LEGEND_HEADER_H / 2)
+  ctx.fillText(
+    '[' + size + 'x' + size + '/' + items.length + '色/共' + totalBeads + '颗]',
+    LEGEND_PAD,
+    y0 + LEGEND_TOP + LEGEND_HEADER_H / 2
+  )
   let y = y0 + LEGEND_TOP + LEGEND_HEADER_H
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -214,26 +333,40 @@ function renderLegend(ctx, items, opts) {
       if (idx >= items.length) break
       const item = items[idx]
       const x = LEGEND_PAD + c * (LEGEND_UNIT_W + LEGEND_GAP)
+      const midY = y + LEGEND_UNIT_H / 2
+      // 胶囊卡片（白底、圆角、轻微投影）
+      ctx.save()
+      ctx.shadowColor = 'rgba(18, 23, 27, 0.10)'
+      ctx.shadowBlur = 10
+      ctx.shadowOffsetY = 3
       ctx.fillStyle = '#ffffff'
-      ctx.fillRect(x, y, LEGEND_UNIT_W, LEGEND_UNIT_H)
-      ctx.strokeStyle = '#d5d5d5'
-      ctx.lineWidth = 1
-      ctx.strokeRect(x + 0.5, y + 0.5, LEGEND_UNIT_W - 1, LEGEND_UNIT_H - 1)
+      roundRectPath(ctx, x, y, LEGEND_UNIT_W, LEGEND_UNIT_H, LEGEND_UNIT_H / 2)
+      ctx.fill()
+      ctx.restore()
+      // 圆形色样（浅色加极淡描边，避免在米白背景上糊成一片）
       ctx.fillStyle = item.hex || '#ffffff'
-      ctx.fillRect(x + 6, y + 6, LEGEND_SWATCH, LEGEND_SWATCH)
-      ctx.strokeStyle = 'rgba(0,0,0,0.14)'
-      ctx.strokeRect(x + 6.5, y + 6.5, LEGEND_SWATCH - 1, LEGEND_SWATCH - 1)
-      ctx.fillStyle = '#12171b'
-      ctx.font = '600 18px sans-serif'
+      ctx.beginPath()
+      ctx.arc(x + 12 + LEGEND_SWATCH / 2, midY, LEGEND_SWATCH / 2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(18, 23, 27, 0.10)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      // 色号 × 数量
+      const textX = x + 12 + LEGEND_SWATCH + 14
+      ctx.fillStyle = '#333333'
+      ctx.font = '600 22px sans-serif'
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillText(item.code, x + LEGEND_SWATCH + 12, y + 20)
-      ctx.font = '700 26px sans-serif'
-      ctx.fillText(String(item.count), x + LEGEND_SWATCH + 12, y + 43)
+      ctx.fillText(item.code, textX, midY)
+      const codeW = ctx.measureText(item.code).width
+      ctx.fillText('×', textX + codeW + 10, midY)
+      const timesW = ctx.measureText('×').width
+      ctx.font = '700 24px sans-serif'
+      ctx.fillText(String(item.count), textX + codeW + 10 + timesW + 8, midY)
     }
     y += LEGEND_UNIT_H + LEGEND_GAP
   }
-  return legendHeight(items, width)
+  return height
 }
 
 /**
@@ -259,7 +392,8 @@ function renderExport(ctx, grid, palette, opts) {
     cellSize,
     gap,
     code: opts && opts.code !== false,
-    gridEvery: opts && opts.gridEvery
+    gridEvery: opts && opts.gridEvery,
+    noCodeMask: opts && opts.noCodeMask
   })
   let legendH = 0
   if (opts && opts.legendItems && opts.legendItems.length) {
@@ -277,6 +411,11 @@ module.exports = {
   mapRgb,
   averageBlocks,
   countColors,
+  countColor,
+  replaceColor,
+  displayCell,
+  findWhiteishCodes,
+  findBackgroundMask,
   renderGrid,
   renderLegend,
   renderExport,

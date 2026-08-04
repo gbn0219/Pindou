@@ -4,20 +4,25 @@ const color = require('../../utils/color.js')
 const ai = require('../../utils/ai.js')
 const image = require('../../utils/image.js')
 
+const MIN_SIZE = 15 // 拼豆盘最小边长
+const MAX_SIZE = 208 // 拼豆盘最大边长
+
 Page({
   data: {
     imagePath: '',
     set: '221',
     size: 52,
     colorSets: ['48', '72', '144', '221'],
-    boardSizes: [52, 78, 104],
-    mode: 'photo', // 'photo' 照片还原 | 'ai' AI 生成
+    boardSizes: [52, 78, 104], // 快捷档位（滑块/输入框支持 15~208）
+    mode: 'ai', // 默认 AI 生成（'photo' 照片还原 | 'ai' AI 生成）
     styles: [
       { key: 'cartoon', name: '卡通', desc: '简化造型、粗黑描边、平涂色块、五官夸张' },
-      { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' }
+      { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' },
+      { key: 'realistic', name: '写实风', desc: '保留原图的光影、结构与真实质感，仅像素化为拼豆图纸，不卡通化、不加描边' }
     ],
     selectedStyle: 'cartoon',
     customStyle: '',
+    extraReq: '', // 额外要求（不覆盖风格，如删掉画面中的某些元素）
     aiCutout: false, // 抠出主体（背景变白）
     generating: false
   },
@@ -64,6 +69,16 @@ Page({
     this.setData({ size: Number(e.currentTarget.dataset.value) })
   },
 
+  onSizeChanging(e) {
+    this.setData({ size: e.detail.value })
+  },
+
+  onSizeInput(e) {
+    const v = Math.round(Number(e.detail.value))
+    if (!v || isNaN(v)) return // 非法输入保持当前值
+    this.setData({ size: Math.max(MIN_SIZE, Math.min(MAX_SIZE, v)) })
+  },
+
   pickMode(e) {
     this.setData({ mode: e.currentTarget.dataset.value })
   },
@@ -80,6 +95,10 @@ Page({
 
   onCustomStyleInput(e) {
     this.setData({ customStyle: e.detail.value })
+  },
+
+  onExtraReqInput(e) {
+    this.setData({ extraReq: e.detail.value })
   },
 
   getStyle() {
@@ -142,7 +161,8 @@ Page({
         set: this.data.set,
         style,
         styleKey: this.getStyleKey(),
-        cutout: this.data.aiCutout
+        cutout: this.data.aiCutout,
+        extra: this.data.extraReq.trim()
       })
       const grid = await ai.imageToGrid(resp.image, this.data.size, this.data.set)
       this.finish(grid, 'ai', style)

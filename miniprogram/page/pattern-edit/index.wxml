@@ -1,16 +1,24 @@
 <view class="page">
   <view class="top-bar">
     <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
-    <view class="cell-info">{{cellInfo}}</view>
+    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canUndo}}" bindtap="undo">撤销</button>
+    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canRedo}}" bindtap="redo">重做</button>
+  </view>
+
+  <view class="status-bar">
+    <view class="pick-swatch" wx:if="{{selectedHex}}" style="background: {{selectedHex}}"></view>
+    <text class="status-text">{{cellInfo}}</text>
   </view>
 
   <view class="canvas-shell card">
-    <movable-area class="canvas-area" id="canvasArea" scale-area>
-      <movable-view class="canvas-view" direction="all" scale animation="{{false}}" scale-min="0.14" scale-max="4" scale-value="{{initScale}}" x="{{viewX}}" y="{{viewY}}" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindscale="onScale">
-        <canvas type="2d" id="editCanvas" class="pattern-canvas" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel" />
-      </movable-view>
-    </movable-area>
-    <view class="canvas-hint">点选颜色后，点格子涂色</view>
+    <view class="canvas-area" id="canvasArea" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel">
+      <canvas type="2d" id="editCanvas" class="pattern-canvas" style="width: 100%; height: 100%;" />
+    </view>
+    <view class="tool-row">
+      <view class="mode-chip {{mode === 'paint' ? 'mode-chip--on' : ''}}" data-mode="paint" bindtap="pickEditMode">涂色</view>
+      <view class="mode-chip {{mode === 'replace' ? 'mode-chip--on' : ''}}" data-mode="replace" bindtap="pickEditMode">换色</view>
+      <view class="mode-chip {{mode === 'pick' ? 'mode-chip--on' : ''}}" data-mode="pick" bindtap="pickEditMode">吸色</view>
+    </view>
   </view>
 
   <view class="palette">
@@ -22,7 +30,7 @@
             wx:for="{{group.items}}"
             wx:for-item="item"
             wx:key="code"
-            class="palette-box {{selected === item.code ? 'palette-box--on' : ''}}"
+            class="palette-box {{selected === item.code && mode !== 'replace' ? 'palette-box--on' : ''}} {{mode === 'replace' && replaceSource === item.code ? 'palette-box--src' : ''}}"
             hover-class="palette-box--pressed"
             data-code="{{item.code}}"
             bindtap="pickColor"

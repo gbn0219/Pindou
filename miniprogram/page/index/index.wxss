@@ -160,3 +160,23 @@
   font-size: var(--text-sm);
   color: var(--color-ink);
 }
+.size-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+.size-slider {
+  flex: 1;
+}
+.size-input {
+  width: 120rpx;
+  padding: 12rpx 16rpx;
+  text-align: center;
+  border-radius: var(--radius-input);
+  background: var(--color-paper-2);
+  border: 2rpx solid var(--color-rule);
+  font-family: var(--font-label);
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}

@@ -20,17 +20,17 @@
     <view class="section-title">生成方式</view>
     <view class="chip-row">
       <view
-        class="chip {{mode === 'photo' ? 'chip--on' : ''}}"
-        hover-class="chip--pressed"
-        data-value="photo"
-        bindtap="pickMode"
-      >照片还原</view>
-      <view
         class="chip {{mode === 'ai' ? 'chip--on' : ''}}"
         hover-class="chip--pressed"
         data-value="ai"
         bindtap="pickMode"
       >AI 生成</view>
+      <view
+        class="chip {{mode === 'photo' ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
+        data-value="photo"
+        bindtap="pickMode"
+      >照片还原</view>
     </view>
   </view>
 
@@ -53,6 +53,13 @@
       bindinput="onCustomStyleInput"
     />
     <view class="section-hint">留空使用所选预设；填写自定义风格后以自定义为准，预设不可用</view>
+    <input
+      class="style-input"
+      placeholder="额外要求（可选），如：去掉画面中的眼镜、背景里的人物等"
+      value="{{extraReq}}"
+      bindinput="onExtraReqInput"
+    />
+    <view class="section-hint">附加在所选风格上，不会覆盖预设；可写删元素、改背景等要求</view>
     <view class="switch-row">
       <text class="switch-label">抠出主体（背景变白）</text>
       <switch checked="{{aiCutout}}" color="#2f6fed" bindchange="onCutoutChange" />
@@ -85,7 +92,27 @@
         bindtap="pickSize"
       >{{item}}×{{item}}</view>
     </view>
-
+    <view class="size-controls">
+      <slider
+        class="size-slider"
+        min="15"
+        max="208"
+        step="1"
+        value="{{size}}"
+        activeColor="#2f6fed"
+        block-size="24"
+        bindchanging="onSizeChanging"
+        bindchange="onSizeChanging"
+      />
+      <input
+        class="size-input"
+        type="number"
+        value="{{size}}"
+        bindblur="onSizeInput"
+        bindconfirm="onSizeInput"
+      />
+    </view>
+    <view class="section-hint">可拖动滑块或直接输入，范围 15~208</view>
   </view>
 
   <button

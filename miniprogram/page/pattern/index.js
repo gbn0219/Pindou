@@ -1,22 +1,18 @@
 // miniprogram/page/pattern/index.js
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
+const gesture = require('../../utils/gesture.js')
 
 const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号（默认铺满视图隐藏编号，避免乱码感）
-
 
 Page({
   data: {
     set: '221',
     size: 52,
     mode: 'photo',
-    style: '',
+    styleShort: '', // 生成方式显示用：只保留风格名（去掉冒号后的描述）
     legend: [],
     total: 0,
-    canvasPx: 0,
-    viewX: 0,
-    viewY: 0,
-    initScale: 0.3,
     gridOn: true,
     gridEvery: 5
   },
@@ -30,8 +26,11 @@ Page({
     }
     this.pattern = p
     this.palette = color.buildPalette(p.set)
+    this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
+    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes) // 白色背景连通域（不显示编号、不计色块数）
     this.codeShown = false
-    this.setData({ set: p.set, size: p.size, mode: p.mode || 'photo', style: p.style || '' })
+    const styleShort = (p.style || '').split(/[：:]/)[0].trim()
+    this.setData({ set: p.set, size: p.size, mode: p.mode || 'photo', styleShort })
   },
 
   onShow() {
@@ -46,12 +45,13 @@ Page({
 
   updateLegend() {
     const p = this.pattern
-    const counts = pattern.countColors(p.grid, this.palette.map((i) => i.code))
+    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+    const counts = pattern.countColors(p.grid, this.palette.map((i) => i.code), this.bgMask)
     const hexByCode = {}
     this.palette.forEach((i) => {
       hexByCode[i.code] = i.hex
     })
-    const total = p.size * p.size
+    const total = counts.reduce((s, i) => s + i.count, 0)
     this.setData({
       legend: counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] })),
       total
@@ -68,49 +68,137 @@ Page({
       .exec((res) => {
         if (!res || !res[1]) return
         const area = res[0]
+        this.areaRect = { left: (area && area.left) || 0, top: (area && area.top) || 0 } // 触摸用视口坐标换算
         const canvas = res[1].node
-        const total = p.size * (pattern.CELL + pattern.GAP) - pattern.GAP
+        const cell = pattern.displayCell(p.size) // 大盘面自动降低格边长，避免画布超限
+        this.displayCell = cell
+        const total = p.size * (cell + pattern.GAP) - pattern.GAP
         const areaW = (area && area.width) || 300
         const areaH = (area && area.height) || 300
-        const initScale = Math.max(0.14, Math.min(1, Math.min(areaW, areaH) / total))
-        this.setData({
-          canvasPx: total,
-          viewX: (areaW - total) / 2,
-          viewY: (areaH - total) / 2,
-          initScale: Number(initScale.toFixed(3))
-        })
-        canvas.width = total
-        canvas.height = total
-        const ctx = canvas.getContext('2d')
-        pattern.renderGrid(ctx, p.grid, this.palette, {
-          cellSize: pattern.CELL,
-          gap: pattern.GAP,
-          code: this.codeShown,
-          gridEvery: this.data.gridOn ? this.data.gridEvery : 0
-        })
+        // 画布 = 可视区域，内容用 ctx 变换呈现，触摸坐标无缩放歧义
+        const scale = Math.max(0.05, Math.min(1, Math.min(areaW, areaH) / total))
+        this.view = {
+          scale,
+          ox: (areaW - total * scale) / 2,
+          oy: (areaH - total * scale) / 2
+        }
+        this.canvasW = areaW
+        this.canvasH = areaH
+        canvas.width = areaW
+        canvas.height = areaH
         this.canvas = canvas
+        this.ctx = canvas.getContext('2d')
+        this.drawGrid()
       })
   },
 
-  onScale(e) {
-    const show = e.detail.scale >= CODE_MIN_SCALE
-    if (show !== this.codeShown) {
-      this.codeShown = show
-      this.redraw()
-    }
+  applyView() {
+    const v = this.view
+    if (!this.ctx || !v) return
+    this.ctx.setTransform(v.scale, 0, 0, v.scale, v.ox, v.oy)
+  },
+
+  drawGrid() {
+    if (!this.canvas || !this.ctx) return
+    // 先以单位变换清空整块画布，否则缩放/拖动后旧图残留在原位（残影）
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+    this.applyView()
+    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
+      cellSize: this.displayCell || pattern.CELL,
+      gap: pattern.GAP,
+      code: this.codeShown,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+      noCodeMask: this.bgMask
+    })
   },
 
   redraw() {
+    this.drawGrid()
+  },
+
+  // 触摸坐标统一换算为可视区域坐标（视口坐标 - 区域左上角），避免 canvas 触摸的已知问题
+  normTouch(t) {
+    const r = this.areaRect || { left: 0, top: 0 }
+    return { x: t.clientX - r.left, y: t.clientY - r.top }
+  },
+
+  // 双指：缩放 + 拖动（连续手势），手势结束前不响应其他逻辑
+  onTouchStart(e) {
+    const touches = e.touches
+    if (touches.length >= 2) {
+      this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+    }
+  },
+
+  onTouchMove(e) {
+    const touches = e.touches
+    // 双指手势期间（即使只剩一指）保持手势，等全部抬起再清理
+    if (this.pinchActive || touches.length >= 2) {
+      if (touches.length >= 2) {
+        if (!this.pinchActive) {
+          this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+        } else {
+          this.handlePinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+        }
+      }
+      return
+    }
+  },
+
+  onTouchEnd(e) {
+    // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
+    if (e.touches && e.touches.length > 0) return
+    this.pinchActive = false
+    this.pinch = null
+  },
+
+  onTouchCancel() {
+    this.pinchActive = false
+    this.pinch = null
+  },
+
+  startPinch(t1, t2) {
+    const dx = t1.x - t2.x
+    const dy = t1.y - t2.y
+    const v = this.view
+    this.pinch = {
+      dist: Math.sqrt(dx * dx + dy * dy),
+      midX: (t1.x + t2.x) / 2,
+      midY: (t1.y + t2.y) / 2,
+      scale: v.scale,
+      ox: v.ox,
+      oy: v.oy
+    }
+    this.pinchActive = true
+  },
+
+  handlePinch(t1, t2) {
+    if (!this.pinch || !this.view) return
+    this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
+    const show = this.view.scale >= CODE_MIN_SCALE
+    if (show !== this.codeShown) {
+      this.codeShown = show
+    }
+    this.scheduleRedraw()
+  },
+
+  // 捏合期间用 rAF 合并重绘，避免每帧全量重绘把主线程占满（否则按钮会显得失灵）
+  scheduleRedraw() {
+    if (this._redrawPending) return
+    this._redrawPending = true
     const canvas = this.canvas
-    if (!canvas) return
-    const p = this.pattern
-    const ctx = canvas.getContext('2d')
-    pattern.renderGrid(ctx, p.grid, this.palette, {
-      cellSize: pattern.CELL,
-      gap: pattern.GAP,
-      code: this.codeShown,
-      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
-    })
+    const raf = canvas && canvas.requestAnimationFrame
+    const done = () => {
+      this._redrawPending = false
+      try {
+        this.drawGrid()
+      } catch (err) {
+        console.error('redraw error', err)
+      }
+    }
+    if (typeof raf === 'function') raf.call(canvas, done)
+    else setTimeout(done, 16)
   },
 
   onGridToggle(e) {
@@ -133,7 +221,7 @@ Page({
     if (!canvas) return
     wx.showLoading({ title: '导出中…', mask: true })
     const codes = this.palette.map((i) => i.code)
-    const counts = pattern.countColors(p.grid, codes)
+    const counts = pattern.countColors(p.grid, codes, this.bgMask)
     const hexByCode = {}
     this.palette.forEach((i) => { hexByCode[i.code] = i.hex })
     const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
@@ -152,7 +240,8 @@ Page({
       gap: 1,
       code: true,
       gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
-      legendItems
+      legendItems,
+      noCodeMask: this.bgMask
     })
     wx.canvasToTempFilePath({
       canvas,
@@ -169,17 +258,10 @@ Page({
   },
 
   restoreDisplay(canvas) {
-    const p = this.pattern
-    const total = p.size * (pattern.CELL + pattern.GAP) - pattern.GAP
-    canvas.width = total
-    canvas.height = total
-    const ctx = canvas.getContext('2d')
-    pattern.renderGrid(ctx, p.grid, this.palette, {
-      cellSize: pattern.CELL,
-      gap: pattern.GAP,
-      code: this.codeShown,
-      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
-    })
+    canvas.width = this.canvasW
+    canvas.height = this.canvasH
+    this.ctx = canvas.getContext('2d')
+    this.drawGrid()
   },
 
   saveToAlbum(filePath) {

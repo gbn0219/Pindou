@@ -118,6 +118,48 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('马卡龙') >= 0, '马卡龙预设应包含马卡龙风格描述')
 }
 
+// 写实风预设：保留原图光影结构与真实质感，不注入卡通化的五官/描边要求
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '写实风：保留原图的光影、结构与真实质感，仅像素化为拼豆图纸，不卡通化、不加描边',
+    styleKey: 'realistic',
+    subject: 'person'
+  })
+  assert.ok(p.indexOf('写实') >= 0, '写实风预设应包含写实风格描述')
+  assert.ok(p.indexOf('不额外勾线') >= 0, '写实风不应添加描边')
+  assert.ok(p.indexOf('3~5 档色阶') >= 0, '写实风应保留多档明暗层次')
+  assert.ok(p.indexOf('20~40 种颜色') >= 0, '写实风应允许更多颜色保留质感')
+  assert.ok(p.indexOf('禁止放大眼睛、粗黑眼线、腮红圆块') >= 0, '写实风应禁止卡通化五官')
+  assert.ok(p.indexOf('圆润可爱的脸型') < 0, '写实风不应包含卡通脸型画法')
+  assert.ok(p.indexOf('粗描边') < 0, '写实风不应包含粗描边要求')
+  assert.ok(p.indexOf('写实风参考样例') >= 0, '写实风应使用拼接的写实参考样例描述')
+}
+
+// 自动判断主体 + 写实风：应使用写实五官规则
+{
+  const p = prompt.buildPrompt({ size: 52, style: '写实风', styleKey: 'realistic' })
+  assert.ok(p.indexOf('主体判断') >= 0, '自动模式应包含主体判断指令')
+  assert.ok(p.indexOf('五官（写实）') >= 0, '自动判断 + 写实风应使用写实五官规则')
+  assert.ok(p.indexOf('圆润可爱的脸型') < 0, '自动判断 + 写实风不应包含卡通脸型画法')
+}
+
+// 额外要求：附加在所选风格之后，不覆盖风格
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '卡通：简化造型、粗黑描边、平涂色块、五官夸张',
+    styleKey: 'cartoon',
+    subject: 'person',
+    extra: '去掉画面中的眼镜'
+  })
+  assert.ok(p.indexOf('「额外要求」去掉画面中的眼镜') >= 0, '额外要求应附加到提示词')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon' })
+  assert.ok(p.indexOf('「额外要求」') < 0, '未填额外要求时不应出现该节')
+}
+
 // 自定义风格：不得注入卡通/马卡龙风格提示词，只保留用户输入
 {
   const p = prompt.buildPrompt({
@@ -151,6 +193,7 @@ const prompt = require('../tools/prompt.js')
 {
   const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person', cutout: true })
   assert.ok(p.indexOf('抠图') >= 0 && p.indexOf('主体') >= 0, '抠图提示词应使用主体措辞')
+  assert.ok(p.indexOf('只允许使用纯白色') >= 0 && p.indexOf('严格等于') >= 0, '抠图提示词应要求背景严格纯白')
   const q = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person' })
   assert.ok(q.indexOf('背景') >= 0 && q.indexOf('抠图') < 0, '非抠图应使用背景措辞')
 }
@@ -183,6 +226,12 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('色块均匀') >= 0, '应包含色块均匀（每格单色）要求')
   assert.ok(p.indexOf('52×52 个纯色方块') >= 0, '应明确纯色方块数量与盘面一致')
   assert.ok(p.indexOf('禁止渐变、混色、抗锯齿') >= 0, '应禁止块内渐变/混色/抗锯齿')
+}
+
+// 任意盘面尺寸（15~208）：提示词应使用实际尺寸
+{
+  const p = prompt.buildPrompt({ size: 208, style: '卡通', styleKey: 'cartoon' })
+  assert.ok(p.indexOf('208×208') >= 0, '提示词应使用自定义盘面尺寸')
 }
 
 console.log('ai.test.js 全部通过 ✓')

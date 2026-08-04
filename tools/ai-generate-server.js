@@ -23,10 +23,14 @@ const GEN_HOST = 'ark.cn-beijing.volces.com'
 const GEN_PATH = '/api/v3/images/generations'
 const DEFAULT_MODEL = 'doubao-seedream-5-0-260128' // 可在 .env 里用 ARK_MODEL 覆盖
 const GEN_SIZE = '2K' // Seedream 2K（默认 2048×2048 方形），前端按盘面 floor 分块映射
-const BOARD_SIZES = [52, 78, 104]
+const BOARD_MIN = 15 // 拼豆盘最小边长
+const BOARD_MAX = 208 // 拼豆盘最大边长
 // 参考素材合成一张参考拼图：两张"原图转像素图"示例（源图在 convert-examples/ 中），
 // 随请求作为第二张参考图发送（Seedream 多图输入：image 数组）。改图后需重新生成 ref-pack.jpg。
 const REF_PACK_PATH = path.join(__dirname, 'style-refs', 'ref-pack.jpg')
+// 写实风参考样例：两张「原图转拼豆图纸」对比图（布偶猫照片、动漫插画）上下拼接而成，
+// 风格为 realistic 时作为第二张参考图替换通用参考拼图。
+const REALISTIC_REF_PATH = path.join(__dirname, 'style-refs', 'realistic-ref.jpg')
 // 五官画法示例拼图：5 张拼豆像素画人脸合成（tools/face-refs/build-face-ref.ps1 生成），
 // 作为第三张参考图随请求发送，仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
 const FACE_REF_PATH = path.join(__dirname, 'face-refs', 'face-ref.jpg')
@@ -157,14 +161,15 @@ function extractImageUrl(resp) {
 
 async function generate(apiKey, model, data) {
   const size = Number(data.size)
-  if (BOARD_SIZES.indexOf(size) < 0) {
-    throw new Error('AI 图像生成仅支持 52×52 / 78×78 / 104×104')
+  if (!Number.isInteger(size) || size < BOARD_MIN || size > BOARD_MAX) {
+    throw new Error('AI 图像生成仅支持 ' + BOARD_MIN + '×' + BOARD_MIN + ' ~ ' + BOARD_MAX + '×' + BOARD_MAX + ' 的整数盘面')
   }
   if (!data.imageBase64) {
     throw new Error('请求缺少 imageBase64')
   }
   const images = [data.imageBase64]
-  if (fs.existsSync(REF_PACK_PATH)) images.push(imageDataUrl(REF_PACK_PATH))
+  const styleRef = data.styleKey === 'realistic' ? REALISTIC_REF_PATH : REF_PACK_PATH
+  if (fs.existsSync(styleRef)) images.push(imageDataUrl(styleRef))
   if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
   const payload = {
     model,
@@ -173,7 +178,8 @@ async function generate(apiKey, model, data) {
       style: data.style || '卡通',
       styleKey: data.styleKey || 'cartoon',
       cutout: data.cutout,
-      subject: data.subject || 'auto'
+      subject: data.subject || 'auto',
+      extra: data.extra
     }),
     image: images,
     size: GEN_SIZE,

@@ -20,13 +20,16 @@
 
 .meta {
   display: flex;
-  gap: var(--space-lg);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-sm) var(--space-lg);
   padding: var(--space-sm) var(--space-md);
 }
 .meta-item {
   display: flex;
   align-items: baseline;
   gap: var(--space-2xs);
+  white-space: nowrap;
 }
 .meta-label {
   font-size: var(--text-xs);

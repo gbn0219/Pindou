@@ -9,6 +9,7 @@
  * 不输出文字色号，无输出 token 上限问题。
  */
 const config = require('../config')
+const background = require('./background') // AI 图纸背景近白噪声清洗
 const color = require('./color')
 const image = require('./image')
 const pattern = require('./pattern')
@@ -125,6 +126,7 @@ function callAiGenerate(params) {
     set: params.set,
     style: params.style,
     styleKey: params.styleKey,
+    extra: params.extra || '',
     cutout: !!params.cutout
   }
   if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
@@ -286,6 +288,7 @@ async function imageToGrid(dataUrl, size, setKey) {
   ctx.fillRect(0, 0, img.width, img.height)
   ctx.drawImage(img, 0, 0, img.width, img.height)
   const imageData = ctx.getImageData(0, 0, img.width, img.height)
+  background.cleanImageData(imageData) // 背景近白噪声 → 纯白，不影响主体内容
   return imageDataToGrid(imageData, img.width, img.height, size, setKey)
 }
 
