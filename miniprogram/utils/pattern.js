@@ -19,7 +19,7 @@ const LEGEND_BG = '#f8f5ee' // 图例区米白背景（胶囊卡片风格）
 const LEGEND_PAD = 24
 const LEGEND_TOP = 20
 const LEGEND_HEADER_H = 48
-const LEGEND_UNIT_W = 170
+const LEGEND_UNIT_W = 232 // 胶囊卡片宽：预留 3 位色号 + '×' + 5 位数量（208 盘最大 43264 颗）与左右留白，防止数字溢出
 const LEGEND_UNIT_H = 64
 const LEGEND_GAP = 12
 const LEGEND_SWATCH = 40
@@ -424,5 +424,6 @@ module.exports = {
   CELL,
   GAP,
   EXPORT_CELL,
-  EXPORT_MAX_DIM
+  EXPORT_MAX_DIM,
+  LEGEND_UNIT_W
 }

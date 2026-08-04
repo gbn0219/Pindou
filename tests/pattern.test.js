@@ -339,6 +339,16 @@ assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 1
   assert.ok(legendWide < legendNarrow, '宽度更大时清单行数应更少')
 }
 
+// 图例卡片预留：3 位色号 + '×' + 5 位数量（208 盘最大 43264 颗）必须放得下
+{
+  const OFFSET = 12 + 40 + 14 // 卡片内文字起点：左距 12 + 色样 40 + 间距 14
+  const codeW = 22 * 0.62 * 3 // 22px 半粗，按 0.62 字宽/字符保守估算
+  const timesW = 22 * 0.5 // '×' 符号宽
+  const countW = 24 * 0.68 * 5 // 24px 粗体 5 位数字
+  const need = OFFSET + codeW + 10 + timesW + 8 + countW
+  assert.ok(pattern.LEGEND_UNIT_W >= need, '图例卡片宽应容纳 3 位色号 + × + 5 位数量（预留五位数）')
+}
+
 assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
 
 console.log('pattern.test.js 全部通过 ✓')
