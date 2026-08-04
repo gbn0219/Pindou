@@ -8,6 +8,19 @@ const color = require('./color')
 const CELL = 20 // 展示格边长 px
 const GAP = 1 // 格线留隙 px
 const EXPORT_CELL = 16 // 导出格边长 px（104 格 → 1767px，规避部分设备 2048px 上限）
+const GRID_LINE_COLOR = '#ff3a5d' // 每 N 格粗网格线颜色（与示例一致）
+const GRID_LINE_WIDTH = 2 // 粗网格线宽 px
+const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单），超出时整体等比缩小
+
+// 底部色号清单布局（导出图）
+const LEGEND_PAD = 12
+const LEGEND_TOP = 24
+const LEGEND_HEADER_H = 44
+const LEGEND_UNIT_W = 126
+const LEGEND_UNIT_H = 56
+const LEGEND_GAP = 8
+const LEGEND_SWATCH = 38
+const LEGEND_BOTTOM = 16
 
 function mapRgb(rgbArr, size, palette) {
   const grid = []
@@ -92,6 +105,7 @@ function renderGrid(ctx, grid, palette, opts) {
   const gap = (opts && opts.gap) || GAP
   const showCode = opts && opts.code !== false
   const highlight = opts && opts.highlight
+  const gridEvery = opts && opts.gridEvery
   const size = grid.length
   const total = size * (cellSize + gap) - gap
   ctx.fillStyle = '#ffffff'
@@ -106,6 +120,23 @@ function renderGrid(ctx, grid, palette, opts) {
       })
     }
   }
+  if (gridEvery > 0) {
+    ctx.strokeStyle = (opts && opts.gridColor) || GRID_LINE_COLOR
+    ctx.lineWidth = (opts && opts.gridLineWidth) || GRID_LINE_WIDTH
+    ctx.beginPath()
+    for (let c = gridEvery; c < size; c += gridEvery) {
+      const x = c * (cellSize + gap) - gap / 2
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, total)
+    }
+    for (let r = gridEvery; r < size; r += gridEvery) {
+      const y = r * (cellSize + gap) - gap / 2
+      ctx.moveTo(0, y)
+      ctx.lineTo(total, y)
+    }
+    ctx.stroke()
+  }
+
   return total
 }
 
@@ -147,14 +178,112 @@ function averageBlocks(data, size4, size, block) {
   return rgbArr
 }
 
+
+function legendColumns(width) {
+  return Math.max(1, Math.floor((width - LEGEND_PAD * 2 + LEGEND_GAP) / (LEGEND_UNIT_W + LEGEND_GAP)))
+}
+
+function legendHeight(items, width) {
+  if (!items || !items.length) return 0
+  const cols = legendColumns(width)
+  const rows = Math.ceil(items.length / cols)
+  return LEGEND_TOP + LEGEND_HEADER_H + rows * LEGEND_UNIT_H + (rows - 1) * LEGEND_GAP + LEGEND_BOTTOM
+}
+
+/**
+ * 绘制底部色号清单：一行统计（尺寸/色数/总颗数）+ 每色一个色样单元（色块+编号+数量），自动换行。
+ * 返回清单区高度（不含上方图纸）。
+ */
+function renderLegend(ctx, items, opts) {
+  if (!items || !items.length) return 0
+  const width = opts.width
+  const size = opts.size
+  const y0 = opts.y || 0
+  const totalBeads = items.reduce((s, i) => s + i.count, 0)
+  const cols = legendColumns(width)
+  const rows = Math.ceil(items.length / cols)
+  ctx.fillStyle = '#12171b'
+  ctx.font = '700 32px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('[' + size + 'x' + size + '/' + items.length + '色/共' + totalBeads + '颗]', LEGEND_PAD, y0 + LEGEND_TOP + LEGEND_HEADER_H / 2)
+  let y = y0 + LEGEND_TOP + LEGEND_HEADER_H
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c
+      if (idx >= items.length) break
+      const item = items[idx]
+      const x = LEGEND_PAD + c * (LEGEND_UNIT_W + LEGEND_GAP)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(x, y, LEGEND_UNIT_W, LEGEND_UNIT_H)
+      ctx.strokeStyle = '#d5d5d5'
+      ctx.lineWidth = 1
+      ctx.strokeRect(x + 0.5, y + 0.5, LEGEND_UNIT_W - 1, LEGEND_UNIT_H - 1)
+      ctx.fillStyle = item.hex || '#ffffff'
+      ctx.fillRect(x + 6, y + 6, LEGEND_SWATCH, LEGEND_SWATCH)
+      ctx.strokeStyle = 'rgba(0,0,0,0.14)'
+      ctx.strokeRect(x + 6.5, y + 6.5, LEGEND_SWATCH - 1, LEGEND_SWATCH - 1)
+      ctx.fillStyle = '#12171b'
+      ctx.font = '600 18px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(item.code, x + LEGEND_SWATCH + 12, y + 20)
+      ctx.font = '700 26px sans-serif'
+      ctx.fillText(String(item.count), x + LEGEND_SWATCH + 12, y + 43)
+    }
+    y += LEGEND_UNIT_H + LEGEND_GAP
+  }
+  return legendHeight(items, width)
+}
+
+/**
+ * 计算导出图整体尺寸（图纸 + 底部色号清单），不绘制，供设置画布与等比缩放。
+ */
+function layoutExport(grid, opts) {
+  const cellSize = (opts && opts.cellSize) || EXPORT_CELL
+  const gap = (opts && opts.gap) || 1
+  const size = grid.length
+  const gridTotal = size * (cellSize + gap) - gap
+  const items = (opts && opts.legendItems) || []
+  return { width: gridTotal, height: gridTotal + legendHeight(items, gridTotal) }
+}
+
+/**
+ * 整图导出：上方图纸（可带每 N 格粗网格线）+ 底部色号清单。调用方需先按 layoutExport 设置画布尺寸。
+ * 返回布局尺寸 { width, height }。
+ */
+function renderExport(ctx, grid, palette, opts) {
+  const cellSize = (opts && opts.cellSize) || EXPORT_CELL
+  const gap = (opts && opts.gap) || 1
+  const gridTotal = renderGrid(ctx, grid, palette, {
+    cellSize,
+    gap,
+    code: opts && opts.code !== false,
+    gridEvery: opts && opts.gridEvery
+  })
+  let legendH = 0
+  if (opts && opts.legendItems && opts.legendItems.length) {
+    legendH = renderLegend(ctx, opts.legendItems, {
+      width: gridTotal,
+      size: grid.length,
+      y: gridTotal
+    })
+  }
+  return { width: gridTotal, height: gridTotal + legendH }
+}
+
 module.exports = {
   mapRgbGrid,
   mapRgb,
   averageBlocks,
   countColors,
   renderGrid,
+  renderLegend,
+  renderExport,
+  layoutExport,
   drawCell,
   CELL,
   GAP,
-  EXPORT_CELL
+  EXPORT_CELL,
+  EXPORT_MAX_DIM
 }

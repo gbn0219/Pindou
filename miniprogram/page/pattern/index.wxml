@@ -23,6 +23,19 @@
     <view class="canvas-hint">双指缩放 · 拖动查看</view>
   </view>
 
+  <view class="grid-opt card">
+    <view class="opt-row">
+      <text class="opt-label">网格线</text>
+      <switch checked="{{gridOn}}" color="#009fef" bindchange="onGridToggle" />
+    </view>
+    <view class="opt-row">
+      <text class="opt-label">网格密度</text>
+      <view class="seg {{gridOn ? '' : 'seg--disabled'}}">
+        <view wx:for="{{[5, 10, 20]}}" wx:key="*this" class="seg-item {{gridEvery === item ? 'seg-item--on' : ''}}" data-value="{{item}}" bindtap="onGridEvery">每 {{item}} 格</view>
+      </view>
+    </view>
+  </view>
+
   <view class="legend card">
     <view class="legend-head">
       <view class="section-title">用到的颜色</view>

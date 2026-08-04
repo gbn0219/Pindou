@@ -16,7 +16,9 @@ Page({
     canvasPx: 0,
     viewX: 0,
     viewY: 0,
-    initScale: 0.3
+    initScale: 0.3,
+    gridOn: true,
+    gridEvery: 5
   },
 
   onLoad() {
@@ -83,7 +85,8 @@ Page({
         pattern.renderGrid(ctx, p.grid, this.palette, {
           cellSize: pattern.CELL,
           gap: pattern.GAP,
-          code: this.codeShown
+          code: this.codeShown,
+          gridEvery: this.data.gridOn ? this.data.gridEvery : 0
         })
         this.canvas = canvas
       })
@@ -105,8 +108,19 @@ Page({
     pattern.renderGrid(ctx, p.grid, this.palette, {
       cellSize: pattern.CELL,
       gap: pattern.GAP,
-      code: this.codeShown
+      code: this.codeShown,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
     })
+  },
+
+  onGridToggle(e) {
+    this.setData({ gridOn: e.detail.value }, () => this.redraw())
+  },
+
+  onGridEvery(e) {
+    const v = Number(e.currentTarget.dataset.value)
+    if (v === this.data.gridEvery) return
+    this.setData({ gridEvery: v }, () => this.redraw())
   },
 
   goEdit() {
@@ -118,14 +132,27 @@ Page({
     const p = this.pattern
     if (!canvas) return
     wx.showLoading({ title: '导出中…', mask: true })
-    const total = p.size * (pattern.EXPORT_CELL + 1) - 1
-    canvas.width = total
-    canvas.height = total
-    const ctx = canvas.getContext('2d')
-    pattern.renderGrid(ctx, p.grid, this.palette, {
+    const codes = this.palette.map((i) => i.code)
+    const counts = pattern.countColors(p.grid, codes)
+    const hexByCode = {}
+    this.palette.forEach((i) => { hexByCode[i.code] = i.hex })
+    const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
+    const layout = pattern.layoutExport(p.grid, {
       cellSize: pattern.EXPORT_CELL,
       gap: 1,
-      code: true
+      legendItems
+    })
+    const scale = Math.min(1, pattern.EXPORT_MAX_DIM / Math.max(layout.width, layout.height))
+    canvas.width = Math.max(1, Math.round(layout.width * scale))
+    canvas.height = Math.max(1, Math.round(layout.height * scale))
+    const ctx = canvas.getContext('2d')
+    ctx.scale(scale, scale)
+    pattern.renderExport(ctx, p.grid, this.palette, {
+      cellSize: pattern.EXPORT_CELL,
+      gap: 1,
+      code: true,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+      legendItems
     })
     wx.canvasToTempFilePath({
       canvas,
@@ -150,7 +177,8 @@ Page({
     pattern.renderGrid(ctx, p.grid, this.palette, {
       cellSize: pattern.CELL,
       gap: pattern.GAP,
-      code: this.codeShown
+      code: this.codeShown,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
     })
   },
 

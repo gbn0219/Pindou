@@ -96,4 +96,70 @@ function fakeBlock(px) {
 const g3 = pattern.mapRgb([[247, 236, 92]], 1, palette)
 assert.strictEqual(g3[0][0], 'A4', 'mapRgb 应命中 A4')
 
+
+// ---- renderGrid 每 N 格粗网格线 ----
+function fakeCtx() {
+  const calls = []
+  return {
+    calls,
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: '', textBaseline: '',
+    fillRect() { calls.push(['fillRect', ...arguments]) },
+    strokeRect() { calls.push(['strokeRect', ...arguments]) },
+    fillText() { calls.push(['fillText', ...arguments]) },
+    beginPath() {},
+    moveTo() { calls.push(['moveTo', ...arguments]) },
+    lineTo() { calls.push(['lineTo', ...arguments]) },
+    stroke() { calls.push(['stroke']) }
+  }
+}
+
+const grid10 = []
+for (let i = 0; i < 10; i++) grid10.push(new Array(10).fill('A1'))
+{
+  const ctx = fakeCtx()
+  pattern.renderGrid(ctx, grid10, palette, { cellSize: 16, gap: 1, code: false, gridEvery: 5 })
+  const lineTos = ctx.calls.filter((c) => c[0] === 'lineTo')
+  assert.strictEqual(lineTos.length, 2, '每 5 格应在 10 格网格中画 1 横 1 纵两条粗线')
+  assert.ok(ctx.calls.some((c) => c[0] === 'stroke'), '粗网格线应执行 stroke')
+}
+{
+  const ctx = fakeCtx()
+  pattern.renderGrid(ctx, grid10, palette, { cellSize: 16, gap: 1, code: false })
+  assert.strictEqual(ctx.calls.filter((c) => c[0] === 'lineTo').length, 0, '不传 gridEvery 时不画粗线')
+}
+
+// ---- renderExport / renderLegend / layoutExport ----
+const one = [['A1']]
+const legendItems = [
+  { code: 'A1', count: 1, hex: '#ffd500' },
+  { code: 'A4', count: 2, hex: '#e60012' }
+]
+const layout = pattern.layoutExport(one, { cellSize: 16, gap: 1, legendItems })
+assert.strictEqual(layout.width, 16, '导出宽度应等于图纸宽度')
+assert.ok(layout.height > 16, '含色号清单时高度应大于图纸高度')
+assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 16, '无色号清单时高度应等于图纸高度')
+
+{
+  const ctx = fakeCtx()
+  const out = pattern.renderExport(ctx, one, palette, { cellSize: 16, gap: 1, code: true, legendItems })
+  assert.deepStrictEqual(out, layout, 'renderExport 应返回与 layoutExport 一致的尺寸')
+  const texts = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])
+  assert.ok(texts.indexOf('[1x1/2色/共3颗]') >= 0, '应绘制统计行')
+  assert.ok(texts.indexOf('A1') >= 0 && texts.indexOf('A4') >= 0, '应绘制每个色号')
+  assert.ok(texts.indexOf('1') >= 0 && texts.indexOf('2') >= 0, '应绘制每个数量')
+}
+
+// 清单自动换行：更宽图纸能放下更多列，清单区高度应更矮
+{
+  const gridWide = []
+  for (let i = 0; i < 50; i++) gridWide.push(new Array(50).fill('A1'))
+  const many = []
+  for (let i = 0; i < 20; i++) many.push({ code: 'A1', count: 1, hex: '#ffffff' })
+  const legendNarrow = pattern.layoutExport(one, { cellSize: 16, gap: 1, legendItems: many }).height - 16
+  const legendWide = pattern.layoutExport(gridWide, { cellSize: 16, gap: 1, legendItems: many }).height - pattern.layoutExport(gridWide, { cellSize: 16, gap: 1 }).height
+  assert.ok(legendWide < legendNarrow, '宽度更大时清单行数应更少')
+}
+
+assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
+
 console.log('pattern.test.js 全部通过 ✓')
