@@ -199,6 +199,14 @@ const prompt = require('../tools/prompt.js')
 }
 
 
+// 轮廓闭合：提示词必须要求轮廓线闭合，防止内部白色被误判为背景
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person' })
+  assert.ok(p.indexOf('轮廓闭合') >= 0 && p.indexOf('完全闭合') >= 0, '提示词应要求轮廓线完全闭合')
+  const q = prompt.buildPrompt({ size: 52, style: '写实风', styleKey: 'realistic', subject: 'person' })
+  assert.ok(q.indexOf('轮廓闭合') >= 0, '写实风提示词也应要求轮廓闭合')
+}
+
 // 自动判断主体：不传 subject 时提示词应包含主体判断指令与全部类别规则
 {
   const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon' })
