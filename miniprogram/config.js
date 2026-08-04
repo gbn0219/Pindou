@@ -20,7 +20,7 @@ const config = {
   // AI 生成图纸后端：'local' = 本地代理服务（tools/ai-generate-server.js，读取根目录 .env）；
   // 'cloud' = 云函数 ai-generate-pattern
   aiGenerate: {
-    backend: 'local',
+    backend: 'cloud',
     // 开发者工具模拟器可用 http://127.0.0.1:8787；
     // 真机调试时必须改成电脑的局域网 IP（手机与电脑需在同一 Wi-Fi），
     // 运行 node tools/ai-generate-server.js 时启动日志会打印当前可用 IP。
