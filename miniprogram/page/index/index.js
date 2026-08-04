@@ -4,8 +4,6 @@ const color = require('../../utils/color.js')
 const ai = require('../../utils/ai.js')
 const image = require('../../utils/image.js')
 
-const AI_SIZE = 52 // AI 生成仅支持 52×52
-
 Page({
   data: {
     imagePath: '',
@@ -16,13 +14,11 @@ Page({
     mode: 'photo', // 'photo' 照片还原 | 'ai' AI 生成
     styles: [
       { key: 'cartoon', name: '卡通', desc: '简化造型、粗黑描边、平涂色块、五官夸张' },
-      { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' },
-      { key: 'flat', name: '扁平插画', desc: '简洁扁平、色块归纳、弱化细节' },
-      { key: 'retro', name: '复古像素', desc: '8-bit 复古游戏像素风、高对比、锯齿边缘' },
-      { key: 'watercolor', name: '水彩', desc: '水彩晕染感、柔和的颜色过渡、边缘朦胧' }
+      { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' }
     ],
     selectedStyle: 'cartoon',
     customStyle: '',
+    aiCutout: false, // 抠出主体（背景变白）
     generating: false
   },
 
@@ -65,20 +61,21 @@ Page({
   },
 
   pickSize(e) {
-    const value = Number(e.currentTarget.dataset.value)
-    if (this.data.mode === 'ai' && value !== AI_SIZE) return
-    this.setData({ size: value })
+    this.setData({ size: Number(e.currentTarget.dataset.value) })
   },
 
   pickMode(e) {
-    const mode = e.currentTarget.dataset.value
-    const patch = { mode }
-    if (mode === 'ai' && this.data.size !== AI_SIZE) patch.size = AI_SIZE
-    this.setData(patch)
+    this.setData({ mode: e.currentTarget.dataset.value })
   },
 
   pickStyle(e) {
+    if (this.data.customStyle.trim()) return
     this.setData({ selectedStyle: e.currentTarget.dataset.value })
+  },
+
+
+  onCutoutChange(e) {
+    this.setData({ aiCutout: e.detail.value })
   },
 
   onCustomStyleInput(e) {
@@ -90,6 +87,10 @@ Page({
     if (custom) return custom
     const s = this.data.styles.find((x) => x.key === this.data.selectedStyle)
     return s.name + '：' + s.desc
+  },
+
+  getStyleKey() {
+    return this.data.customStyle.trim() ? 'custom' : this.data.selectedStyle
   },
 
   generate() {
@@ -120,7 +121,8 @@ Page({
     const style = this.getStyle()
     wx.showModal({
       title: 'AI 生成图纸',
-      content: '将原图与风格描述发送给 AI 生成 52×52 拼豆图纸，约需 30~60 秒并按次计费，继续吗？',
+      content:
+        '将原图与风格描述发送给 AI 生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，继续吗？',
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
@@ -136,12 +138,13 @@ Page({
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
       const resp = await ai.callAiGenerate({
         imageBase64,
-        size: AI_SIZE,
+        size: this.data.size,
         set: this.data.set,
-        style
+        style,
+        styleKey: this.getStyleKey(),
+        cutout: this.data.aiCutout
       })
-      const palette = color.buildPalette(this.data.set)
-      const grid = ai.parseGridResponse(resp.grid, AI_SIZE, palette.map((i) => i.code))
+      const grid = await ai.imageToGrid(resp.image, this.data.size, this.data.set)
       this.finish(grid, 'ai', style)
     } catch (err) {
       wx.hideLoading()
@@ -149,7 +152,7 @@ Page({
         title: 'AI 生成失败',
         content:
           (err && err.message) ||
-          '请确认本地服务已启动（node tools/ai-generate-server.js）或云函数已部署并配置 DASHSCOPE_API_KEY',
+          '请确认本地服务已启动（node tools/ai-generate-server.js）或云函数已部署并配置 ARK_API_KEY',
         showCancel: false
       })
       console.error(err)

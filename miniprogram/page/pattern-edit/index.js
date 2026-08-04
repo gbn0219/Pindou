@@ -145,10 +145,39 @@ Page({
   onTouchStart(e) {
     const t = e.touches && e.touches[0]
     if (!t) return
+    // 先只记录起点：拖动/缩放由 movable-view 处理，不能误涂色
+    this.tapStart = { x: t.x, y: t.y, time: Date.now(), moved: false }
+  },
+
+  onTouchMove(e) {
+    if (!this.tapStart) return
+    const t = e.touches && e.touches[0]
+    if (!t) return
+    if (Math.abs(t.x - this.tapStart.x) > 16 || Math.abs(t.y - this.tapStart.y) > 16) {
+      this.tapStart.moved = true
+    }
+  },
+
+  onTouchEnd(e) {
+    const start = this.tapStart
+    this.tapStart = null
+    if (!start || start.moved) return
+    const t = e.changedTouches && e.changedTouches[0]
+    if (!t) return
+    // 位移小于 16px 且 400ms 内抬起才算轻点，才涂色
+    if (Math.abs(t.x - start.x) > 16 || Math.abs(t.y - start.y) > 16 || Date.now() - start.time > 400) return
+    this.paintCell(t.x, t.y)
+  },
+
+  onTouchCancel() {
+    this.tapStart = null
+  },
+
+  paintCell(x, y) {
     const p = this.pattern
     const cell = pattern.CELL + pattern.GAP
-    const col = Math.floor(t.x / this.data.scale / cell)
-    const row = Math.floor(t.y / this.data.scale / cell)
+    const col = Math.floor(x / this.data.scale / cell)
+    const row = Math.floor(y / this.data.scale / cell)
     if (row < 0 || col < 0 || row >= p.size || col >= p.size) return
 
     const prev = this.highlight

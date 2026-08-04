@@ -17,21 +17,22 @@
 
 选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **`averageBlocks`**：每 4×4 块求平均 RGB 得到 N×N 代表色（不做任何平滑/合并/去噪）→ **`mapRgb`**：CIELAB 最近色匹配，只输出当前套装内色号 → grid。支持 52/78/104 三种盘面。
 
-### 方式二：AI 生成（按次计费，仅 52×52）
+### 方式二：AI 生成（按次计费，支持 52/78/104）
 
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
-- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `DASHSCOPE_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开；若报 ERR_ADDRESS_UNREACHABLE 说明不在同一局域网（公司/校园网常见 AP 隔离），改用手机热点：手机开热点 → 电脑连热点 → 按启动日志的新 IP 更新 localUrl）
-- `cloud`：云函数 `ai-generate-pattern`
+- `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `ARK_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开；若报 ERR_ADDRESS_UNREACHABLE 说明不在同一局域网（公司/校园网常见 AP 隔离），改用手机热点：手机开热点 → 电脑连热点 → 按启动日志的新 IP 更新 localUrl）
+- `cloud`：云函数 `ai-generate-pattern`（**旧文字色号实现，尚未同步图像方案**，本地验证通过后再改造）
 
-后端以 **OpenAI 兼容接口**（`/compatible-mode/v1/chat/completions`）调用多模态模型（默认 `qwen3-vl-plus`，`DASHSCOPE_MODEL` 可覆盖）：
+后端以**图像生成方案**调用火山方舟 OpenAI 兼容接口（默认模型 `doubao-seedream-5-0-260128`，`ARK_MODEL` 可覆盖）：
+- 请求 `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`，多图输入：原图（base64）+ 一张参考拼图（两张「原图转像素图」示例，见 `tools/style-refs/ref-pack.jpg`，作为第二张参考图）+ 一张五官画法示例拼图（5 张拼豆像素画人脸合成，见 `tools/face-refs/face-ref.jpg`，作为第三张参考图；仅用于学习五官画法，提示词明确禁止复制示例角色/内容），`size` 统一取 `2K`（约 2048×2048，前端按盘面 floor 分块，不依赖每格 16px），`watermark: false`（默认会加"AI生成"水印）；
+- 输出对应尺寸的像素风格图纸 PNG（URL 24h 有效，服务端立即下载并转 base64 返回）；
+- 前端把图片写入临时文件 → offscreen canvas 读整幅像素 → **主色分块**（`dominantBlockRgb`，每块取占比最高的颜色，抗 AI 自带的网格线/辅助线）→ CIELAB 最近色映射到当前套装色号 → 生成 grid；
+- **不输出文字色号**（2704 个色号一次输出会被 token 截断，分块生成又导致块间风格不统一），彻底绕开输出 token 上限；
+- 本地服务采用“提交任务 + 轮询”：`POST /ai-generate` 立即返回 taskId，客户端每 3s 轮询 `GET /ai-generate/status?taskId=xx`（wx.request 单次最长 60s，生成可能超时），最长等待 5 分钟。
 
-- system 消息携带**完整色表**（色号 + hex + RGB）、**风格定义**与**输出规则**；
-- `tools` 定义 `submit_pixel_pattern`，用 JSON schema 严格约束 `style / board_size=52 / color_set / grid`（grid 必须恰好 2704 个色号、行优先、全部来自色表）；
-- `tool_choice` 强制模型调用该函数，模型响应中的 `function.arguments` 即 JSON（如 `{"grid":["A1","A4",...]}`）；
-- 后端解析并校验（数量、色号合法性）后返回 JSON grid；前端渲染前再次校验。
 
-**风格**：前端内置 5 个示例（卡通、马卡龙、扁平插画、复古像素、水彩），用户也可在输入框填写自定义风格关键词；输入框留空用所选示例，填写后以自定义为准。AI 生成仅支持 52×52，78/104 在 AI 模式下禁用。
+**风格**：前端内置 5 个示例（卡通、马卡龙、扁平插画、复古像素、水彩），用户也可在输入框填写自定义风格关键词；输入框留空用所选示例，填写后以自定义为准。两张「原图转像素图」示例合成为一张参考拼图（`tools/style-refs/ref-pack.jpg`），5 张拼豆像素画人脸合成为一张五官画法示例拼图（`tools/face-refs/face-ref.jpg`），两者每次 AI 生成固定随请求发送、前端无需选择；另有「抠出人物（背景变白）」开关。提示词对构图、五官（眼睛/眉毛/鼻子/嘴巴/腮红）、头发、衣服、皮肤（肤色锁定 G1：RGB 255,228,211，禁止深棕/深灰皮肤与深色阴影）、描边、配色、背景均有明确要求，并按示例的转换思路生成。AI 生成支持 52/78/104 三种盘面。
 
 **AI 优化图纸功能已移除**（原展示页入口、`tools/ai-optimize-server.js`、云函数 `ai-optimize-pattern` 均不再保留）。
 
@@ -48,13 +49,16 @@ miniprogram/
   page/pattern-edit/          修改页
   utils/color.js              sRGB→CIELAB、最近色匹配、按套装构建调色板（纯函数，node 可测）
   utils/pattern.js            网格映射/计数/canvas 绘制 + 照片还原采样（averageBlocks / mapRgb / countColors / renderGrid，node 可测）
-  utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、grid 校验（node 可测）
+  utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、读 AI 图纸像素映射色号（imageToGrid / imageDataToGrid / dominantBlockRgb，node 可测）
   utils/image.js              图片加载工具（唯一临时路径绕过 iOS createImage 缓存，带超时+重试）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
   data/colors.js              运行时数据模块（与 colors.json 同源；小程序 require JSON 不可靠，运行时统一加载 .js）
   styles/tokens.wxss          Hum 设计令牌（色彩/字号/间距/动效，各页面 @import）
 scripts/build-colors.js       解析 docs/拼豆标准色彩RGB与拼豆盘尺寸.md → 生成 data/colors.json 与 data/colors.js
 tools/ai-generate-server.js   本地 AI 生成代理服务（开发用，读取根目录 .env，默认端口 8787）
+tools/style-refs/             原图转像素图示例源图 + 合成参考拼图 ref-pack.jpg（服务端固定随请求发送）
+tools/face-refs/              五官画法示例源图 + 合成拼图 face-ref.jpg（服务端固定随请求发送，仅作五官画法参考）
+tools/convert-examples/        原图转像素图示例源图（合成进 ref-pack.jpg）
 tests/                        无框架 node 单测（断言失败即非 0 退出）
 cloudfunctions/ai-generate-pattern/  AI 生成云函数（cloud 模式）
 cloudfunctions/               其余为官方模板遗留云函数（本项目未使用）
@@ -65,7 +69,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
 - 照片还原管线：选图 → 裁剪页（可选）→ 主页面 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 绘制（白底补齐、透明像素按白）→ **`averageBlocks`**（4×4 块平均 → N×N RGB，透明像素不计入、全透明块按白）→ **`mapRgb`**（CIELAB 最近色匹配，只输出当前套装内色号）。**不做**相似色合并、孤立点平滑、区域合并、抖动等任何后处理
-- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ qwen3-vl-plus（多模态 + function call，system 带完整色表与输出规则，`submit_pixel_pattern` 的 JSON schema 约束 style/board_size/color_set/grid）→ 后端校验（grid 长度 = N×N、色号全部来自当前套装）→ 返回 JSON → 前端再次校验后渲染
+- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格（可选抠图；固定携带参考拼图）→ 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ 豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）图像生成，`size` 统一 `2K`（约 2048×2048）→ 返回图片 base64 → 前端 offscreen canvas 读整幅像素 → `dominantBlockRgb` 主色分块 → `mapRgb` CIELAB 最近色映射到当前套装 → 二维 grid。无文字色号输出，无 token 上限问题
 - 风格：5 个内置示例（卡通、马卡龙、扁平插画、复古像素、水彩），支持用户输入自定义风格关键词；自定义输入优先于示例
 - **AI 优化图纸：已移除**，不再保留任何入口与后端
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本），展示/修改页共享，不持久化
@@ -75,7 +79,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 - 展示页与修改页的 canvas 位于 `movable-area > movable-view(scale)` 内，用于缩放/拖动查看 52~104 格的大图纸
 - **必须**同时给 movable-view 和 canvas 设置显式 CSS 宽高（数据字段 `canvasPx`），否则画布会缩在左上角；初始缩放 `initScale` 与位移 `viewX/viewY` 由页面 JS 测量展示区后计算（铺满并居中），见两个页面各自的 `drawPattern()` / `draw()`
-- 修改页触摸定位：`col = floor(touch.x / this.data.scale / (CELL+GAP))`，`scale` 初始等于 `initScale`，双指缩放由 `bindscale` 更新；真机坐标换算若有偏差以真机实测为准
+- 修改页触摸定位：`col = floor(touch.x / this.data.scale / (CELL+GAP))`，`scale` 初始等于 `initScale`，双指缩放由 `bindscale` 更新；真机坐标换算若有偏差以真机实测为准；轻点判定：touchstart→touchend 位移 ≤16px 且耗时 ≤400ms 才视为点格涂色，拖拽移动不触发涂色
 - 编号显示：展示/修改页默认铺满视图**隐藏编号**（纯色图预览清晰）；放大到每格 ≥13.6px（scale ≥0.65）自动显示编号；导出图固定带编号
 - 导出：临时把 canvas 分辨率切成 `EXPORT_CELL=16`（104 格 → 1767px，规避部分设备 2048px 画布上限），导出后恢复展示分辨率
 - 修改页绘制带"节点未就绪/尺寸为 0 自动重试"（最多 8 次，120ms 间隔）；movable-view 关闭位置动画（`animation="{{false}}"`）且不使用 `out-of-bounds`，避免初始定位把画布带出视野；改动渲染逻辑时保持该兜底
@@ -86,9 +90,9 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 新增/修改 JS 一律执行 `node --check <file>`；JSON 用 `node -e "JSON.parse(...)"` 校验
 - 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证三个页面
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
-- AI 生成本地模式：项目根目录 `.env` 填写 `DASHSCOPE_API_KEY`（已有 `.env.example`），运行 `node tools/ai-generate-server.js`，开发者工具勾选"不校验合法域名"
+- AI 生成本地模式：项目根目录 `.env` 填写 `ARK_API_KEY`（火山方舟 API Key，已有 `.env.example`），运行 `node tools/ai-generate-server.js`，开发者工具勾选"不校验合法域名"
 - 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"
-- 云函数 `ai-generate-pattern`（cloud 模式）需配置环境变量：`DASHSCOPE_API_KEY`（必填）、`DASHSCOPE_MODEL`（可选，默认 `qwen3-vl-plus`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置
+- 云函数 `ai-generate-pattern`（cloud 模式）需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置（云函数与本地服务同为 Seedream 图像方案；部署目录含 ref-pack.jpg 与 face-ref.jpg；云函数超时建议在控制台调大到 60s）
 
 ## 工作准则
 

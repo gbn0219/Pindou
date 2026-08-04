@@ -1,6 +1,7 @@
 // tests/ai.test.js
 /**
- * AI 生成前端纯函数测试。运行: node tests/ai.test.js
+ * AI 生成前端纯函数测试：dominantBlockRgb / imageDataToGrid（整幅像素 → 主色分块 → 色号网格）。
+ * 运行： node tests/ai.test.js
  */
 const assert = require('assert')
 const ai = require('../miniprogram/utils/ai.js')
@@ -9,23 +10,179 @@ const color = require('../miniprogram/utils/color.js')
 const setCodes = color.buildPalette('48').map((i) => i.code)
 assert.ok(setCodes.indexOf('A4') >= 0 && setCodes.indexOf('A6') >= 0, '48 套装应含 A4/A6')
 
-// 合法 2×2 grid，行优先
-const ok = ai.parseGridResponse(['A4', 'A6', 'A6', 'A4'], 2, setCodes)
-assert.deepStrictEqual(ok, [['A4', 'A6'], ['A6', 'A4']], '合法 grid 应转为二维数组')
+const palette = color.buildPalette('48')
+const rgbOf = (code) => palette.find((i) => i.code === code).rgb
+const codeOf = (r, g, b) => color.nearestColor(r, g, b, palette).code
 
-// 大小写归一
-const lower = ai.parseGridResponse(['a4', 'A6', 'A6', 'a4'], 2, setCodes)
-assert.deepStrictEqual(lower, [['A4', 'A6'], ['A6', 'A4']], '小写色号应归一为大写')
+// 构造 8×8 像素图：2×2 格子（每格 4×4 块），格子间有 1px 深色网格线
+// 网格线像素为 (60,60,60)，模拟 AI 输出自带的辅助线
+function makeGridImage() {
+  const w = 8
+  const data = new Uint8ClampedArray(w * w * 4)
+  const colors = [
+    ['A4', 'A6'],
+    ['A6', 'A4']
+  ]
+  for (let y = 0; y < w; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      const isLine = x % 4 === 3 || y % 4 === 3
+      if (isLine) {
+        data[i] = 60
+        data[i + 1] = 60
+        data[i + 2] = 60
+      } else {
+        const cell = colors[Math.floor(y / 4)][Math.floor(x / 4)]
+        const rgb = rgbOf(cell)
+        data[i] = rgb[0]
+        data[i + 1] = rgb[1]
+        data[i + 2] = rgb[2]
+      }
+      data[i + 3] = 255
+    }
+  }
+  return { data }
+}
 
-// 数量不对
-assert.throws(() => ai.parseGridResponse(['A4', 'A6'], 2, setCodes), /数量不对/, '数量不足应报错')
+// 主色分块应忽略网格线，正确得到 A4/A6 网格
+const img = makeGridImage()
+const rgb = ai.dominantBlockRgb(img, 8, 8, 2)
+assert.deepStrictEqual(rgb.map((p) => codeOf(p[0], p[1], p[2])), ['A4', 'A6', 'A6', 'A4'], '主色分块应忽略细网格线')
 
-// 非法色号
-assert.throws(() => ai.parseGridResponse(['A4', 'ZZ', 'A6', 'A4'], 2, setCodes), /非法色号/, '非套装色号应报错')
+const grid = ai.imageDataToGrid(img, 8, 8, 2, '48')
+assert.deepStrictEqual(grid, [['A4', 'A6'], ['A6', 'A4']], 'imageDataToGrid 应返回正确的二维网格')
 
-// buildColorTable 与套装一致
-const table = ai.buildColorTable('48')
-assert.strictEqual(table.length, 48, '48 套装色表应有 48 项')
-assert.ok(table.every((i) => i.code && i.hex && Array.isArray(i.rgb)), '色表项应含 code/hex/rgb')
+// 整块透明按白色处理
+const img2 = makeGridImage()
+for (let y = 0; y < 4; y++) {
+  for (let x = 0; x < 4; x++) {
+    const i = (y * 8 + x) * 4
+    img2.data[i] = 255
+    img2.data[i + 1] = 0
+    img2.data[i + 2] = 0
+    img2.data[i + 3] = 0
+  }
+}
+const white = codeOf(255, 255, 255)
+const grid2 = ai.imageDataToGrid(img2, 8, 8, 2, '48')
+assert.strictEqual(grid2[0][0], white, '全透明块应按白色处理')
+
+// 无网格线的普通像素图同样正确
+const img3 = makeGridImage()
+for (let y = 0; y < 8; y++) {
+  for (let x = 0; x < 8; x++) {
+    const i = (y * 8 + x) * 4
+    if (x % 4 === 3 || y % 4 === 3) continue
+    const cell = [['A4', 'A6'], ['A6', 'A4']][Math.floor(y / 4)][Math.floor(x / 4)]
+    const rgbv = rgbOf(cell)
+    img3.data[i] = rgbv[0]
+    img3.data[i + 1] = rgbv[1]
+    img3.data[i + 2] = rgbv[2]
+  }
+}
+const grid3 = ai.imageDataToGrid(img3, 8, 8, 2, '48')
+assert.deepStrictEqual(grid3, [['A4', 'A6'], ['A6', 'A4']], '普通像素图映射正确')
+
+// 肤色归一：G4 小麦色应归一为 G1，深棕头发/橙色/深灰不误伤
+assert.deepStrictEqual(ai.skinNormalize(220, 179, 135), [255, 228, 211], 'G4 小麦色应归一为 G1')
+assert.deepStrictEqual(ai.skinNormalize(255, 228, 211), [255, 228, 211], 'G1 本身保持不变')
+assert.deepStrictEqual(ai.skinNormalize(113, 61, 47), [113, 61, 47], '深棕头发不应归一')
+assert.deepStrictEqual(ai.skinNormalize(253, 169, 81), [253, 169, 81], '橙色不应误伤')
+assert.deepStrictEqual(ai.skinNormalize(70, 70, 72), [70, 70, 72], '深灰不应归一')
+assert.deepStrictEqual(ai.skinNormalize(245, 240, 235), [245, 240, 235], '暖灰白背景不应归一为肤色')
+
+
+// ---- 提示词构造（tools/prompt.js）----
+const prompt = require('../tools/prompt.js')
+
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '卡通：简化造型、粗黑描边、平涂色块、五官夸张',
+    styleKey: 'cartoon',
+    subject: 'person'
+  })
+  assert.ok(p.indexOf('52×52') >= 0, '提示词应包含盘面尺寸')
+  assert.ok(p.indexOf('卡通') >= 0, '卡通预设应包含卡通风格描述')
+  assert.ok(p.indexOf('G1') >= 0, '人物提示词应包含肤色 G1 要求')
+  assert.ok(p.indexOf('拼豆友好') >= 0, '应包含拼豆友好的大块同色要求')
+}
+
+{
+  const p = prompt.buildPrompt({
+    size: 78,
+    style: '马卡龙：低饱和马卡龙色系、圆润柔和、减少硬边',
+    styleKey: 'macaron',
+    subject: 'person'
+  })
+  assert.ok(p.indexOf('马卡龙') >= 0, '马卡龙预设应包含马卡龙风格描述')
+}
+
+// 自定义风格：不得注入卡通/马卡龙风格提示词，只保留用户输入
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '赛博朋克霓虹',
+    styleKey: 'custom',
+    subject: 'person'
+  })
+  assert.ok(p.indexOf('卡通') < 0 && p.indexOf('马卡龙') < 0, '自定义风格不应注入卡通/马卡龙风格提示词')
+  assert.ok(p.indexOf('赛博朋克霓虹') >= 0, '自定义风格应出现在提示词中')
+}
+
+// 主体类型：动物不含人物肤色 G1，物体不含五官参考
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'animal' })
+  assert.ok(p.indexOf('动物') >= 0, '动物提示词应包含主体要求')
+  assert.ok(p.indexOf('花纹') >= 0, '动物提示词应包含毛色花纹要求')
+  assert.ok(p.indexOf('G1') < 0, '动物提示词不应包含人物肤色 G1')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'object' })
+  assert.ok(p.indexOf('物体') >= 0, '物体提示词应包含主体要求')
+  assert.ok(p.indexOf('五官参考') < 0, '物体提示词不应包含五官参考')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'virtual' })
+  assert.ok(p.indexOf('虚拟形象') >= 0, '虚拟形象提示词应包含主体要求')
+}
+
+// 抠图/背景：主体措辞
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person', cutout: true })
+  assert.ok(p.indexOf('抠图') >= 0 && p.indexOf('主体') >= 0, '抠图提示词应使用主体措辞')
+  const q = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person' })
+  assert.ok(q.indexOf('背景') >= 0 && q.indexOf('抠图') < 0, '非抠图应使用背景措辞')
+}
+
+
+// 自动判断主体：不传 subject 时提示词应包含主体判断指令与全部类别规则
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon' })
+  assert.ok(p.indexOf('主体判断') >= 0, '自动模式应包含主体判断指令')
+  assert.ok(
+    p.indexOf('人物') >= 0 &&
+      p.indexOf('动物') >= 0 &&
+      p.indexOf('物体') >= 0 &&
+      p.indexOf('虚拟形象') >= 0,
+    '自动模式应包含全部主体类别规则'
+  )
+  assert.ok(p.indexOf('G1') >= 0, '自动模式应保留人物肤色 G1 规则')
+}
+
+// 自动判断 + 自定义风格：不得注入卡通/马卡龙
+{
+  const p = prompt.buildPrompt({ size: 52, style: '赛博朋克霓虹', styleKey: 'custom' })
+  assert.ok(p.indexOf('卡通') < 0 && p.indexOf('马卡龙') < 0, '自动模式 + 自定义风格不应注入卡通/马卡龙')
+}
+
+
+// 每格单色约束：明确每格对应一个纯色方块，避免取色偏差
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon' })
+  assert.ok(p.indexOf('色块均匀') >= 0, '应包含色块均匀（每格单色）要求')
+  assert.ok(p.indexOf('52×52 个纯色方块') >= 0, '应明确纯色方块数量与盘面一致')
+  assert.ok(p.indexOf('禁止渐变、混色、抗锯齿') >= 0, '应禁止块内渐变/混色/抗锯齿')
+}
 
 console.log('ai.test.js 全部通过 ✓')

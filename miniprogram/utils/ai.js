@@ -1,14 +1,22 @@
 // miniprogram/utils/ai.js
 /**
- * AI 生成前端：原图压缩、调用后端（local/cloud）、grid 校验。
- * parseGridResponse / buildColorTable 为纯函数，可在 Node 中测试。
+ * AI 生成前端：原图压缩、提交任务并轮询后端（local/cloud）、读取 AI 图纸图片像素映射为拼豆色号。
+ * imageToGrid 依赖 wx 环境；imageDataToGrid 为纯函数，可在 Node 中测试。
+ *
+ * 图像方案：后端调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）
+ * 生成 2K（约 2048×2048）像素风格图纸，前端把图片写入临时文件 → offscreen canvas 读整幅像素 →
+ * dominantBlockRgb 按盘面 floor 分块取主色 → CIELAB 最近色映射到套装色号。
+ * 不输出文字色号，无输出 token 上限问题。
  */
 const config = require('../config')
 const color = require('./color')
 const image = require('./image')
+const pattern = require('./pattern')
 
 const MAX_SIZE = 768 // 原图压缩边长 px
-const TIMEOUT = 120000
+const REQUEST_TIMEOUT = 20000 // 单次 wx.request 超时
+const POLL_INTERVAL = 3000 // 轮询间隔
+const POLL_MAX_MS = 300000 // 总等待上限 5 分钟
 
 async function compressToBase64(src, maxSize) {
   const px = maxSize || MAX_SIZE
@@ -41,22 +49,58 @@ async function compressToBase64(src, maxSize) {
   return 'data:image/jpeg;base64,' + base64
 }
 
-function callLocal(ai, data) {
+function request(url, method, data) {
   return new Promise((resolve, reject) => {
     wx.request({
-      url: ai.localUrl + '/ai-generate',
-      method: 'POST',
+      url,
+      method,
       data,
-      timeout: TIMEOUT,
-      success: (r) => {
-        if (r.statusCode === 200 && r.data && r.data.grid) {
-          resolve(r.data)
+      timeout: REQUEST_TIMEOUT,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '本地 AI 服务请求失败'))
+    })
+  })
+}
+
+function pollTask(ai, taskId, resolve, reject, start) {
+  request(ai.localUrl + '/ai-generate/status?taskId=' + encodeURIComponent(taskId), 'GET')
+    .then((r) => {
+      const d = r.data || {}
+      if (r.statusCode === 200 && d.status === 'done' && d.image) {
+        resolve({ image: d.image })
+        return
+      }
+      if (r.statusCode === 200 && d.status === 'error') {
+        reject(new Error(d.error || '本地 AI 服务生成失败'))
+        return
+      }
+      if (Date.now() - start > POLL_MAX_MS) {
+        reject(new Error('AI 生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
+        return
+      }
+      setTimeout(() => pollTask(ai, taskId, resolve, reject, start), POLL_INTERVAL)
+    })
+    .catch(() => {
+      // 轮询网络抖动时继续重试，直到总等待上限
+      if (Date.now() - start > POLL_MAX_MS) {
+        reject(new Error('AI 生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
+        return
+      }
+      setTimeout(() => pollTask(ai, taskId, resolve, reject, start), POLL_INTERVAL)
+    })
+}
+function callLocal(ai, data) {
+  return new Promise((resolve, reject) => {
+    request(ai.localUrl + '/ai-generate', 'POST', data)
+      .then((r) => {
+        if (r.statusCode === 200 && r.data && r.data.taskId) {
+          pollTask(ai, r.data.taskId, resolve, reject, Date.now())
         } else {
           reject(new Error((r.data && r.data.error) || '本地 AI 服务响应异常'))
         }
-      },
-      fail: (err) => {
-        const msg = (err && err.errMsg) || '本地 AI 服务请求失败'
+      })
+      .catch((err) => {
+        const msg = err.message || '本地 AI 服务请求失败'
         const lower = msg.toLowerCase()
         let tip = ''
         if (lower.indexOf('domain') >= 0 || lower.indexOf('url') >= 0) {
@@ -69,8 +113,7 @@ function callLocal(ai, data) {
           tip = '（请确认已运行 node tools/ai-generate-server.js；真机需与电脑同一 Wi-Fi 或连电脑热点，config.localUrl 填电脑当前 IP）'
         }
         reject(new Error(msg + tip))
-      }
-    })
+      })
   })
 }
 
@@ -81,14 +124,15 @@ function callAiGenerate(params) {
     size: params.size,
     set: params.set,
     style: params.style,
-    colors: buildColorTable(params.set)
+    styleKey: params.styleKey,
+    cutout: !!params.cutout
   }
   if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
   return wx.cloud
     .callFunction({ name: 'ai-generate-pattern', data })
     .then((res) => {
       const result = res && res.result
-      if (!result || !result.grid) {
+      if (!result || !result.image) {
         throw new Error((result && result.error) || '云函数调用失败')
       }
       return result
@@ -98,41 +142,151 @@ function callAiGenerate(params) {
     })
 }
 
-function buildColorTable(setKey) {
-  return color.buildPalette(setKey).map((item) => ({
-    code: item.code,
-    hex: item.hex,
-    rgb: item.rgb
-  }))
+/**
+ * 纯函数：把整幅 AI 图纸像素（RGBA）按 size×size 分块，每块取主色（占比最高的颜色桶），
+ * 再映射为当前套装的色号网格。AI 输出常带细网格线/辅助线，块内主色一定是格子内容；
+ * 若取平均会把网格线混进背景导致发灰。块内无主色（如渐变）时退化为平均。
+ */
+/**
+ * 肤色归一：把判定为肤色的主色统一为 G1 色号 RGB(255,228,211)，
+ * 解决 AI 把脸画成深棕/小麦色导致肤色不符的问题。
+ * 判定条件：暖色相（R>G>B）、足够亮、色相不偏橙不偏黄太多，避免误伤头发/衣服。
+ */
+function skinNormalize(r, g, b) {
+  // 暖肤色判定：暖色相 + 足够亮 + 有一定饱和度（排除暖灰白背景）
+  if (
+    r > g &&
+    g > b &&
+    r >= 190 &&
+    g >= 150 &&
+    r - g <= 90 &&
+    g - b <= 85 &&
+    r - b >= 25
+  ) {
+    return [255, 228, 211]
+  }
+  return [r, g, b]
+}
+
+function dominantBlockRgb(imageData, srcW, srcH, size) {
+  const data = imageData.data
+  const bw = Math.floor(srcW / size)
+  const bh = Math.floor(srcH / size)
+  const rgbArr = []
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const x0 = c * bw
+      const y0 = r * bh
+      const buckets = new Map()
+      let total = 0
+      for (let dy = 0; dy < bh; dy++) {
+        const rowBase = (y0 + dy) * srcW + x0
+        for (let dx = 0; dx < bw; dx++) {
+          const i = (rowBase + dx) * 4
+          if (data[i + 3] < 128) continue
+          const key = ((data[i] >> 5) << 10) | ((data[i + 1] >> 5) << 5) | (data[i + 2] >> 5)
+          let b = buckets.get(key)
+          if (!b) {
+            b = { r: 0, g: 0, b: 0, n: 0 }
+            buckets.set(key, b)
+          }
+          b.r += data[i]
+          b.g += data[i + 1]
+          b.b += data[i + 2]
+          b.n++
+          total++
+        }
+      }
+      if (total === 0) {
+        rgbArr.push([255, 255, 255])
+        continue
+      }
+      let best = null
+      for (const b of buckets.values()) {
+        if (!best || b.n > best.n) best = b
+      }
+      if (best.n / total >= 0.35) {
+        // 肤色本地兜底（暂注释）：统一肤色为 G1，避免模型肤色飘移；需要时取消注释
+        // rgbArr.push(
+        //   skinNormalize(
+        //     Math.round(best.r / best.n),
+        //     Math.round(best.g / best.n),
+        //     Math.round(best.b / best.n)
+        //   )
+        // )
+        rgbArr.push([
+          Math.round(best.r / best.n),
+          Math.round(best.g / best.n),
+          Math.round(best.b / best.n)
+        ])
+      } else {
+        let sr = 0
+        let sg = 0
+        let sb = 0
+        for (const b of buckets.values()) {
+          sr += b.r
+          sg += b.g
+          sb += b.b
+        }
+        // 肤色本地兜底（暂注释），同上
+        // rgbArr.push(
+        //   skinNormalize(
+        //     Math.round(sr / total),
+        //     Math.round(sg / total),
+        //     Math.round(sb / total)
+        //   )
+        // )
+        rgbArr.push([Math.round(sr / total), Math.round(sg / total), Math.round(sb / total)])
+      }
+    }
+  }
+  return rgbArr
 }
 
 /**
- * 校验 AI 返回的拼豆色号数组（行优先）并转为二维 grid。
- * 数量必须恰好 size×size，色号大小写归一并必须属于当前套装。
+ * 纯函数：整幅 AI 图纸像素 → 主色分块 → 当前套装色号网格。
  */
-function parseGridResponse(rawGrid, size, setCodes) {
-  const total = size * size
-  const set = {}
-  for (const code of setCodes) set[String(code).toLowerCase()] = code
-  if (!Array.isArray(rawGrid) || rawGrid.length !== total) {
-    throw new Error(
-      'AI 返回色号数量不对：应为 ' + total + ' 个，实际 ' + (rawGrid ? rawGrid.length : 0) + ' 个'
-    )
-  }
-  const grid = []
-  for (let r = 0; r < size; r++) {
-    const row = []
-    for (let c = 0; c < size; c++) {
-      const raw = rawGrid[r * size + c]
-      const key = String(raw).toLowerCase()
-      if (!set[key]) {
-        throw new Error('AI 返回了非法色号：' + raw)
-      }
-      row.push(set[key])
-    }
-    grid.push(row)
-  }
-  return grid
+function imageDataToGrid(imageData, srcW, srcH, size, setKey) {
+  return pattern.mapRgb(
+    dominantBlockRgb(imageData, srcW, srcH, size),
+    size,
+    color.buildPalette(setKey)
+  )
 }
 
-module.exports = { compressToBase64, callAiGenerate, buildColorTable, parseGridResponse }
+/**
+ * 把 AI 返回的图片 data URL 写入临时文件 → 加载 → 读整幅像素 → 主色分块映射为色号网格。
+ */
+async function imageToGrid(dataUrl, size, setKey) {
+  const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,/.exec(dataUrl)
+  if (!m) throw new Error('AI 返回的图片格式不正确')
+  const fs = wx.getFileSystemManager()
+  const tempPath =
+    wx.env.USER_DATA_PATH +
+    '/ai_pix_' +
+    Date.now() +
+    '_' +
+    Math.floor(Math.random() * 1000000) +
+    '.' +
+    m[1].toLowerCase()
+  await new Promise((resolve, reject) => {
+    fs.writeFile({
+      filePath: tempPath,
+      data: dataUrl.slice(dataUrl.indexOf(',') + 1),
+      encoding: 'base64',
+      success: resolve,
+      fail: (err) => reject(new Error('AI 图纸图片保存失败: ' + ((err && err.errMsg) || '')))
+    })
+  })
+  const loader = wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 })
+  const img = await image.loadImageOnce(loader, tempPath)
+  const canvas = wx.createOffscreenCanvas({ type: '2d', width: img.width, height: img.height })
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, img.width, img.height)
+  ctx.drawImage(img, 0, 0, img.width, img.height)
+  const imageData = ctx.getImageData(0, 0, img.width, img.height)
+  return imageDataToGrid(imageData, img.width, img.height, size, setKey)
+}
+
+module.exports = { compressToBase64, callAiGenerate, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }

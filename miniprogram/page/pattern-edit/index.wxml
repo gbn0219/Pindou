@@ -7,7 +7,7 @@
   <view class="canvas-shell card">
     <movable-area class="canvas-area" id="canvasArea" scale-area>
       <movable-view class="canvas-view" direction="all" scale animation="{{false}}" scale-min="0.14" scale-max="4" scale-value="{{initScale}}" x="{{viewX}}" y="{{viewY}}" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindscale="onScale">
-        <canvas type="2d" id="editCanvas" class="pattern-canvas" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindtouchstart="onTouchStart" />
+        <canvas type="2d" id="editCanvas" class="pattern-canvas" style="width: {{canvasPx}}px; height: {{canvasPx}}px;" bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel" />
       </movable-view>
     </movable-area>
     <view class="canvas-hint">点选颜色后，点格子涂色</view>

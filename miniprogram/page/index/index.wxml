@@ -40,7 +40,7 @@
       <view
         wx:for="{{styles}}"
         wx:key="key"
-        class="chip chip--auto {{selectedStyle === item.key && !customStyle ? 'chip--on' : ''}}"
+        class="chip chip--auto {{selectedStyle === item.key && !customStyle ? 'chip--on' : ''}} {{customStyle ? 'chip--disabled' : ''}}"
         hover-class="chip--pressed"
         data-value="{{item.key}}"
         bindtap="pickStyle"
@@ -52,7 +52,11 @@
       value="{{customStyle}}"
       bindinput="onCustomStyleInput"
     />
-    <view class="section-hint">留空使用所选示例，填写后以自定义为准</view>
+    <view class="section-hint">留空使用所选预设；填写自定义风格后以自定义为准，预设不可用</view>
+    <view class="switch-row">
+      <text class="switch-label">抠出主体（背景变白）</text>
+      <switch checked="{{aiCutout}}" color="#2f6fed" bindchange="onCutoutChange" />
+    </view>
   </view>
 
   <view class="card section">
@@ -75,13 +79,13 @@
       <view
         wx:for="{{boardSizes}}"
         wx:key="*this"
-        class="chip {{size === item ? 'chip--on' : ''}} {{mode === 'ai' && item !== 52 ? 'chip--disabled' : ''}}"
-        hover-class="{{mode === 'ai' && item !== 52 ? '' : 'chip--pressed'}}"
+        class="chip {{size === item ? 'chip--on' : ''}}"
+        hover-class="chip--pressed"
         data-value="{{item}}"
         bindtap="pickSize"
       >{{item}}×{{item}}</view>
     </view>
-    <view class="section-hint" wx:if="{{mode === 'ai'}}">AI 生成仅支持 52×52</view>
+
   </view>
 
   <button

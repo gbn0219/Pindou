@@ -1,15 +1,38 @@
 // 本地 AI 生成代理服务（开发用，无需部署云函数）
-// 用法：node tools/ai-generate-server.js（读取项目根目录 .env 中的 DASHSCOPE_API_KEY，默认端口 8787）
-// 小程序端在开发者工具勾选“不校验合法域名”后，通过 config.aiGenerate.localUrl 调用本服务。
+// 用法：node tools/ai-generate-server.js（读取项目根目录 .env 中的 ARK_API_KEY，默认端口 8787）
+// 小程序端在开发者工具勾选"不校验合法域名"后，通过 config.aiGenerate.localUrl 调用本服务。
+//
+// 流程：POST /ai-generate 提交任务立即返回 taskId → 客户端轮询 GET /ai-generate/status?taskId=xx
+//
+// 为什么用图像生成：
+// 1) 文字色号方案（qwen3-vl function call）实测在 ~300 token 处提前截断，2704 个色号一次输出必失败；
+//    分块生成又导致块与块之间风格不统一。
+// 2) 改为调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 OpenAI 兼容接口
+//    images/generations）直接生成一张像素风格的图纸图片（2K ≈ 2048×2048），
+//    由前端读取图片像素映射为拼豆色号，完全绕开输出 token 上限。
+//    52/78/104 三种盘面统一用 2K 输出，前端 dominantBlockRgb 按盘面 floor 分块取主色，
+//    不依赖"每格 16px"的精确尺寸。
 const http = require('http')
 const https = require('https')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const { buildPrompt } = require('./prompt')
 
-const CHAT_HOST = 'dashscope.aliyuncs.com'
-const CHAT_PATH = '/compatible-mode/v1/chat/completions'
-const DEFAULT_MODEL = 'qwen3-vl-plus'
+const GEN_HOST = 'ark.cn-beijing.volces.com'
+const GEN_PATH = '/api/v3/images/generations'
+const DEFAULT_MODEL = 'doubao-seedream-5-0-260128' // 可在 .env 里用 ARK_MODEL 覆盖
+const GEN_SIZE = '2K' // Seedream 2K（默认 2048×2048 方形），前端按盘面 floor 分块映射
+const BOARD_SIZES = [52, 78, 104]
+// 参考素材合成一张参考拼图：两张"原图转像素图"示例（源图在 convert-examples/ 中），
+// 随请求作为第二张参考图发送（Seedream 多图输入：image 数组）。改图后需重新生成 ref-pack.jpg。
+const REF_PACK_PATH = path.join(__dirname, 'style-refs', 'ref-pack.jpg')
+// 五官画法示例拼图：5 张拼豆像素画人脸合成（tools/face-refs/build-face-ref.ps1 生成），
+// 作为第三张参考图随请求发送，仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
+const FACE_REF_PATH = path.join(__dirname, 'face-refs', 'face-ref.jpg')
+const TASK_TTL_MS = 10 * 60 * 1000
+const tasks = new Map()
+let taskSeq = 0
 
 function loadEnv() {
   const env = {}
@@ -32,6 +55,20 @@ function lanAddresses() {
     }
   }
   return list
+}
+
+function createTask() {
+  const taskId = 'task_' + Date.now() + '_' + ++taskSeq
+  const task = { status: 'pending', image: null, error: null, createdAt: Date.now() }
+  tasks.set(taskId, task)
+  return { taskId, task }
+}
+
+function pruneTasks() {
+  const now = Date.now()
+  for (const [id, t] of tasks) {
+    if (now - t.createdAt > TASK_TTL_MS) tasks.delete(id)
+  }
 }
 
 function postJson(host, pathname, payload, apiKey, timeoutMs) {
@@ -70,121 +107,110 @@ function postJson(host, pathname, payload, apiKey, timeoutMs) {
   })
 }
 
-function buildColorTable(colors) {
-  return colors
-    .map((c) => c.code + ' ' + c.hex + ' (' + c.rgb.join(',') + ')')
-    .join('\n')
-}
-
-function buildSystemPrompt(size, style, colors) {
-  const total = size * size
-  return (
-    '你是拼豆图纸生成器。用户会给你一张真实图片，你需要根据图片内容生成一张' + size + '×' + size + ' 的拼豆图纸。\n' +
-    '要求：\n' +
-    '1) 图纸内容与图片一致（人物/物体的轮廓、五官、姿态、位置关系），以拼豆色块表达；\n' +
-    '2) 风格：' + style + '；\n' +
-    '3) 只使用下方色表中的色号，禁止使用色表以外的颜色；\n' +
-    '4) grid 必须恰好包含 ' + total + ' 个色号，按行优先（第 1 行 ' + size + ' 个 → 第 2 行 ' + size + ' 个 → …）；\n' +
-    '5) 不得输出任何解释、前后缀或多余文字，直接调用 submit_pixel_pattern 提交结果。\n\n' +
-    '色表（色号 = hex RGB）：\n' +
-    buildColorTable(colors)
-  )
-}
-
-function buildTools(size, set) {
-  const total = size * size
-  return [
-    {
-      type: 'function',
-      function: {
-        name: 'submit_pixel_pattern',
-        description:
-          '提交根据图片生成的拼豆图纸。grid 必须恰好包含 ' + total + ' 个色号，按行优先排列，每个色号必须来自给定色表。',
-        parameters: {
-          type: 'object',
-          properties: {
-            style: { type: 'string', description: '用户选择的图纸风格描述' },
-            board_size: { type: 'integer', enum: [size], description: '图纸边长（格数）' },
-            color_set: { type: 'string', enum: [set], description: '当前色系' },
-            grid: {
-              type: 'array',
-              items: { type: 'string' },
-              minItems: total,
-              maxItems: total,
-              description: size + '×' + size + ' 个拼豆色号（如 A1），行优先'
-            }
-          },
-          required: ['style', 'board_size', 'color_set', 'grid']
-        }
+function downloadBinary(url, timeoutMs, redirectsLeft) {
+  return new Promise((resolve, reject) => {
+    const mod = url.indexOf('https:') === 0 ? https : http
+    const req = mod.get(url, { timeout: timeoutMs || 60000 }, (res) => {
+      if (
+        res.statusCode >= 300 &&
+        res.statusCode < 400 &&
+        res.headers.location &&
+        redirectsLeft > 0
+      ) {
+        res.resume()
+        resolve(downloadBinary(res.headers.location, timeoutMs, redirectsLeft - 1))
+        return
       }
-    }
-  ]
+      if (res.statusCode >= 400) {
+        res.resume()
+        reject(new Error('AI 图片下载失败: HTTP ' + res.statusCode))
+        return
+      }
+      const chunks = []
+      res.on('data', (chunk) => {
+        chunks.push(chunk)
+      })
+      res.on('end', () =>
+        resolve({
+          buffer: Buffer.concat(chunks),
+          contentType: res.headers['content-type'] || 'image/jpeg'
+        })
+      )
+    })
+    req.on('timeout', () => req.destroy(new Error('AI 图片下载超时')))
+    req.on('error', reject)
+  })
 }
 
-function validateArgs(args, size, set, colors) {
-  const total = size * size
-  if (!args || typeof args !== 'object') throw new Error('AI 返回的函数参数不是合法 JSON 对象')
-  if (args.board_size !== size) throw new Error('AI 返回的 board_size 应为 ' + size + '，实际 ' + args.board_size)
-  if (args.color_set !== set) throw new Error('AI 返回的 color_set 应为 ' + set + '，实际 ' + args.color_set)
-  const codes = {}
-  for (const c of colors) codes[c.code.toLowerCase()] = true
-  if (!Array.isArray(args.grid)) throw new Error('AI 未返回 grid 数组')
-  if (args.grid.length !== total) {
-    throw new Error('AI 返回色号数量不对：应为 ' + total + ' 个，实际 ' + args.grid.length + ' 个')
-  }
-  for (const code of args.grid) {
-    if (!codes[String(code).toLowerCase()]) {
-      throw new Error('AI 返回了非法色号：' + code)
-    }
-  }
+function imageDataUrl(filePath) {
+  let ext = path.extname(filePath).slice(1).toLowerCase() || 'jpg'
+  if (ext === 'jpg') ext = 'jpeg' // MIME 标准为 image/jpeg
+  const base64 = fs.readFileSync(filePath).toString('base64')
+  return 'data:image/' + ext + ';base64,' + base64
+}
+
+function extractImageUrl(resp) {
+  // OpenAI 兼容返回：{ data: [{ url }] }
+  if (resp && resp.data && resp.data[0] && resp.data[0].url) return resp.data[0].url
+  return null
 }
 
 async function generate(apiKey, model, data) {
   const size = Number(data.size)
-  const set = String(data.set)
-  if (!data.imageBase64 || !Array.isArray(data.colors) || !data.colors.length) {
-    throw new Error('请求缺少 imageBase64 或 colors')
+  if (BOARD_SIZES.indexOf(size) < 0) {
+    throw new Error('AI 图像生成仅支持 52×52 / 78×78 / 104×104')
   }
-  const userText =
-    '请把这张图片生成' + size + '×' + size + ' 拼豆图纸（风格：' + data.style + '），并调用 submit_pixel_pattern 提交。'
+  if (!data.imageBase64) {
+    throw new Error('请求缺少 imageBase64')
+  }
+  const images = [data.imageBase64]
+  if (fs.existsSync(REF_PACK_PATH)) images.push(imageDataUrl(REF_PACK_PATH))
+  if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
   const payload = {
     model,
-    messages: [
-      { role: 'system', content: buildSystemPrompt(size, data.style, data.colors) },
-      {
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: data.imageBase64 } },
-          { type: 'text', text: userText }
-        ]
-      }
-    ],
-    tools: buildTools(size, set),
-    tool_choice: { type: 'function', function: { name: 'submit_pixel_pattern' } }
+    prompt: buildPrompt({
+      size,
+      style: data.style || '卡通',
+      styleKey: data.styleKey || 'cartoon',
+      cutout: data.cutout,
+      subject: data.subject || 'auto'
+    }),
+    image: images,
+    size: GEN_SIZE,
+    response_format: 'url',
+    watermark: false, // 默认 true 会加"AI生成"水印，拼豆图纸必须关闭
+    seed: Math.floor(Math.random() * 2147483647) // 随机种子：不传时模型用固定默认种子，相同输入会返回同一张图
   }
-  const resp = await postJson(CHAT_HOST, CHAT_PATH, payload, apiKey, 120000)
-  if (resp.error || resp.code) {
-    const msg = (resp.error && resp.error.message) || resp.message || resp.code || 'unknown'
-    throw new Error('AI 返回错误: ' + msg)
+  // 调用火山方舟：429 / 5xx / 网络异常自动重试，避免用户连续生成被限流
+  let resp = null
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      resp = await postJson(GEN_HOST, GEN_PATH, payload, apiKey, 120000)
+    } catch (e) {
+      if (attempt >= 3) throw e
+      await new Promise((r) => setTimeout(r, 5000 * (attempt + 1)))
+      continue
+    }
+    const errMsg =
+      (resp && ((resp.error && resp.error.message) || resp.message || resp.code)) || ''
+    if (!errMsg) break
+    const retriable = /rate limit|429|5\d\d|throttl/i.test(errMsg)
+    if (!retriable || attempt >= 3) {
+      throw new Error('AI 返回错误: ' + errMsg)
+    }
+    await new Promise((r) => setTimeout(r, 8000 * (attempt + 1)))
   }
-  const message = resp.choices && resp.choices[0] && resp.choices[0].message
-  const call = message && message.tool_calls && message.tool_calls[0]
-  if (!call || !call.function || !call.function.arguments) {
-    throw new Error('AI 未返回结构化的图纸数据（缺少 tool_calls）')
+  const url = extractImageUrl(resp)
+  if (!url) {
+    throw new Error('AI 未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
   }
-  let args
-  try {
-    args = JSON.parse(call.function.arguments)
-  } catch (e) {
-    throw new Error('AI 返回的 function.arguments 不是合法 JSON')
-  }
-  validateArgs(args, size, set, data.colors)
-  return { grid: args.grid }
+  const { buffer, contentType } = await downloadBinary(url, 60000, 5)
+  return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }
 }
 
 const env = loadEnv()
-const API_KEY = env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY
-const MODEL = env.DASHSCOPE_MODEL || process.env.DASHSCOPE_MODEL || DEFAULT_MODEL
+const API_KEY = env.ARK_API_KEY || process.env.ARK_API_KEY
+const MODEL = env.ARK_MODEL || process.env.ARK_MODEL || DEFAULT_MODEL
 const PORT = Number(process.env.PORT || env.PORT || 8787)
 
 const server = http.createServer((req, res) => {
@@ -193,17 +219,27 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, keyConfigured: !!API_KEY, model: MODEL }))
     return
   }
+  if (req.method === 'GET' && req.url.indexOf('/ai-generate/status') === 0) {
+    const q = new URL(req.url, 'http://localhost').searchParams
+    const taskId = q.get('taskId')
+    const task = taskId && tasks.get(taskId)
+    if (!task) {
+      res.statusCode = 404
+      res.end(JSON.stringify({ error: 'task not found' }))
+      return
+    }
+    res.end(JSON.stringify({ status: task.status, image: task.image, error: task.error }))
+    return
+  }
   if (req.method === 'POST' && req.url === '/ai-generate') {
-    const t0 = Date.now()
-    console.log('[ai-generate] 收到请求')
     let body = ''
-    req.on('data', (c) => {
-      body += c
+    req.on('data', (chunk) => {
+      body += chunk
     })
-    req.on('end', async () => {
+    req.on('end', () => {
       if (!API_KEY) {
         res.statusCode = 500
-        res.end(JSON.stringify({ error: '未配置 DASHSCOPE_API_KEY，请在项目根目录 .env 中填写' }))
+        res.end(JSON.stringify({ error: '未配置 ARK_API_KEY，请在项目根目录 .env 中填写' }))
         return
       }
       let data
@@ -214,15 +250,32 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: '请求体不是合法 JSON' }))
         return
       }
-      try {
-        const result = await generate(API_KEY, MODEL, data)
-        res.end(JSON.stringify(result))
-        console.log('[ai-generate] 成功，耗时', ((Date.now() - t0) / 1000).toFixed(1) + 's')
-      } catch (e) {
-        res.statusCode = 500
-        res.end(JSON.stringify({ error: e.message }))
-        console.error('[ai-generate] 失败，耗时', ((Date.now() - t0) / 1000).toFixed(1) + 's:', e.message)
-      }
+      pruneTasks()
+      const { taskId, task } = createTask()
+      console.log('[ai-generate] 收到请求，任务', taskId)
+      res.end(JSON.stringify({ taskId }))
+      generate(API_KEY, MODEL, data)
+        .then((result) => {
+          task.status = 'done'
+          task.image = result.image
+          console.log(
+            '[ai-generate] 任务',
+            taskId,
+            '成功，耗时',
+            ((Date.now() - task.createdAt) / 1000).toFixed(1) + 's'
+          )
+        })
+        .catch((e) => {
+          task.status = 'error'
+          task.error = e.message
+          console.error(
+            '[ai-generate] 任务',
+            taskId,
+            '失败，耗时',
+            ((Date.now() - task.createdAt) / 1000).toFixed(1) + 's:',
+            e.message
+          )
+        })
     })
     return
   }
@@ -234,10 +287,13 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('AI 生成代理服务已启动: http://127.0.0.1:' + PORT)
   const lans = lanAddresses()
   if (lans.length) {
-    console.log('真机调试 localUrl（手机与电脑同一 Wi-Fi）: ' + lans.map((ip) => 'http://' + ip + ':' + PORT).join(' 或 '))
+    console.log(
+      '真机调试 localUrl（手机与电脑同一 Wi-Fi）：' +
+        lans.map((ip) => 'http://' + ip + ':' + PORT).join(' 或 ')
+    )
   } else {
     console.log('未检测到局域网 IP，真机调试请手动填写电脑 IP 到 config.localUrl')
   }
-  console.log('API Key 已配置: ' + (API_KEY ? '是' : '否（请填写 .env 中的 DASHSCOPE_API_KEY）'))
+  console.log('API Key 已配置: ' + (API_KEY ? '是' : '否（请填写 .env 中的 ARK_API_KEY）'))
   console.log('模型: ' + MODEL)
 })

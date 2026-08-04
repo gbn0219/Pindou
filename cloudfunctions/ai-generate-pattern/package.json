@@ -1,7 +1,7 @@
 {
   "name": "ai-generate-pattern",
   "version": "1.0.0",
-  "description": "AI 生成拼豆图纸：qwen3-vl-plus function call 返回 2704 个色号",
+  "description": "AI 生成拼豆图纸：火山方舟 Seedream 图像生成返回图纸图片 base64",
   "main": "index.js",
   "dependencies": {
     "wx-server-sdk": "~2.6.3"

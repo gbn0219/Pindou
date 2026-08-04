@@ -150,3 +150,13 @@
   font-size: var(--text-xs);
   color: var(--color-ink-2);
 }
+.switch-row {
+  margin-top: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.switch-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
