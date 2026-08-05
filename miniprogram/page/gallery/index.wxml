@@ -1,1 +1,28 @@
-<view class="page"></view>
+<view class="page">
+  <view class="gallery-head">我的图库 · 共 {{totalPages}} 页</view>
+  <view wx:if="{{items.length}}" class="gallery-grid">
+    <view wx:for="{{items}}" wx:key="_id" class="pair-card">
+      <view class="pair-thumbs">
+        <image class="thumb" src="{{item.originalFileID}}" mode="aspectFill" data-fileid="{{item.originalFileID}}" bindtap="onSave" />
+        <image class="thumb" src="{{item.patternFileID}}" mode="aspectFill" data-fileid="{{item.patternFileID}}" bindtap="onSave" />
+      </view>
+      <view class="pair-meta">
+        <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + (item.style || '') : '照片还原'}}</text>
+        <text class="pair-sub">{{item.timeText}} · {{item.size}}×{{item.size}} · {{item.set}} 色</text>
+      </view>
+    </view>
+  </view>
+  <view wx:else class="empty">还没有图纸，去首页生成一张吧</view>
+
+  <view wx:if="{{totalPages > 1}}" class="pager">
+    <view class="pager-btn {{page === 1 ? 'pager-btn--disabled' : ''}}" data-page="{{page - 1}}" bindtap="goPage">上一页</view>
+    <view
+      wx:for="{{pageNos}}"
+      wx:key="*this"
+      class="pager-num {{item === page ? 'pager-num--on' : ''}} {{item === '...' ? 'pager-dot' : ''}}"
+      data-page="{{item}}"
+      bindtap="goPage"
+    >{{item}}</view>
+    <view class="pager-btn {{page === totalPages ? 'pager-btn--disabled' : ''}}" data-page="{{page + 1}}" bindtap="goPage">下一页</view>
+  </view>
+</view>
