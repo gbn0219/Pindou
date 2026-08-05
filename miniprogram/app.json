@@ -40,18 +40,22 @@
   ],
   "lazyCodeLoading": "requiredComponents",
   "tabBar": {
-    "color": "#8a8f98",
+    "color": "#7a8189",
     "selectedColor": "#2f6fed",
     "backgroundColor": "#ffffff",
     "borderStyle": "black",
     "list": [
       {
         "pagePath": "page/index/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "images/tabbar/home.png",
+        "selectedIconPath": "images/tabbar/home-active.png"
       },
       {
         "pagePath": "page/profile/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "images/tabbar/user.png",
+        "selectedIconPath": "images/tabbar/user-active.png"
       }
     ]
   }
