@@ -1,0 +1,9 @@
+{
+  "name": "gallery",
+  "version": "1.0.0",
+  "description": "图库云函数：入库/分页列表",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
