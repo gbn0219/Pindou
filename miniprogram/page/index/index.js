@@ -3,6 +3,10 @@ const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const ai = require('../../utils/ai.js')
 const image = require('../../utils/image.js')
+const config = require('../../config.js')
+const user = require('../../utils/user.js')
+const hash = require('../../utils/hash.js')
+const session = require('../../utils/session.js')
 
 const MIN_SIZE = 15 // 拼豆盘最小边长
 const MAX_SIZE = 208 // 拼豆盘最大边长
@@ -138,6 +142,18 @@ Page({
 
   generateByAi() {
     const style = this.getStyle()
+    const app = getApp()
+    if (!(app.globalData.user && app.globalData.user.openid)) {
+      wx.showModal({
+        title: '需要登录',
+        content: '创意生成需要登录后使用，去「我的」页登录？',
+        confirmText: '去登录',
+        success: (r) => {
+          if (r.confirm) wx.switchTab({ url: '/page/profile/index' })
+        }
+      })
+      return
+    }
     wx.showModal({
       title: '创意生成图纸',
       content:
@@ -154,8 +170,26 @@ Page({
     this.setData({ generating: true })
     wx.showLoading({ title: '生成中…', mask: true })
     try {
+      const g = getApp().globalData
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
-      const resp = await ai.callAiGenerate({
+      const imageHash = hash.fnv1a64(imageBase64)
+      if (!g.aiSession || g.aiSession.imageHash !== imageHash) {
+        g.aiSession = session.createSession(imageHash)
+        g.aiSession.params = {
+          imagePath: this.data.imagePath,
+          size: this.data.size,
+          set: this.data.set,
+          style,
+          styleKey: this.getStyleKey(),
+          cutout: this.data.aiCutout,
+          extra: this.data.extraReq.trim()
+        }
+      }
+      const s = g.aiSession
+      if (config.aiGenerate.backend === 'local') {
+        await user.consumeQuota({ sessionId: s.sessionId, imageHash })
+      }
+      const grid = await ai.generateGrid({
         imageBase64,
         size: this.data.size,
         set: this.data.set,
@@ -163,10 +197,12 @@ Page({
         styleKey: this.getStyleKey(),
         cutout: this.data.aiCutout,
         extra: this.data.extraReq.trim(),
+        imageHash,
+        sessionId: s.sessionId,
         onRetry: (used, total) => wx.showLoading({ title: '超时重试 ' + used + '/' + total, mask: true })
       })
-      const grid = await ai.imageToGrid(resp.image, this.data.size, this.data.set)
-      this.finish(grid, 'ai', style)
+      g.aiSession = session.addCandidate(g.aiSession, grid)
+      this.finish(grid, 'ai', style, true)
     } catch (err) {
       wx.hideLoading()
       wx.showModal({
@@ -182,14 +218,15 @@ Page({
     }
   },
 
-  finish(grid, mode, style) {
+  finish(grid, mode, style, locked) {
     getApp().globalData.pattern = {
       grid,
       size: this.data.size,
       set: this.data.set,
       imagePath: this.data.imagePath,
       mode,
-      style
+      style,
+      locked: !!locked
     }
     wx.hideLoading()
     wx.navigateTo({ url: '/page/pattern/index' })

@@ -135,7 +135,9 @@ function callAiGenerate(params) {
     style: params.style,
     styleKey: params.styleKey,
     extra: params.extra || '',
-    cutout: !!params.cutout
+    cutout: !!params.cutout,
+    imageHash: params.imageHash || '',
+    sessionId: params.sessionId || ''
   }
   if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
   // 云函数 60s 超时上限，生成偶发超时：自动重试（最多 CLOUD_RETRY_MAX 次），避免用户手动重按
@@ -159,6 +161,14 @@ function callAiGenerate(params) {
         throw new Error((err && err.errMsg) || '云函数调用失败')
       })
   return attempt(CLOUD_RETRY_MAX)
+}
+
+/**
+ * 生成并映射网格：base64 已在 params.imageBase64，返回当前套装色号网格。
+ */
+async function generateGrid(params) {
+  const resp = await callAiGenerate(params)
+  return imageToGrid(resp.image, params.size, params.set)
 }
 
 /**
@@ -309,4 +319,4 @@ async function imageToGrid(dataUrl, size, setKey) {
   return imageDataToGrid(imageData, img.width, img.height, size, setKey)
 }
 
-module.exports = { compressToBase64, callAiGenerate, isTimeoutError, CLOUD_RETRY_MAX, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }
+module.exports = { compressToBase64, callAiGenerate, generateGrid, isTimeoutError, CLOUD_RETRY_MAX, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }

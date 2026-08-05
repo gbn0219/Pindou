@@ -10,6 +10,7 @@ const path = require('path')
 const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const MAX_ATTEMPTS = 3 // 每张原图免费生成次数上限
 
 const GEN_HOST = 'ark.cn-beijing.volces.com'
 const GEN_PATH = '/api/v3/images/generations'
@@ -208,13 +209,38 @@ async function generate(apiKey, model, data) {
   return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }
 }
 
+async function checkQuota(openid, event) {
+  const db = cloud.database()
+  const users = await db.collection('users').where({ _openid: openid }).limit(1).get()
+  if (users.data.length && users.data[0].freeVip) return
+  if (!event.imageHash) throw new Error('缺少 imageHash')
+  const col = db.collection('ai_sessions')
+  const res = await col.where({ _openid: openid, imageHash: event.imageHash }).limit(1).get()
+  if (!res.data.length) {
+    await col.add({
+      data: {
+        _openid: openid, sessionId: event.sessionId || '', imageHash: event.imageHash,
+        attempts: 1, unlocked: false, createdAt: db.serverDate(), updatedAt: db.serverDate()
+      }
+    })
+    return
+  }
+  const doc = res.data[0]
+  if (doc.unlocked) return
+  if (doc.attempts >= MAX_ATTEMPTS) throw new Error('已达该图片免费生成上限（3 次），请解锁一张或更换图片')
+  await col.doc(doc._id).update({ data: { attempts: doc.attempts + 1, updatedAt: db.serverDate() } })
+}
+
 exports.main = async (event) => {
   const apiKey = process.env.ARK_API_KEY
   if (!apiKey) {
     return { error: '云函数未配置 ARK_API_KEY 环境变量' }
   }
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) return { error: '请先登录' }
   const model = process.env.ARK_MODEL || DEFAULT_MODEL
   try {
+    await checkQuota(OPENID, event || {})
     return await generate(apiKey, model, event || {})
   } catch (e) {
     return { error: e.message }
