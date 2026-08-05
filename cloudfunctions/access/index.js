@@ -55,19 +55,29 @@ exports.main = async (event) => {
     return ok({ unlocked: !!(s && s.unlocked), freeVip: !!u.freeVip })
   }
   if (action === 'createOrder') {
-    const s = await getSession(OPENID, event.sessionId || '')
-    if (!s) return fail('NO_SESSION', '会话不存在')
+    let s = await getSession(OPENID, event.sessionId || '')
+    if (!s) {
+      // 旧版本生成或会话未落库：解锁时自动补建（已付费/邀请码，不破坏计费规则）
+      const imageHash = String(event.imageHash || '')
+      const add = await db.collection('ai_sessions').add({
+        data: {
+          _openid: OPENID, sessionId: String(event.sessionId || ''), imageHash,
+          attempts: MAX_ATTEMPTS, unlocked: false, createdAt: db.serverDate(), updatedAt: db.serverDate()
+        }
+      })
+      s = { _id: add._id, sessionId: String(event.sessionId || '') }
+    }
     const u = await getUser(OPENID)
     if (u.freeVip) return ok({ paid: true })
     if (PAY_MODE !== 'mock') return fail('PAY_NOT_READY', '支付未开通，请先配置 PAY_MODE')
-    const add = await db.collection('orders').add({
+    const addOrder = await db.collection('orders').add({
       data: {
         _openid: OPENID, sessionId: s.sessionId, amountFen: UNLOCK_PRICE, status: 'paid',
         createdAt: db.serverDate(), paidAt: db.serverDate()
       }
     })
     await db.collection('ai_sessions').doc(s._id).update({ data: { unlocked: true, updatedAt: db.serverDate() } })
-    return ok({ paid: true, orderId: add._id })
+    return ok({ paid: true, orderId: addOrder._id })
   }
   if (action === 'unlock') {
     const s = await getSession(OPENID, event.sessionId || '')

@@ -28,7 +28,7 @@ function saveProfile(payload) { return call('account', 'saveProfile', payload) }
 function applyInvite(code) { return call('account', 'applyInvite', { code }) }
 function consumeQuota(payload) { return call('access', 'consumeQuota', payload) }
 function checkAccess(sessionId) { return call('access', 'checkAccess', { sessionId }) }
-function createOrder(sessionId) { return call('access', 'createOrder', { sessionId }) }
+function createOrder(sessionId, imageHash) { return call('access', 'createOrder', { sessionId, imageHash }) }
 function unlock(sessionId) { return call('access', 'unlock', { sessionId }) }
 function saveGallery(payload) { return call('gallery', 'save', payload) }
 function listGallery(page, pageSize) { return call('gallery', 'list', { page, pageSize }) }

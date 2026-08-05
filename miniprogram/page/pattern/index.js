@@ -124,7 +124,7 @@ Page({
       cellSize: this.displayCell || pattern.CELL,
       gap: pattern.GAP,
       code: this.data.locked ? false : this.codeShown,
-      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+      gridEvery: this.data.locked ? 0 : (this.data.gridOn ? this.data.gridEvery : 0),
       noCodeMask: this.bgMask
     })
   },
@@ -275,24 +275,12 @@ Page({
     }
   },
 
-  onSwitchCandidate() {
-    const s = this.aiSession
-    if (!s || s.candidates.length < 2) return
-    const next = (s.index + 1) % s.candidates.length
-    this.aiSession = session.switchCandidate(s, next)
-    getApp().globalData.aiSession = this.aiSession
-    this.pattern.grid = this.aiSession.candidates[next]
-    this.setData({ lockedIndex: next + 1 })
-    this.updateLegend()
-    this.drawPattern()
-  },
-
   async onUnlock() {
     const s = this.aiSession
     if (!s) return
     wx.showLoading({ title: '解锁中…', mask: true })
     try {
-      const order = await user.createOrder(s.sessionId)
+      const order = await user.createOrder(s.sessionId, s.imageHash)
       if (!order.paid) throw new Error('支付未完成')
       await user.unlock(s.sessionId)
       this.pattern.locked = false

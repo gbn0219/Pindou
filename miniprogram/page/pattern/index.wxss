@@ -57,12 +57,7 @@
 .pattern-canvas {
   display: block;
 }
-.canvas-hint {
-  margin-top: var(--space-sm);
-  text-align: center;
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
-}
+
 
 .legend-head {
   display: flex;
@@ -189,4 +184,10 @@
 }
 .locked-actions .action-btn {
   flex: 1;
+  min-width: 0;
+  height: 80rpx;
+  padding: 0 var(--space-xs);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  line-height: 1;
 }

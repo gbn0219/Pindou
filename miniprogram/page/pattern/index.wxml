@@ -18,7 +18,7 @@
     <view class="canvas-area" id="canvasArea" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel">
       <canvas type="2d" id="patternCanvas" class="pattern-canvas" style="width: 100%; height: 100%;" />
     </view>
-    <view class="canvas-hint">双指缩放 · 拖动查看</view>
+
   </view>
 
   <view wx:if="{{!locked}}" class="grid-opt card">
@@ -54,10 +54,10 @@
   </view>
 
   <view wx:if="{{locked}}" class="locked-bar card">
-    <view class="locked-tip">预览中 · 第 {{lockedIndex}}/{{lockedTotal}} 张（已用 {{lockedTotal}}/3 次）</view>
+    <view class="locked-tip">预览中 · 第 {{lockedIndex}}/{{lockedTotal}} 张 · 本次已用 {{lockedTotal}}/3 次预览机会</view>
     <view class="locked-actions">
       <button class="btn btn--soft action-btn" disabled="{{lockedTotal >= 3}}" bindtap="onRegenerate">再生成{{lockedTotal >= 3 ? '（已用尽）' : ''}}</button>
-      <button class="btn btn--soft action-btn" bindtap="onSwitchCandidate">换一张</button>
+
       <button class="btn btn--primary action-btn" bindtap="onUnlock">解锁并交互</button>
     </view>
   </view>
