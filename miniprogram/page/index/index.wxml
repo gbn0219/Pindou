@@ -93,6 +93,7 @@
       >{{item}}×{{item}}</view>
     </view>
     <view class="size-controls">
+      <view class="size-btn" hover-class="size-btn--pressed" data-delta="-1" bindtap="onSizeStep">-</view>
       <slider
         class="size-slider"
         min="15"
@@ -104,6 +105,7 @@
         bindchanging="onSizeChanging"
         bindchange="onSizeChanging"
       />
+      <view class="size-btn" hover-class="size-btn--pressed" data-delta="1" bindtap="onSizeStep">+</view>
       <input
         class="size-input"
         type="number"

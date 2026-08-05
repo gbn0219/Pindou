@@ -166,6 +166,25 @@
   gap: var(--space-sm);
   margin-top: var(--space-sm);
 }
+.size-btn {
+  width: 64rpx;
+  height: 64rpx;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-paper-2);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-ink);
+  transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
+}
+.size-btn--pressed {
+  background: var(--color-paper-3);
+  transform: scale(0.94);
+}
 .size-slider {
   flex: 1;
 }

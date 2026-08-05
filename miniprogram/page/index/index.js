@@ -85,6 +85,11 @@ Page({
     if (!v || isNaN(v)) return // 非法输入保持当前值
     this.setData({ size: Math.max(MIN_SIZE, Math.min(MAX_SIZE, v)) })
   },
+  onSizeStep(e) {
+    const delta = Number(e.currentTarget.dataset.delta)
+    const v = Math.max(MIN_SIZE, Math.min(MAX_SIZE, this.data.size + delta))
+    this.setData({ size: v })
+  },
 
   pickMode(e) {
     this.setData({ mode: e.currentTarget.dataset.value })
