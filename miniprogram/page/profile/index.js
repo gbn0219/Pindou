@@ -11,12 +11,12 @@ Page({
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 1 })
     }
-    this.refresh()
+    if (!this.data.user) this.refresh()
   },
   async refresh() {
     try {
       const u = await getApp().ensureLogin()
-      this.setData({ user: u, openidTail: u.openid ? u.openid.slice(-6) : '' })
+      this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
     } catch (e) {
       console.error('登录状态刷新失败', e)
       this.setData({ user: null, openidTail: '' })
@@ -26,7 +26,7 @@ Page({
     this.setData({ loading: true })
     try {
       const u = await getApp().ensureLogin()
-      this.setData({ user: u, openidTail: u.openid ? u.openid.slice(-6) : '' })
+      this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
     } catch (e) {
       wx.showToast({ title: (e && e.message) || '登录失败', icon: 'none' })
       console.error('登录失败', e)
@@ -41,7 +41,7 @@ Page({
     try {
       const ext = (filePath.match(/\.(\w+)$/) || [ , 'jpg'])[1]
       const up = await wx.cloud.uploadFile({
-        cloudPath: 'avatars/' + this.data.user.openid + '/avatar.' + ext,
+        cloudPath: 'avatars/' + (this.data.user.openid || this.data.user._openid) + '/avatar.' + ext,
         filePath
       })
       const u = await user.saveProfile({ avatarFileID: up.fileID })
@@ -70,7 +70,9 @@ Page({
     if (!code) return
     try {
       const r = await user.applyInvite(code)
-      this.setData({ user: r.user })
+      const merged = Object.assign({}, this.data.user, r.user)
+      if (!merged.openid && merged._openid) merged.openid = merged._openid
+      this.setData({ user: merged, openidTail: (merged.openid || merged._openid || '').slice(-6) })
       wx.showToast({ title: '邀请码激活成功', icon: 'success' })
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '邀请码无效', icon: 'none' })

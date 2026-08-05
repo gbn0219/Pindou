@@ -146,7 +146,8 @@ Page({
   generateByAi() {
     const style = this.getStyle()
     const app = getApp()
-    if (!(app.globalData.user && app.globalData.user.openid)) {
+    const curUser = app.globalData.user
+    if (!(curUser && (curUser.openid || curUser._openid))) {
       wx.showModal({
         title: '需要登录',
         content: '创意生成需要登录后使用，去「我的」页登录？',

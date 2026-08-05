@@ -123,17 +123,22 @@ App({
   },
   restoreLogin() {
     const user = wx.getStorageSync('user')
-    if (user && user.openid) this.globalData.user = user
+    if (user && (user.openid || user._openid)) {
+      if (!user.openid && user._openid) user.openid = user._openid
+      this.globalData.user = user
+    }
   },
   ensureLogin() {
-    if (this.globalData.user && this.globalData.user.openid) {
+    if (this.globalData.user && (this.globalData.user.openid || this.globalData.user._openid)) {
       return Promise.resolve(this.globalData.user)
     }
     const userApi = require('./utils/user.js')
     return userApi.login().then((r) => {
-      this.globalData.user = r.user
-      wx.setStorageSync('user', r.user)
-      return r.user
+      const u = r.user
+      if (!u.openid && u._openid) u.openid = u._openid
+      this.globalData.user = u
+      wx.setStorageSync('user', u)
+      return u
     })
   }
 })

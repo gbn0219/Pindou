@@ -14,7 +14,8 @@ function fail(code, msg) { return { ok: false, code, msg } }
 async function getOrCreateUser(openid) {
   const col = db.collection('users')
   const res = await col.where({ _openid: openid }).limit(1).get()
-  if (res.data.length) return res.data[0]
+  const withOpenid = (doc) => Object.assign({}, doc, { openid: doc._openid })
+  if (res.data.length) return withOpenid(res.data[0])
   const doc = {
     _openid: openid,
     nickname: '',
@@ -25,7 +26,7 @@ async function getOrCreateUser(openid) {
     updatedAt: db.serverDate()
   }
   await col.add({ data: doc })
-  return doc
+  return withOpenid(doc)
 }
 
 exports.main = async (event) => {

@@ -35,6 +35,10 @@
   gap: var(--space-md);
 }
 .avatar-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   background: transparent;
   border: 0;
@@ -55,7 +59,7 @@
   border: 2rpx dashed var(--color-rule);
 }
 .profile-info {
-  flex: 1;
+  flex: 2;
   min-width: 0;
 }
 .nickname-input {
@@ -69,7 +73,8 @@
   font-family: var(--font-label);
 }
 .vip-badge {
-  align-self: flex-start;
+  display: inline-block;
+  margin-top: var(--space-2xs);
   background: var(--color-accent);
   color: var(--color-accent-ink);
   border-radius: var(--radius-pill);

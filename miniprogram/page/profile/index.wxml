@@ -15,8 +15,8 @@
       <view class="profile-info">
         <input class="nickname-input" type="nickname" placeholder="点击设置昵称" value="{{user.nickname}}" bindblur="onNicknameBlur" />
         <view class="profile-tip">ID：{{openidTail}}</view>
+        <view wx:if="{{user.freeVip}}" class="vip-badge">邀请码用户 · 全部免费</view>
       </view>
-      <view wx:if="{{user.freeVip}}" class="vip-badge">邀请码用户 · 全部免费</view>
     </view>
 
     <view class="card section">

@@ -238,7 +238,8 @@ Page({
   async onRegenerate() {
     const s = this.aiSession
     if (!s || !s.params || !session.canGenerate(s)) return
-    if (!(getApp().globalData.user && getApp().globalData.user.openid)) {
+    const curUser = getApp().globalData.user
+    if (!(curUser && (curUser.openid || curUser._openid))) {
       wx.showToast({ title: '请先登录', icon: 'none' })
       return
     }
