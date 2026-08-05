@@ -44,6 +44,7 @@ App({
         traceUser: true,
       })
     }
+    this.restoreLogin()
   },
 
   
@@ -75,6 +76,7 @@ App({
     theme: wx.getSystemInfoSync().theme,
     hasLogin: false,
     openid: null,
+    user: null,
     iconTabbar: '/page/weui/example/images/icon_tabbar.png',
   },
   // lazy loading openid
@@ -117,6 +119,21 @@ App({
     }).then(res => {
       this.globalData.openid = res.result.openid
       return res.result.openid
+    })
+  },
+  restoreLogin() {
+    const user = wx.getStorageSync('user')
+    if (user && user.openid) this.globalData.user = user
+  },
+  ensureLogin() {
+    if (this.globalData.user && this.globalData.user.openid) {
+      return Promise.resolve(this.globalData.user)
+    }
+    const userApi = require('./utils/user.js')
+    return userApi.login().then((r) => {
+      this.globalData.user = r.user
+      wx.setStorageSync('user', r.user)
+      return r.user
     })
   }
 })

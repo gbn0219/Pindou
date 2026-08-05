@@ -1,6 +1,8 @@
 {
   "pages": [
     "page/index/index",
+    "page/profile/index",
+    "page/gallery/index",
     "page/crop/index",
     "page/pattern/index",
     "page/pattern-edit/index"
@@ -33,6 +35,24 @@
     "weui": true
   },
   "frameset": true,
-  "embeddedAppIdList": ["wxfdcee92a299bcaf1"],
-  "lazyCodeLoading": "requiredComponents"
+  "embeddedAppIdList": [
+    "wxfdcee92a299bcaf1"
+  ],
+  "lazyCodeLoading": "requiredComponents",
+  "tabBar": {
+    "color": "#8a8f98",
+    "selectedColor": "#2f6fed",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "page/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "page/profile/index",
+        "text": "我的"
+      }
+    ]
+  }
 }
