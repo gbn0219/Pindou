@@ -3,11 +3,11 @@
   <view wx:if="{{items.length}}" class="gallery-grid">
     <view wx:for="{{items}}" wx:key="_id" class="pair-card">
       <view class="pair-thumbs">
-        <image class="thumb" src="{{item.originalFileID}}" mode="aspectFill" data-fileid="{{item.originalFileID}}" bindtap="onSave" />
-        <image class="thumb" src="{{item.patternFileID}}" mode="aspectFill" data-fileid="{{item.patternFileID}}" bindtap="onSave" />
+        <image class="thumb" src="{{item.originalFileID}}" mode="aspectFill" data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
+        <image class="thumb" src="{{item.patternFileID}}" mode="aspectFill" data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
       </view>
       <view class="pair-meta">
-        <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + (item.style || '') : '照片还原'}}</text>
+        <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>
         <text class="pair-sub">{{item.timeText}} · {{item.size}}×{{item.size}} · {{item.set}} 色</text>
       </view>
     </view>

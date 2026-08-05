@@ -2,11 +2,8 @@
 @import '../../styles/tokens.wxss';
 
 .page {
-  height: 100vh;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
   padding: var(--space-md);
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
 .gallery-head {
@@ -17,16 +14,15 @@
 }
 
 .gallery-grid {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--space-sm);
-  align-content: start;
 }
 
 .pair-card {
+  width: 60%;
+  max-width: 440rpx;
   background: var(--color-bead-bg);
   border-radius: var(--radius-card);
   padding: var(--space-xs);
@@ -61,10 +57,8 @@
 }
 
 .empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: var(--space-xl) 0;
+  text-align: center;
   color: var(--color-neutral);
   font-size: var(--text-base);
 }

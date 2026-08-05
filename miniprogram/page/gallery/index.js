@@ -31,7 +31,10 @@ Page({
       const r = await user.listGallery(page, PAGE_SIZE)
       const p = r.page || page
       const items = (r.items || []).map((it) =>
-        Object.assign({}, it, { timeText: formatTime(it.createdAt) })
+        Object.assign({}, it, {
+          timeText: formatTime(it.createdAt),
+          styleShort: (it.style || '').split(/[：:]/)[0].trim()
+        })
       )
       this.setData({
         items,
@@ -50,28 +53,24 @@ Page({
     if (!n || isNaN(n) || n === this.data.page || n < 1 || n > this.data.totalPages) return
     this.load(n)
   },
-  onSave(e) {
+  onPreview(e) {
     const fileID = e.currentTarget.dataset.fileid
-    if (!fileID) return
-    wx.showModal({
-      title: '保存到相册',
-      content: '保存这张图片到手机相册？',
-      success: (r) => {
-        if (!r.confirm) return
-        wx.showLoading({ title: '保存中…', mask: true })
-        wx.cloud.downloadFile({ fileID })
-          .then((res) => new Promise((resolve, reject) => {
-            wx.saveImageToPhotosAlbum({ filePath: res.tempFilePath, success: resolve, fail: reject })
-          }))
-          .then(() => {
-            wx.hideLoading()
-            wx.showToast({ title: '已保存到相册', icon: 'success' })
-          })
-          .catch(() => {
-            wx.hideLoading()
-            wx.showToast({ title: '保存失败', icon: 'none' })
-          })
-      }
-    })
+    const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
+    if (!fileID || !pair) return
+    wx.showLoading({ title: '加载中…', mask: true })
+    wx.cloud.getTempFileURL({ fileList: [pair.originalFileID, pair.patternFileID] })
+      .then((res) => {
+        const list = res.fileList || []
+        const byId = {}
+        list.forEach((f) => { byId[f.fileID] = f.tempFileURL })
+        const urls = [pair.originalFileID, pair.patternFileID].map((id) => byId[id]).filter(Boolean)
+        if (!urls.length) throw new Error('empty')
+        wx.hideLoading()
+        wx.previewImage({ urls, current: byId[fileID] || urls[0] })
+      })
+      .catch(() => {
+        wx.hideLoading()
+        wx.showToast({ title: '图片加载失败', icon: 'none' })
+      })
   }
 })

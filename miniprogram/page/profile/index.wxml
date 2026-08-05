@@ -9,7 +9,7 @@
   <block wx:else>
     <view class="card profile-card">
       <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-        <image wx:if="{{user.avatarFileID}}" class="avatar" src="{{user.avatarFileID}}" mode="aspectFill" />
+        <image wx:if="{{user.avatarFileID && !avatarBroken}}" class="avatar" src="{{user.avatarFileID}}" mode="aspectFill" binderror="onAvatarError" />
         <view wx:else class="avatar avatar--empty">设头像</view>
       </button>
       <view class="profile-info">

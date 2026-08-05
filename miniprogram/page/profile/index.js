@@ -1,10 +1,19 @@
 // miniprogram/page/profile/index.js
 const user = require('../../utils/user.js')
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('上传超时')), ms))
+  ])
+}
 Page({
   data: {
     user: null,
     openidTail: '',
     loading: false,
+    uploading: false,
+    avatarBroken: false,
     inviteCode: ''
   },
   onShow() {
@@ -36,21 +45,26 @@ Page({
   },
   async onChooseAvatar(e) {
     const filePath = e.detail.avatarUrl
-    if (!filePath || !this.data.user) return
+    if (!filePath || !this.data.user || this.data.uploading) return
+    this.setData({ uploading: true, avatarBroken: false })
     wx.showLoading({ title: '上传中…', mask: true })
     try {
       const ext = (filePath.match(/\.(\w+)$/) || [ , 'jpg'])[1]
-      const up = await wx.cloud.uploadFile({
+      const up = await withTimeout(wx.cloud.uploadFile({
         cloudPath: 'avatars/' + (this.data.user.openid || this.data.user._openid) + '/avatar.' + ext,
         filePath
-      })
+      }), 15000)
       const u = await user.saveProfile({ avatarFileID: up.fileID })
       this.setData({ user: u })
     } catch (err) {
       wx.showToast({ title: '头像上传失败', icon: 'none' })
     } finally {
+      this.setData({ uploading: false })
       wx.hideLoading()
     }
+  },
+  onAvatarError() {
+    this.setData({ avatarBroken: true })
   },
   async onNicknameBlur(e) {
     const nickname = String(e.detail.value || '').trim()
