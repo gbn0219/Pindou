@@ -37,7 +37,27 @@ exports.main = async (event) => {
     const col = db.collection('gallery')
     const total = (await col.where(where).count()).total
     const res = await col.where(where).orderBy('createdAt', 'desc').skip((page - 1) * pageSize).limit(pageSize).get()
-    return ok({ items: res.data, page, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
+    const docs = res.data
+    // 批量取临时 URL（一次请求），避免前端逐张解析 cloud:// 造成卡顿
+    const urlMap = {}
+    if (docs.length) {
+      const fileList = []
+      docs.forEach((d) => {
+        if (d.originalFileID) fileList.push(d.originalFileID)
+        if (d.patternFileID) fileList.push(d.patternFileID)
+      })
+      const urlRes = await cloud.getTempFileURL({ fileList })
+      ;(urlRes.fileList || []).forEach((f) => {
+        if (f.tempFileURL) urlMap[f.fileID] = f.tempFileURL
+      })
+    }
+    const items = docs.map((d) =>
+      Object.assign({}, d, {
+        originalURL: urlMap[d.originalFileID] || '',
+        patternURL: urlMap[d.patternFileID] || ''
+      })
+    )
+    return ok({ items, page, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) })
   }
   return fail('BAD_ACTION', '未知操作')
 }

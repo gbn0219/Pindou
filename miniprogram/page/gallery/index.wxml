@@ -1,10 +1,10 @@
 <view class="page">
-  <view class="gallery-head">我的图库 · 共 {{totalPages}} 页</view>
+  <view class="gallery-head">我的图库 · 共 {{total}} 张 · 第 {{page}}/{{totalPages}} 页</view>
   <view wx:if="{{items.length}}" class="gallery-grid">
     <view wx:for="{{items}}" wx:key="_id" class="pair-card">
       <view class="pair-thumbs">
-        <image class="thumb" src="{{item.originalFileID}}" mode="aspectFill" data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
-        <image class="thumb" src="{{item.patternFileID}}" mode="aspectFill" data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
+        <image class="thumb" src="{{item.originalURL || item.originalFileID}}" mode="aspectFill" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
+        <image class="thumb" src="{{item.patternURL || item.patternFileID}}" mode="aspectFill" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
       </view>
       <view class="pair-meta">
         <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>

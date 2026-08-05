@@ -18,6 +18,7 @@ Page({
     items: [],
     page: 1,
     totalPages: 1,
+    total: 0,
     pageNos: [1],
     loading: false
   },
@@ -40,6 +41,7 @@ Page({
         items,
         page: p,
         totalPages: r.totalPages || 1,
+        total: r.total || 0,
         pageNos: pager.pageWindow(r.totalPages || 1, p)
       })
     } catch (err) {
@@ -57,20 +59,32 @@ Page({
     const fileID = e.currentTarget.dataset.fileid
     const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
     if (!fileID || !pair) return
+    // 优先用列表已带回来的临时 URL，避免二次请求
+    const byId = {}
+    if (pair.originalURL) byId[pair.originalFileID] = pair.originalURL
+    if (pair.patternURL) byId[pair.patternFileID] = pair.patternURL
+    const show = (urls) => wx.previewImage({ urls, current: byId[fileID] || urls[0] })
+    if (byId[pair.originalFileID] && byId[pair.patternFileID]) {
+      show([byId[pair.originalFileID], byId[pair.patternFileID]])
+      return
+    }
     wx.showLoading({ title: '加载中…', mask: true })
     wx.cloud.getTempFileURL({ fileList: [pair.originalFileID, pair.patternFileID] })
       .then((res) => {
         const list = res.fileList || []
-        const byId = {}
-        list.forEach((f) => { byId[f.fileID] = f.tempFileURL })
+        list.forEach((f) => { if (f.tempFileURL) byId[f.fileID] = f.tempFileURL })
         const urls = [pair.originalFileID, pair.patternFileID].map((id) => byId[id]).filter(Boolean)
         if (!urls.length) throw new Error('empty')
         wx.hideLoading()
-        wx.previewImage({ urls, current: byId[fileID] || urls[0] })
+        show(urls)
       })
       .catch(() => {
         wx.hideLoading()
         wx.showToast({ title: '图片加载失败', icon: 'none' })
       })
+  },
+  async onPullDownRefresh() {
+    await this.load(this.data.page)
+    wx.stopPullDownRefresh()
   }
 })
