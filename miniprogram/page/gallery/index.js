@@ -3,6 +3,13 @@ const user = require('../../utils/user.js')
 const pager = require('../../utils/pager.js')
 const PAGE_SIZE = 10
 
+function downloadFile(fileID, ms) {
+  return Promise.race([
+    wx.cloud.downloadFile({ fileID }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('下载超时')), ms || 15000))
+  ]).then((res) => res.tempFilePath)
+}
+
 function formatTime(d) {
   if (!d) return ''
   const date = new Date(d)
@@ -59,20 +66,17 @@ Page({
     const fileID = e.currentTarget.dataset.fileid
     const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
     if (!fileID || !pair) return
+    // 预览用压缩图（老数据回退原图），下载到本地再打开，不依赖域名白名单
+    const isOriginal = fileID === pair.originalFileID
+    const ids = [
+      isOriginal ? (pair.originalPreviewFileID || pair.originalFileID) : (pair.patternPreviewFileID || pair.patternFileID),
+      isOriginal ? (pair.patternPreviewFileID || pair.patternFileID) : (pair.originalPreviewFileID || pair.originalFileID)
+    ]
     wx.showLoading({ title: '加载中…', mask: true })
-    // 每次预览都重新取临时 URL（列表里的 URL 可能已过期，过期会导致永远加载不出）
-    wx.cloud.getTempFileURL({ fileList: [pair.originalFileID, pair.patternFileID] })
-      .then((res) => {
-        const byId = {}
-        ;(res.fileList || []).forEach((f) => { if (f.tempFileURL) byId[f.fileID] = f.tempFileURL })
-        const urls = [pair.originalFileID, pair.patternFileID].map((id) => byId[id]).filter(Boolean)
-        if (!urls.length) throw new Error('empty')
+    Promise.all(ids.map((id) => downloadFile(id, 15000)))
+      .then((paths) => {
         wx.hideLoading()
-        wx.previewImage({
-          urls,
-          current: byId[fileID] || urls[0],
-          complete: () => wx.hideLoading()
-        })
+        wx.previewImage({ urls: paths, current: paths[0], complete: () => wx.hideLoading() })
       })
       .catch(() => {
         wx.hideLoading()

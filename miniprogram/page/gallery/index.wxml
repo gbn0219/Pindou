@@ -4,10 +4,10 @@
     <view wx:for="{{items}}" wx:key="_id" class="pair-card">
       <view class="pair-thumbs">
         <view class="thumb-box">
-          <image class="thumb" src="{{item.originalURL || item.originalFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
+          <image class="thumb" src="{{item.originalThumbFileID || item.originalFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
         </view>
         <view class="thumb-box">
-          <image class="thumb" src="{{item.patternURL || item.patternFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
+          <image class="thumb" src="{{item.patternThumbFileID || item.patternFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
         </view>
       </view>
       <view class="pair-meta">
