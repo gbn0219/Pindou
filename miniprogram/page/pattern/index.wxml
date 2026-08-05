@@ -52,7 +52,7 @@
     <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
     <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
   </view>
-</view>
+
   <view wx:if="{{locked}}" class="locked-bar card">
     <view class="locked-tip">预览中 · 第 {{lockedIndex}}/{{lockedTotal}} 张（已用 {{lockedTotal}}/3 次）</view>
     <view class="locked-actions">
