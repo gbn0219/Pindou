@@ -3,7 +3,7 @@
 
 .page {
   padding: var(--space-md);
-  padding-bottom: calc(var(--space-xl) + 120rpx);
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom) + var(--space-xl));
 }
 
 .card {

@@ -1,0 +1,30 @@
+/* custom-tab-bar/index.wxss */
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 200rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: content-box;
+  display: flex;
+  background: #ffffff;
+  border-top: 2rpx solid #e5e1d3;
+  z-index: 999;
+}
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+.tab-icon {
+  width: 64rpx;
+  height: 64rpx;
+}
+.tab-text {
+  font-size: 26rpx;
+  line-height: 1;
+}

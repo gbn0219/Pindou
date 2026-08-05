@@ -2,7 +2,7 @@
 @import "../../styles/tokens.wxss";
 
 .page {
-  padding: var(--space-xl) var(--space-md) calc(var(--space-xl) + 48rpx);
+  padding: var(--space-xl) var(--space-md) calc(200rpx + env(safe-area-inset-bottom) + var(--space-lg));
 }
 
 .hero {

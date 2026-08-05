@@ -40,8 +40,9 @@
   ],
   "lazyCodeLoading": "requiredComponents",
   "tabBar": {
+    "custom": true,
     "color": "#7a8189",
-    "selectedColor": "#2f6fed",
+    "selectedColor": "#f6ce00",
     "backgroundColor": "#ffffff",
     "borderStyle": "black",
     "list": [
@@ -53,7 +54,7 @@
       },
       {
         "pagePath": "page/profile/index",
-        "text": "我的",
+        "text": "个人中心",
         "iconPath": "images/tabbar/user.png",
         "selectedIconPath": "images/tabbar/user-active.png"
       }
