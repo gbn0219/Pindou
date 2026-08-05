@@ -15,6 +15,7 @@ Page({
       const u = await getApp().ensureLogin()
       this.setData({ user: u, openidTail: u.openid ? u.openid.slice(-6) : '' })
     } catch (e) {
+      console.error('登录状态刷新失败', e)
       this.setData({ user: null, openidTail: '' })
     }
   },
@@ -24,7 +25,8 @@ Page({
       const u = await getApp().ensureLogin()
       this.setData({ user: u, openidTail: u.openid ? u.openid.slice(-6) : '' })
     } catch (e) {
-      wx.showToast({ title: '登录失败', icon: 'none' })
+      wx.showToast({ title: (e && e.message) || '登录失败', icon: 'none' })
+      console.error('登录失败', e)
     } finally {
       this.setData({ loading: false })
     }

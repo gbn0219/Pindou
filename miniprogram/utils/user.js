@@ -12,6 +12,11 @@ function call(name, action, data) {
       throw err
     }
     return r
+  }).catch((err) => {
+    const msg = (err && (err.errMsg || err.message)) || '云函数调用失败'
+    const e = new Error(msg)
+    e.code = (err && err.code) || 'CALL_FAIL'
+    throw e
   })
 }
 function login() { return call('account', 'login') }
