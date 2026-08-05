@@ -59,24 +59,20 @@ Page({
     const fileID = e.currentTarget.dataset.fileid
     const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
     if (!fileID || !pair) return
-    // 优先用列表已带回来的临时 URL，避免二次请求
-    const byId = {}
-    if (pair.originalURL) byId[pair.originalFileID] = pair.originalURL
-    if (pair.patternURL) byId[pair.patternFileID] = pair.patternURL
-    const show = (urls) => wx.previewImage({ urls, current: byId[fileID] || urls[0] })
-    if (byId[pair.originalFileID] && byId[pair.patternFileID]) {
-      show([byId[pair.originalFileID], byId[pair.patternFileID]])
-      return
-    }
     wx.showLoading({ title: '加载中…', mask: true })
+    // 每次预览都重新取临时 URL（列表里的 URL 可能已过期，过期会导致永远加载不出）
     wx.cloud.getTempFileURL({ fileList: [pair.originalFileID, pair.patternFileID] })
       .then((res) => {
-        const list = res.fileList || []
-        list.forEach((f) => { if (f.tempFileURL) byId[f.fileID] = f.tempFileURL })
+        const byId = {}
+        ;(res.fileList || []).forEach((f) => { if (f.tempFileURL) byId[f.fileID] = f.tempFileURL })
         const urls = [pair.originalFileID, pair.patternFileID].map((id) => byId[id]).filter(Boolean)
         if (!urls.length) throw new Error('empty')
         wx.hideLoading()
-        show(urls)
+        wx.previewImage({
+          urls,
+          current: byId[fileID] || urls[0],
+          complete: () => wx.hideLoading()
+        })
       })
       .catch(() => {
         wx.hideLoading()

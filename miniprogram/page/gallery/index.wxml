@@ -3,8 +3,12 @@
   <view wx:if="{{items.length}}" class="gallery-grid">
     <view wx:for="{{items}}" wx:key="_id" class="pair-card">
       <view class="pair-thumbs">
-        <image class="thumb" src="{{item.originalURL || item.originalFileID}}" mode="aspectFill" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
-        <image class="thumb" src="{{item.patternURL || item.patternFileID}}" mode="aspectFill" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
+        <view class="thumb-box">
+          <image class="thumb" src="{{item.originalURL || item.originalFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
+        </view>
+        <view class="thumb-box">
+          <image class="thumb" src="{{item.patternURL || item.patternFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
+        </view>
       </view>
       <view class="pair-meta">
         <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>

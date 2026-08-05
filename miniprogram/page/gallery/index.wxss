@@ -32,9 +32,21 @@
   display: flex;
   gap: 8rpx;
 }
-.thumb {
+.thumb-box {
   width: 50%;
-  height: 150rpx;
+  position: relative;
+}
+.thumb-box::after {
+  content: '';
+  display: block;
+  padding-bottom: 100%;
+}
+.thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   border-radius: var(--radius-input);
   background: var(--color-paper-2);
 }
