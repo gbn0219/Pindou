@@ -1,6 +1,6 @@
 // miniprogram/utils/ai.js
 /**
- * AI 生成前端：原图压缩、提交任务并轮询后端（local/cloud）、读取 AI 图纸图片像素映射为拼豆色号。
+ * 创意生成前端：原图压缩、提交任务并轮询后端（local/cloud）、读取生成图纸图片像素映射为拼豆色号。
  * imageToGrid 依赖 wx 环境；imageDataToGrid 为纯函数，可在 Node 中测试。
  *
  * 图像方案：后端调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）
@@ -9,7 +9,7 @@
  * 不输出文字色号，无输出 token 上限问题。
  */
 const config = require('../config')
-const background = require('./background') // AI 图纸背景近白噪声清洗
+const background = require('./background') // 生成图纸背景近白噪声清洗
 const color = require('./color')
 const image = require('./image')
 const pattern = require('./pattern')
@@ -60,7 +60,7 @@ function request(url, method, data) {
       data,
       timeout: REQUEST_TIMEOUT,
       success: resolve,
-      fail: (err) => reject(new Error((err && err.errMsg) || '本地 AI 服务请求失败'))
+      fail: (err) => reject(new Error((err && err.errMsg) || '本地生成服务请求失败'))
     })
   })
 }
@@ -74,11 +74,11 @@ function pollTask(ai, taskId, resolve, reject, start) {
         return
       }
       if (r.statusCode === 200 && d.status === 'error') {
-        reject(new Error(d.error || '本地 AI 服务生成失败'))
+        reject(new Error(d.error || '本地生成服务生成失败'))
         return
       }
       if (Date.now() - start > POLL_MAX_MS) {
-        reject(new Error('AI 生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
+        reject(new Error('生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
         return
       }
       setTimeout(() => pollTask(ai, taskId, resolve, reject, start), POLL_INTERVAL)
@@ -86,7 +86,7 @@ function pollTask(ai, taskId, resolve, reject, start) {
     .catch(() => {
       // 轮询网络抖动时继续重试，直到总等待上限
       if (Date.now() - start > POLL_MAX_MS) {
-        reject(new Error('AI 生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
+        reject(new Error('生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
         return
       }
       setTimeout(() => pollTask(ai, taskId, resolve, reject, start), POLL_INTERVAL)
@@ -99,11 +99,11 @@ function callLocal(ai, data) {
         if (r.statusCode === 200 && r.data && r.data.taskId) {
           pollTask(ai, r.data.taskId, resolve, reject, Date.now())
         } else {
-          reject(new Error((r.data && r.data.error) || '本地 AI 服务响应异常'))
+          reject(new Error((r.data && r.data.error) || '本地生成服务响应异常'))
         }
       })
       .catch((err) => {
-        const msg = err.message || '本地 AI 服务请求失败'
+        const msg = err.message || '本地生成服务请求失败'
         const lower = msg.toLowerCase()
         let tip = ''
         if (lower.indexOf('domain') >= 0 || lower.indexOf('url') >= 0) {
@@ -162,13 +162,13 @@ function callAiGenerate(params) {
 }
 
 /**
- * 纯函数：把整幅 AI 图纸像素（RGBA）按 size×size 分块，每块取主色（占比最高的颜色桶），
- * 再映射为当前套装的色号网格。AI 输出常带细网格线/辅助线，块内主色一定是格子内容；
+ * 纯函数：把整幅生成图纸像素（RGBA）按 size×size 分块，每块取主色（占比最高的颜色桶），
+ * 再映射为当前套装的色号网格。生成输出常带细网格线/辅助线，块内主色一定是格子内容；
  * 若取平均会把网格线混进背景导致发灰。块内无主色（如渐变）时退化为平均。
  */
 /**
  * 肤色归一：把判定为肤色的主色统一为 G1 色号 RGB(255,228,211)，
- * 解决 AI 把脸画成深棕/小麦色导致肤色不符的问题。
+ * 解决生成图把脸画成深棕/小麦色导致肤色不符的问题。
  * 判定条件：暖色相（R>G>B）、足够亮、色相不偏橙不偏黄太多，避免误伤头发/衣服。
  */
 function skinNormalize(r, g, b) {
@@ -263,7 +263,7 @@ function dominantBlockRgb(imageData, srcW, srcH, size) {
 }
 
 /**
- * 纯函数：整幅 AI 图纸像素 → 主色分块 → 当前套装色号网格。
+ * 纯函数：整幅生成图纸像素 → 主色分块 → 当前套装色号网格。
  */
 function imageDataToGrid(imageData, srcW, srcH, size, setKey) {
   return pattern.mapRgb(
@@ -274,11 +274,11 @@ function imageDataToGrid(imageData, srcW, srcH, size, setKey) {
 }
 
 /**
- * 把 AI 返回的图片 data URL 写入临时文件 → 加载 → 读整幅像素 → 主色分块映射为色号网格。
+ * 把生成的图片 data URL 写入临时文件 → 加载 → 读整幅像素 → 主色分块映射为色号网格。
  */
 async function imageToGrid(dataUrl, size, setKey) {
   const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,/.exec(dataUrl)
-  if (!m) throw new Error('AI 返回的图片格式不正确')
+  if (!m) throw new Error('生成的图片格式不正确')
   const fs = wx.getFileSystemManager()
   const tempPath =
     wx.env.USER_DATA_PATH +
@@ -294,7 +294,7 @@ async function imageToGrid(dataUrl, size, setKey) {
       data: dataUrl.slice(dataUrl.indexOf(',') + 1),
       encoding: 'base64',
       success: resolve,
-      fail: (err) => reject(new Error('AI 图纸图片保存失败: ' + ((err && err.errMsg) || '')))
+      fail: (err) => reject(new Error('图纸图片保存失败: ' + ((err && err.errMsg) || '')))
     })
   })
   const loader = wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 })

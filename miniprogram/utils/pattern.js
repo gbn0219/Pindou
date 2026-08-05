@@ -98,7 +98,7 @@ function replaceColor(grid, fromCode, toCode) {
 
 /**
  * 白色系色号：RGB 三个通道都 >= WHITE_RGB_MIN 的套装颜色（纯白 H1、近白 H2、奶油白等）。
- * 背景不一定是纯白 H1（AI/照片背景常映射到 H2 或奶油白），需要把整组近白色都视为背景候选。
+ * 背景不一定是纯白 H1（生成图/照片背景常映射到 H2 或奶油白），需要把整组近白色都视为背景候选。
  */
 function findWhiteishCodes(palette) {
   return palette

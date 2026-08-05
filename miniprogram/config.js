@@ -17,7 +17,7 @@ const config = {
   demoImageFileId: 'cloud://release-b86096.7265-release-b86096-1258211818/demo.jpg',
   demoVideoFileId: 'cloud://release-b86096.7265-release-b86096/demo.mp4',
 
-  // AI 生成图纸后端：'local' = 本地代理服务（tools/ai-generate-server.js，读取根目录 .env）；
+  // 创意生成图纸后端：'local' = 本地代理服务（tools/ai-generate-server.js，读取根目录 .env）；
   // 'cloud' = 云函数 ai-generate-pattern
   aiGenerate: {
     backend: 'cloud',

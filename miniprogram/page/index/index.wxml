@@ -24,7 +24,7 @@
         hover-class="chip--pressed"
         data-value="ai"
         bindtap="pickMode"
-      >AI 生成</view>
+      >创意生成</view>
       <view
         class="chip {{mode === 'photo' ? 'chip--on' : ''}}"
         hover-class="chip--pressed"

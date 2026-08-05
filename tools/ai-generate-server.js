@@ -99,12 +99,12 @@ function postJson(host, pathname, payload, apiKey, timeoutMs) {
           try {
             resolve(JSON.parse(data))
           } catch (e) {
-            reject(new Error('AI 响应解析失败: ' + data.slice(0, 200)))
+            reject(new Error('生成服务响应解析失败: ' + data.slice(0, 200)))
           }
         })
       }
     )
-    req.on('timeout', () => req.destroy(new Error('AI 调用超时')))
+    req.on('timeout', () => req.destroy(new Error('生成调用超时')))
     req.on('error', reject)
     req.write(body)
     req.end()
@@ -127,7 +127,7 @@ function downloadBinary(url, timeoutMs, redirectsLeft) {
       }
       if (res.statusCode >= 400) {
         res.resume()
-        reject(new Error('AI 图片下载失败: HTTP ' + res.statusCode))
+        reject(new Error('生成图片下载失败: HTTP ' + res.statusCode))
         return
       }
       const chunks = []
@@ -141,7 +141,7 @@ function downloadBinary(url, timeoutMs, redirectsLeft) {
         })
       )
     })
-    req.on('timeout', () => req.destroy(new Error('AI 图片下载超时')))
+    req.on('timeout', () => req.destroy(new Error('生成图片下载超时')))
     req.on('error', reject)
   })
 }
@@ -162,7 +162,7 @@ function extractImageUrl(resp) {
 async function generate(apiKey, model, data) {
   const size = Number(data.size)
   if (!Number.isInteger(size) || size < BOARD_MIN || size > BOARD_MAX) {
-    throw new Error('AI 图像生成仅支持 ' + BOARD_MIN + '×' + BOARD_MIN + ' ~ ' + BOARD_MAX + '×' + BOARD_MAX + ' 的整数盘面')
+    throw new Error('图像生成仅支持 ' + BOARD_MIN + '×' + BOARD_MIN + ' ~ ' + BOARD_MAX + '×' + BOARD_MAX + ' 的整数盘面')
   }
   if (!data.imageBase64) {
     throw new Error('请求缺少 imageBase64')
@@ -202,13 +202,13 @@ async function generate(apiKey, model, data) {
     if (!errMsg) break
     const retriable = /rate limit|429|5\d\d|throttl/i.test(errMsg)
     if (!retriable || attempt >= 3) {
-      throw new Error('AI 返回错误: ' + errMsg)
+      throw new Error('生成服务返回错误: ' + errMsg)
     }
     await new Promise((r) => setTimeout(r, 8000 * (attempt + 1)))
   }
   const url = extractImageUrl(resp)
   if (!url) {
-    throw new Error('AI 未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
+    throw new Error('生成服务未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
   }
   const { buffer, contentType } = await downloadBinary(url, 60000, 5)
   return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }

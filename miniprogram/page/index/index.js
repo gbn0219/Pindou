@@ -14,7 +14,7 @@ Page({
     size: 52,
     colorSets: ['48', '72', '144', '221'],
     boardSizes: [52, 78, 104], // 快捷档位（滑块/输入框支持 15~208）
-    mode: 'ai', // 默认 AI 生成（'photo' 照片还原 | 'ai' AI 生成）
+    mode: 'ai', // 默认创意生成（'photo' 照片还原 | 'ai' 创意生成）
     styles: [
       { key: 'cartoon', name: '卡通', desc: '简化造型、粗黑描边、平涂色块、五官夸张' },
       { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' },
@@ -139,9 +139,9 @@ Page({
   generateByAi() {
     const style = this.getStyle()
     wx.showModal({
-      title: 'AI 生成图纸',
+      title: '创意生成图纸',
       content:
-        '将原图与风格描述发送给 AI 生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，偶发超时会自动重试，继续吗？',
+        '将原图按所选风格生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，偶发超时会自动重试，继续吗？',
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
@@ -152,7 +152,7 @@ Page({
 
   async runAiGenerate(style) {
     this.setData({ generating: true })
-    wx.showLoading({ title: 'AI 生成中…', mask: true })
+    wx.showLoading({ title: '生成中…', mask: true })
     try {
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
       const resp = await ai.callAiGenerate({
@@ -170,7 +170,7 @@ Page({
     } catch (err) {
       wx.hideLoading()
       wx.showModal({
-        title: 'AI 生成失败',
+        title: '生成失败',
         content:
           (err && err.message) ||
           '请确认本地服务已启动（node tools/ai-generate-server.js）或云函数已部署并配置 ARK_API_KEY',
