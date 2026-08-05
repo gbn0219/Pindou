@@ -21,7 +21,7 @@
     <view class="canvas-hint">双指缩放 · 拖动查看</view>
   </view>
 
-  <view class="grid-opt card">
+  <view wx:if="{{!locked}}" class="grid-opt card">
     <view class="opt-row">
       <text class="opt-label">网格线</text>
       <switch checked="{{gridOn}}" color="#009fef" bindchange="onGridToggle" />
@@ -34,7 +34,7 @@
     </view>
   </view>
 
-  <view class="legend card">
+  <view wx:if="{{!locked}}" class="legend card">
     <view class="legend-head">
       <view class="section-title">用到的颜色</view>
       <view class="legend-total">共 {{total}} 格</view>
@@ -48,8 +48,17 @@
     </view>
   </view>
 
-  <view class="action-bar">
+  <view wx:if="{{!locked}}" class="action-bar">
     <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
     <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
+  </view>
+</view>
+  <view wx:if="{{locked}}" class="locked-bar card">
+    <view class="locked-tip">预览中 · 第 {{lockedIndex}}/{{lockedTotal}} 张（已用 {{lockedTotal}}/3 次）</view>
+    <view class="locked-actions">
+      <button class="btn btn--soft action-btn" disabled="{{lockedTotal >= 3}}" bindtap="onRegenerate">再生成{{lockedTotal >= 3 ? '（已用尽）' : ''}}</button>
+      <button class="btn btn--soft action-btn" bindtap="onSwitchCandidate">换一张</button>
+      <button class="btn btn--primary action-btn" bindtap="onUnlock">解锁并交互</button>
+    </view>
   </view>
 </view>

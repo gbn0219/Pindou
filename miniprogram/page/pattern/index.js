@@ -2,6 +2,11 @@
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const gesture = require('../../utils/gesture.js')
+const config = require('../../config.js')
+const ai = require('../../utils/ai.js')
+const user = require('../../utils/user.js')
+const hash = require('../../utils/hash.js')
+const session = require('../../utils/session.js')
 
 const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号（默认铺满视图隐藏编号，避免乱码感）
 
@@ -14,7 +19,10 @@ Page({
     legend: [],
     total: 0,
     gridOn: true,
-    gridEvery: 5
+    gridEvery: 5,
+    locked: false,
+    lockedIndex: 0,
+    lockedTotal: 0
   },
 
   onLoad() {
@@ -30,7 +38,15 @@ Page({
     this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes) // 白色背景连通域（不显示编号、不计色块数）
     this.codeShown = false
     const styleShort = (p.style || '').split(/[：:]/)[0].trim()
-    this.setData({ set: p.set, size: p.size, mode: p.mode || 'photo', styleShort })
+    this.aiSession = getApp().globalData.aiSession || null
+    const locked = !!(p.locked && this.aiSession)
+    this.setData({ set: p.set, size: p.size, mode: p.mode || 'photo', styleShort, locked })
+    if (locked) {
+      this.setData({
+        lockedIndex: this.aiSession.index + 1,
+        lockedTotal: this.aiSession.candidates.length
+      })
+    }
   },
 
   onShow() {
@@ -107,7 +123,7 @@ Page({
     pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
       cellSize: this.displayCell || pattern.CELL,
       gap: pattern.GAP,
-      code: this.codeShown,
+      code: this.data.locked ? false : this.codeShown,
       gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
       noCodeMask: this.bgMask
     })
@@ -125,6 +141,7 @@ Page({
 
   // 双指：缩放 + 拖动（连续手势），手势结束前不响应其他逻辑
   onTouchStart(e) {
+    if (this.data.locked) return
     const touches = e.touches
     if (touches.length >= 2) {
       this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
@@ -132,6 +149,7 @@ Page({
   },
 
   onTouchMove(e) {
+    if (this.data.locked) return
     const touches = e.touches
     // 双指手势期间（即使只剩一指）保持手势，等全部抬起再清理
     if (this.pinchActive || touches.length >= 2) {
@@ -147,6 +165,7 @@ Page({
   },
 
   onTouchEnd(e) {
+    if (this.data.locked) return
     // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
     if (e.touches && e.touches.length > 0) return
     this.pinchActive = false
@@ -154,6 +173,7 @@ Page({
   },
 
   onTouchCancel() {
+    if (this.data.locked) return
     this.pinchActive = false
     this.pinch = null
   },
@@ -215,46 +235,154 @@ Page({
     wx.navigateTo({ url: '/page/pattern-edit/index' })
   },
 
-  exportImage() {
+  async onRegenerate() {
+    const s = this.aiSession
+    if (!s || !s.params || !session.canGenerate(s)) return
+    if (!(getApp().globalData.user && getApp().globalData.user.openid)) {
+      wx.showToast({ title: '请先登录', icon: 'none' })
+      return
+    }
+    wx.showLoading({ title: '生成中…', mask: true })
+    try {
+      const p = s.params
+      const imageBase64 = await ai.compressToBase64(p.imagePath)
+      const imageHash = hash.fnv1a64(imageBase64)
+      if (config.aiGenerate.backend === 'local') {
+        await user.consumeQuota({ sessionId: s.sessionId, imageHash })
+      }
+      const grid = await ai.generateGrid({
+        imageBase64,
+        size: p.size,
+        set: p.set,
+        style: p.style,
+        styleKey: p.styleKey,
+        cutout: p.cutout,
+        extra: p.extra,
+        imageHash,
+        sessionId: s.sessionId
+      })
+      this.aiSession = session.addCandidate(this.aiSession, grid)
+      getApp().globalData.aiSession = this.aiSession
+      this.pattern.grid = grid
+      this.setData({ lockedIndex: this.aiSession.index + 1, lockedTotal: this.aiSession.candidates.length })
+      this.updateLegend()
+      this.drawPattern()
+    } catch (err) {
+      wx.showModal({ title: '生成失败', content: (err && err.message) || '请重试', showCancel: false })
+    } finally {
+      wx.hideLoading()
+    }
+  },
+
+  onSwitchCandidate() {
+    const s = this.aiSession
+    if (!s || s.candidates.length < 2) return
+    const next = (s.index + 1) % s.candidates.length
+    this.aiSession = session.switchCandidate(s, next)
+    getApp().globalData.aiSession = this.aiSession
+    this.pattern.grid = this.aiSession.candidates[next]
+    this.setData({ lockedIndex: next + 1 })
+    this.updateLegend()
+    this.drawPattern()
+  },
+
+  async onUnlock() {
+    const s = this.aiSession
+    if (!s) return
+    wx.showLoading({ title: '解锁中…', mask: true })
+    try {
+      const order = await user.createOrder(s.sessionId)
+      if (!order.paid) throw new Error('支付未完成')
+      await user.unlock(s.sessionId)
+      this.pattern.locked = false
+      this.setData({ locked: false })
+      this.updateLegend()
+      this.drawPattern()
+      wx.hideLoading()
+      wx.showToast({ title: '已解锁', icon: 'success' })
+      this.saveToGallery()
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '解锁失败', icon: 'none' })
+    }
+  },
+
+  makeExportFile() {
     const canvas = this.canvas
     const p = this.pattern
-    if (!canvas) return
-    wx.showLoading({ title: '导出中…', mask: true })
-    const codes = this.palette.map((i) => i.code)
-    const counts = pattern.countColors(p.grid, codes, this.bgMask)
-    const hexByCode = {}
-    this.palette.forEach((i) => { hexByCode[i.code] = i.hex })
-    const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
-    const layout = pattern.layoutExport(p.grid, {
-      cellSize: pattern.EXPORT_CELL,
-      gap: 1,
-      legendItems
+    return new Promise((resolve, reject) => {
+      if (!canvas) return reject(new Error('画布未就绪'))
+      const codes = this.palette.map((i) => i.code)
+      const counts = pattern.countColors(p.grid, codes, this.bgMask)
+      const hexByCode = {}
+      this.palette.forEach((i) => { hexByCode[i.code] = i.hex })
+      const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
+      const layout = pattern.layoutExport(p.grid, { cellSize: pattern.EXPORT_CELL, gap: 1, legendItems })
+      const scale = Math.min(1, pattern.EXPORT_MAX_DIM / Math.max(layout.width, layout.height))
+      canvas.width = Math.max(1, Math.round(layout.width * scale))
+      canvas.height = Math.max(1, Math.round(layout.height * scale))
+      const ctx = canvas.getContext('2d')
+      ctx.scale(scale, scale)
+      pattern.renderExport(ctx, p.grid, this.palette, {
+        cellSize: pattern.EXPORT_CELL,
+        gap: 1,
+        code: true,
+        gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+        legendItems,
+        noCodeMask: this.bgMask
+      })
+      wx.canvasToTempFilePath({
+        canvas,
+        success: (res) => {
+          this.restoreDisplay(canvas)
+          resolve(res.tempFilePath)
+        },
+        fail: reject
+      })
     })
-    const scale = Math.min(1, pattern.EXPORT_MAX_DIM / Math.max(layout.width, layout.height))
-    canvas.width = Math.max(1, Math.round(layout.width * scale))
-    canvas.height = Math.max(1, Math.round(layout.height * scale))
-    const ctx = canvas.getContext('2d')
-    ctx.scale(scale, scale)
-    pattern.renderExport(ctx, p.grid, this.palette, {
-      cellSize: pattern.EXPORT_CELL,
-      gap: 1,
-      code: true,
-      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
-      legendItems,
-      noCodeMask: this.bgMask
-    })
-    wx.canvasToTempFilePath({
-      canvas,
-      success: (res) => {
-        this.restoreDisplay(canvas)
-        this.saveToAlbum(res.tempFilePath)
-      },
-      fail: () => {
-        this.restoreDisplay(canvas)
+  },
+
+  async saveToGallery() {
+    const app = getApp()
+    const u = app.globalData.user
+    if (!u || !u.openid) return
+    wx.showLoading({ title: '保存到图库…', mask: true })
+    try {
+      const patternFile = await this.makeExportFile()
+      const ts = Date.now()
+      const ext = (this.pattern.imagePath.match(/\.(\w+)$/) || [ , 'jpg'])[1]
+      const original = await wx.cloud.uploadFile({
+        cloudPath: 'gallery/' + u.openid + '/' + ts + '_original.' + ext,
+        filePath: this.pattern.imagePath
+      })
+      const patternImg = await wx.cloud.uploadFile({
+        cloudPath: 'gallery/' + u.openid + '/' + ts + '_pattern.png',
+        filePath: patternFile
+      })
+      await user.saveGallery({
+        originalFileID: original.fileID,
+        patternFileID: patternImg.fileID,
+        mode: this.pattern.mode,
+        style: this.pattern.style || '',
+        size: this.pattern.size,
+        set: this.pattern.set,
+        sessionId: this.aiSession ? this.aiSession.sessionId : undefined
+      })
+      wx.hideLoading()
+      wx.showToast({ title: '已保存到图库', icon: 'success' })
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: '保存到图库失败', icon: 'none' })
+    }
+  },
+
+  exportImage() {
+    this.makeExportFile()
+      .then((filePath) => this.saveToAlbum(filePath))
+      .catch(() => {
         wx.hideLoading()
         wx.showToast({ title: '导出失败', icon: 'none' })
-      }
-    })
+      })
   },
 
   restoreDisplay(canvas) {
@@ -270,6 +398,7 @@ Page({
       success: () => {
         wx.hideLoading()
         wx.showToast({ title: '已保存到相册', icon: 'success' })
+        if (this.pattern.mode !== 'ai') this.saveToGallery()
       },
       fail: (err) => {
         wx.hideLoading()
