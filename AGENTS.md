@@ -4,12 +4,14 @@
 
 拼豆图纸生成微信小程序：用户导入一张图片 →（可选裁剪）→ 选择生成方式 → 像素化并映射到拼豆标准色 → 生成、展示、修改、导出拼豆图纸。
 
-当前包含四个页面（均在主包，无分包、无 tabBar）：
+当前包含六个页面（均在主包，无分包；底部为原生 tabBar：首页 / 我的）：
 
-1. 主页面 `miniprogram/page/index/index`：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成方式（照片还原 / AI 生成）、AI 风格选择
+1. 主页面 `miniprogram/page/index/index`（tab）：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成方式（照片还原 / 创意生成）、创意生成风格选择
 2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动框内部移动位置，拖动四边/四角调整大小），完成后返回主页面，最终图纸仍为方形网格
-3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改
+3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改；创意生成结果先以"锁定预览"展示（纯色、不可交互），解锁后才进入完整交互
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
+5. 个人中心 `miniprogram/page/profile/index`（tab）：微信登录（云开发 openid）、头像昵称、邀请码（GBNLY99 免费）、图库入口
+6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、点击保存到相册）
 
 ## 生成方式（核心）
 
@@ -17,7 +19,9 @@
 
 选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **`averageBlocks`**：每 4×4 块求平均 RGB 得到 N×N 代表色（不做任何平滑/合并/去噪）→ **`mapRgb`**：CIELAB 最近色匹配，只输出当前套装内色号 → grid。支持 52/78/104 三种盘面。
 
-### 方式二：AI 生成（按次计费，支持 52/78/104）
+### 方式二：创意生成（登录 + 每图最多 3 次免费预览，解锁后按次计费，支持 52/78/104）
+
+- 门禁与解锁：仅登录用户可用；每张原图最多 3 次免费预览（服务端 `ai_sessions` 按 `(openid, imageHash)` 计数），未解锁只能看纯色图（不可查看色号/缩放/修改/导出）；付费（`PAY_MODE=mock`）或邀请码 `GBNLY99` 解锁后进入完整交互，并在解锁/导出时自动入库图库
 
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
@@ -60,7 +64,10 @@ tools/style-refs/             原图转像素图示例源图 + 合成参考拼�
 tools/face-refs/              五官画法示例源图 + 合成拼图 face-ref.jpg（服务端固定随请求发送，仅作五官画法参考）
 tools/convert-examples/        原图转像素图示例源图（合成进 ref-pack.jpg）
 tests/                        无框架 node 单测（断言失败即非 0 退出）
-cloudfunctions/ai-generate-pattern/  AI 生成云函数（cloud 模式）
+cloudfunctions/ai-generate-pattern/  AI 生成云函数（cloud 模式，登录 + 每图 3 次配额校验）
+cloudfunctions/account/             用户中心云函数（登录/资料/邀请码）
+cloudfunctions/access/              访问控制云函数（配额/解锁/订单，PAY_MODE=mock）
+cloudfunctions/gallery/             图库云函数（入库/页码分页列表）
 cloudfunctions/               其余为官方模板遗留云函数（本项目未使用）
 docs/superpowers/             设计文档与实施计划（历史过程文档，保留备查）
 ```
@@ -73,6 +80,8 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 风格：5 个内置示例（卡通、马卡龙、扁平插画、复古像素、水彩），支持用户输入自定义风格关键词；自定义输入优先于示例
 - **AI 优化图纸：已移除**，不再保留任何入口与后端
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本），展示/修改页共享，不持久化
+- 创意生成会话：`getApp().globalData.aiSession = { sessionId, imageHash, candidates, index, params }`（每张原图最多 3 个候选，仅内存）
+- 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
 
 ## 前端要点（canvas 相关，改动前先理解）
@@ -86,9 +95,9 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 ## 验证
 
-- 运行单测：`node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js`
+- 运行单测：`node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js && node tests/user.test.js`
 - 新增/修改 JS 一律执行 `node --check <file>`；JSON 用 `node -e "JSON.parse(...)"` 校验
-- 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证三个页面
+- 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证各页面
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
 - AI 生成本地模式：项目根目录 `.env` 填写 `ARK_API_KEY`（火山方舟 API Key，已有 `.env.example`），运行 `node tools/ai-generate-server.js`，开发者工具勾选"不校验合法域名"
 - 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"
