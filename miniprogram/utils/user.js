@@ -13,7 +13,11 @@ function call(name, action, data) {
     }
     return r
   }).catch((err) => {
-    const msg = (err && (err.errMsg || err.message)) || '云函数调用失败'
+    const raw = String((err && (err.errMsg || err.message)) || '')
+    let msg = raw || '云函数调用失败'
+    if (/FUNCTION_NOT_FOUND|\-501000|FunctionName parameter/.test(raw)) {
+      msg = '服务未部署：请在开发者工具右键云函数 ' + name + ' → 上传并部署（云端安装依赖）'
+    }
     const e = new Error(msg)
     e.code = (err && err.code) || 'CALL_FAIL'
     throw e
