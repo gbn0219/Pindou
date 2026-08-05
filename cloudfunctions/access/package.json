@@ -1,0 +1,9 @@
+{
+  "name": "access",
+  "version": "1.0.0",
+  "description": "访问控制云函数：配额/解锁/订单",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
