@@ -15,7 +15,7 @@ const MAX_ATTEMPTS = 3 // 每张原图免费生成次数上限
 const GEN_HOST = 'ark.cn-beijing.volces.com'
 const GEN_PATH = '/api/v3/images/generations'
 const DEFAULT_MODEL = 'doubao-seedream-5-0-260128'
-const GEN_SIZE = '1024x1024' // Seedream 1K（1024×1024 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k，不认 '1K' 关键字
+const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
 const REF_PACK_PATH = path.join(__dirname, 'ref-pack.jpg')
@@ -113,7 +113,7 @@ function buildPrompt(size, style, styleKey, cutout, extra) {
     size +
     ' 的拼豆像素图图纸：每个格子一个纯色块，格子紧密拼接、无缝隙，输出必须是单张完整的像素画，整体为 1:1 正方形。\n' +
     (realistic
-      ? '「参考图」第二张图是写实风参考样例（两张「原图转拼豆图纸」对比图：一张布偶猫照片、一张动漫插画）：请参照它们的转换思路——保留原图的结构、光影、质感与风格，只把画面像素化为拼豆图纸，不简化造型、不卡通化；最终风格以「风格」章节的要求为准。\n'
+      ? '「参考图」第二张图是写实风参考样例（两张「原图转拼豆图纸」对比图：一张布偶猫照片、一张动漫插画）：请参照它们的转换思路——保留原图的结构、光影、颜色、质感与风格，只把画面像素化为拼豆图纸，不简化造型、不卡通化；最终风格以「风格」章节的要求为准。\n'
       : '「参考图」第二张图是参考拼图：两张「原图转像素图」示例，请参照它们的转换思路，把真实照片抽象成方块像素画，保留人物的姿态、表情、发型、服装特征，简化背景与细节；最终风格以「风格」章节的要求为准。\n') +
     (realistic
       ? '「五官参考」第三张图仅供学习像素颗粒表达；写实风下五官必须忠实还原「第一张图」原图的比例、形状、光影与表情，禁止卡通大眼、粗眼线、圆腮红画法。\n'

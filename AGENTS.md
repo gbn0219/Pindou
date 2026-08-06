@@ -29,7 +29,7 @@
 - `cloud`：云函数 `ai-generate-pattern`（**图像方案，与本地服务同步**；部署时需配置 `ARK_API_KEY`、控制台调大超时到 60s，部署目录含 ref-pack.jpg / realistic-ref.jpg / face-ref.jpg）
 
 后端以**图像生成方案**调用火山方舟 OpenAI 兼容接口（默认模型 `doubao-seedream-5-0-260128`，`ARK_MODEL` 可覆盖）：
-- 请求 `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`，多图输入：原图（base64）+ 一张参考拼图（两张「原图转像素图」示例，见 `tools/style-refs/ref-pack.jpg`，作为第二张参考图）+ 一张五官画法示例拼图（5 张拼豆像素画人脸合成，见 `tools/face-refs/face-ref.jpg`，作为第三张参考图；仅用于学习五官画法，提示词明确禁止复制示例角色/内容），`size` 统一取 `1024x1024`（1K；Ark 尺寸参数只接受 WIDTHxHEIGHT / 2k / 3k / 4k，不认 1K 关键字），前端按盘面 floor 分块，不依赖每格 16px，`watermark: false`（默认会加"AI生成"水印）；
+- 请求 `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`，多图输入：原图（base64）+ 一张参考拼图（两张「原图转像素图」示例，见 `tools/style-refs/ref-pack.jpg`，作为第二张参考图）+ 一张五官画法示例拼图（5 张拼豆像素画人脸合成，见 `tools/face-refs/face-ref.jpg`，作为第三张参考图；仅用于学习五官画法，提示词明确禁止复制示例角色/内容），`size` 统一取 `2k`（约 2048×2048；Ark 尺寸参数只接受 WIDTHxHEIGHT / 2k / 3k / 4k，最小约 1920×1920），前端按盘面 floor 分块，不依赖每格 16px，`watermark: false`（默认会加"AI生成"水印）；
 - 输出对应尺寸的像素风格图纸 PNG（URL 24h 有效，服务端立即下载并转 base64 返回）；
 - 前端把图片写入临时文件 → offscreen canvas 读整幅像素 → **主色分块**（`dominantBlockRgb`，每块取占比最高的颜色，抗 AI 自带的网格线/辅助线）→ CIELAB 最近色映射到当前套装色号 → 生成 grid；
 - **不输出文字色号**（2704 个色号一次输出会被 token 截断，分块生成又导致块间风格不统一），彻底绕开输出 token 上限；
@@ -77,7 +77,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
 - 照片还原管线：选图 → 裁剪页（可选）→ 主页面 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 绘制（白底补齐、透明像素按白）→ **`averageBlocks`**（4×4 块平均 → N×N RGB，透明像素不计入、全透明块按白）→ **`mapRgb`**（CIELAB 最近色匹配，只输出当前套装内色号）。**不做**相似色合并、孤立点平滑、区域合并、抖动等任何后处理
-- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格（可选抠图；固定携带参考拼图）→ 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ 豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）图像生成，`size` 统一 `1024x1024`（1K）→ 返回图片 base64 → 前端 offscreen canvas 读整幅像素 → `dominantBlockRgb` 主色分块 → `mapRgb` CIELAB 最近色映射到当前套装 → 二维 grid。无文字色号输出，无 token 上限问题
+- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格（可选抠图；固定携带参考拼图）→ 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ 豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）图像生成，`size` 统一 `2k`（约 2048×2048）→ 返回图片 base64 → 前端 offscreen canvas 读整幅像素 → `dominantBlockRgb` 主色分块 → `mapRgb` CIELAB 最近色映射到当前套装 → 二维 grid。无文字色号输出，无 token 上限问题
 - 风格：5 个内置示例（卡通、马卡龙、扁平插画、复古像素、水彩），支持用户输入自定义风格关键词；自定义输入优先于示例
 - **AI 优化图纸：已移除**，不再保留任何入口与后端
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本），展示/修改页共享，不持久化
