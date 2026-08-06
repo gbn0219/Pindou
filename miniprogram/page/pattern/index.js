@@ -306,7 +306,10 @@ Page({
     return exportUtil.renderSquareJpeg(src, px)
   },
   makeGridJpeg(px) {
-    return exportUtil.renderGridJpeg(this.pattern.grid, this.palette, px, { bgMask: this.bgMask })
+    return exportUtil.renderPatternJpeg(this.pattern.grid, this.palette, px, {
+      bgMask: this.bgMask,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
+    })
   },
 
   async saveToGallery() {

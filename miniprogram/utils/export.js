@@ -3,7 +3,7 @@
  * 图纸资产生成（展示页导出、图库保存、修改页保存共用）：
  * - renderPatternExport：整图导出（图纸 + 底部色号清单），输出分辨率 ×EXPORT_UPSCALE，
  *   画布始终不超过 EXPORT_MAX_DIM，规避部分设备 2048px 画布上限；
- * - renderGridJpeg：方形网格 JPEG（缩略图/预览图，不含色号）；
+ * - renderPatternJpeg：图纸 JPEG（与导出图同一布局：含色号与图例，按宽度缩放，作图库缩略图/预览图）；
  * - renderSquareJpeg：原图 contain 缩放到方形 JPEG（白底补齐）。
  * 依赖 wx.createOffscreenCanvas，仅在小程序环境可用。
  */
@@ -57,23 +57,31 @@ function renderPatternExport(grid, palette, opts) {
 }
 
 /**
- * 方形网格 JPEG：px×px 白底画布，网格 contain 居中，不含色号。opts：{ bgMask }。
+ * 图纸缩略图/预览图：与导出图同一布局（含色号与底部色号清单），按 layoutExport 缩放至 px 宽，
+ * 供图库列表与预览使用（图库第二张图应显示"图纸"而非纯色预览效果图）。opts：{ bgMask, gridEvery }。
  */
-function renderGridJpeg(grid, palette, px, opts) {
-  const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
+function renderPatternJpeg(grid, palette, px, opts) {
+  const bgMask = opts && opts.bgMask
+  const gridEvery = opts && opts.gridEvery
+  const codes = palette.map((i) => i.code)
+  const counts = pattern.countColors(grid, codes, bgMask)
+  const hexByCode = {}
+  palette.forEach((i) => { hexByCode[i.code] = i.hex })
+  const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
+  const layout = pattern.layoutExport(grid, { cellSize: pattern.EXPORT_CELL, gap: 1, legendItems })
+  const scale = px / layout.width
+  const width = Math.max(1, Math.round(layout.width * scale))
+  const height = Math.max(1, Math.round(layout.height * scale))
+  const canvas = wx.createOffscreenCanvas({ type: '2d', width, height })
   const ctx = canvas.getContext('2d')
-  const size = grid.length
-  const cell = Math.max(2, Math.floor(px / size))
-  const total = size * (cell + pattern.GAP) - pattern.GAP
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, px, px)
-  ctx.translate(Math.floor((px - total) / 2), Math.floor((px - total) / 2))
-  pattern.renderGrid(ctx, grid, palette, {
-    cellSize: cell,
-    gap: pattern.GAP,
-    code: false,
-    gridEvery: 0,
-    noCodeMask: opts && opts.bgMask
+  ctx.scale(scale, scale)
+  pattern.renderExport(ctx, grid, palette, {
+    cellSize: pattern.EXPORT_CELL,
+    gap: 1,
+    code: true,
+    gridEvery: gridEvery || 0,
+    legendItems,
+    noCodeMask: bgMask
   })
   return toTempFile(canvas, { fileType: 'jpg', quality: 0.8 })
 }
@@ -95,4 +103,4 @@ function renderSquareJpeg(src, px) {
   })
 }
 
-module.exports = { EXPORT_UPSCALE, renderPatternExport, renderGridJpeg, renderSquareJpeg }
+module.exports = { EXPORT_UPSCALE, renderPatternExport, renderPatternJpeg, renderSquareJpeg }

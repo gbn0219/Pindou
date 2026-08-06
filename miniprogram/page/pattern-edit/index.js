@@ -499,8 +499,8 @@ Page({
     try {
       this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
       const patternFile = await exportUtil.renderPatternExport(p.grid, this.palette, { bgMask: this.bgMask, gridEvery: 5 })
-      const thumb = await exportUtil.renderGridJpeg(p.grid, this.palette, 360, { bgMask: this.bgMask })
-      const preview = await exportUtil.renderGridJpeg(p.grid, this.palette, 1080, { bgMask: this.bgMask })
+      const thumb = await exportUtil.renderPatternJpeg(p.grid, this.palette, 360, { bgMask: this.bgMask, gridEvery: 5 })
+      const preview = await exportUtil.renderPatternJpeg(p.grid, this.palette, 1080, { bgMask: this.bgMask, gridEvery: 5 })
       const u = getApp().globalData.user
       if (!u || !u.openid) throw new Error('请先登录')
       const ts = Date.now()
