@@ -16,6 +16,7 @@
       </view>
       <view class="pair-actions">
         <button class="btn btn--soft btn--sm" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onEdit">编辑</button>
+        <button class="btn btn--soft btn--sm btn--danger" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onDelete">删除</button>
       </view>
     </view>
   </view>

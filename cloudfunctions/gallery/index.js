@@ -1,6 +1,6 @@
 // cloudfunctions/gallery/index.js
 /**
- * 图库云函数：save / list（页码分页，每页 PAGE_SIZE 条）/ get（单条含 grid）/ update（回填与编辑保存）。
+ * 图库云函数：save / list（页码分页，每页 PAGE_SIZE 条）/ get（单条含 grid）/ update（回填与编辑保存）/ delete（删除条目及关联云存储文件）。
  */
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -70,6 +70,27 @@ exports.main = async (event) => {
     if (typeof event.grid === 'string' && event.grid) data.grid = event.grid.slice(0, 400000)
     await db.collection('gallery').doc(res.data[0]._id).update({ data })
     return ok({ updated: true })
+  }
+  if (action === 'delete') {
+    if (!event.id) return fail('MISSING_ID', '缺少记录 ID')
+    const res = await db.collection('gallery').where({ _openid: OPENID, _id: event.id }).limit(1).get()
+    if (!res.data.length) return fail('NOT_FOUND', '记录不存在')
+    const doc = res.data[0]
+    await db.collection('gallery').doc(doc._id).remove()
+    // 删除该条目关联的云存储文件；失败不阻断记录删除（留下孤儿文件，可后续清理）
+    const fileList = [
+      doc.originalFileID, doc.patternFileID,
+      doc.originalThumbFileID, doc.patternThumbFileID,
+      doc.originalPreviewFileID, doc.patternPreviewFileID
+    ].filter(Boolean)
+    if (fileList.length) {
+      try {
+        await cloud.deleteFile({ fileList })
+      } catch (err) {
+        console.error('gallery delete storage failed', err)
+      }
+    }
+    return ok({ deleted: true })
   }
   return fail('BAD_ACTION', '未知操作')
 }

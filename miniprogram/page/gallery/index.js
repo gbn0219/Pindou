@@ -144,6 +144,35 @@ Page({
     }
   },
 
+  onDelete(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    wx.showModal({
+      title: '删除图库条目',
+      content: '删除后不可恢复，原图与图纸将从图库移除，确定删除？',
+      confirmText: '删除',
+      confirmColor: '#ff3a5d',
+      success: async (r) => {
+        if (!r.confirm) return
+        wx.showLoading({ title: '删除中…', mask: true })
+        try {
+          await user.deleteGallery(id)
+          wx.hideLoading()
+          wx.showToast({ title: '已删除', icon: 'success' })
+          // 当前页只剩 1 条且非首页时回退一页，否则刷新当前页
+          if (this.data.items.length <= 1 && this.data.page > 1) {
+            this.load(this.data.page - 1)
+          } else {
+            this.load(this.data.page)
+          }
+        } catch (err) {
+          wx.hideLoading()
+          wx.showToast({ title: (err && err.message) || '删除失败', icon: 'none' })
+        }
+      }
+    })
+  },
+
   async onPullDownRefresh() {
     await this.load(this.data.page)
     wx.stopPullDownRefresh()

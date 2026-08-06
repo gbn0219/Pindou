@@ -34,4 +34,5 @@ function saveGallery(payload) { return call('gallery', 'save', payload) }
 function listGallery(page, pageSize) { return call('gallery', 'list', { page, pageSize }) }
 function getGalleryItem(id) { return call('gallery', 'get', { id }) }
 function updateGallery(payload) { return call('gallery', 'update', payload) }
-module.exports = { call, login, saveProfile, applyInvite, consumeQuota, checkAccess, createOrder, unlock, saveGallery, listGallery, getGalleryItem, updateGallery }
+function deleteGallery(id) { return call('gallery', 'delete', { id }) }
+module.exports = { call, login, saveProfile, applyInvite, consumeQuota, checkAccess, createOrder, unlock, saveGallery, listGallery, getGalleryItem, updateGallery, deleteGallery }

@@ -11,7 +11,7 @@
 3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改；创意生成结果先以"锁定预览"展示（纯色、不可交互），解锁后才进入完整交互
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 5. 个人中心 `miniprogram/page/profile/index`（tab）：微信登录（云开发 openid）、头像昵称、邀请码（GBNLY99 免费）、图库入口
-6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、缩略图/预览图压缩、点击图片 cloud:// 直接预览、条目"编辑"按钮进入修改页；旧数据缺缩略图/预览图时后台回填）
+6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、缩略图/预览图压缩、点击图片 cloud:// 直接预览、条目"编辑"进入修改页、"删除"移除条目及关联云存储文件；旧数据缺缩略图/预览图时后台回填）
 
 ## 生成方式（核心）
 
@@ -68,7 +68,7 @@ tests/                        无框架 node 单测（断言失败即非 0 退�
 cloudfunctions/ai-generate-pattern/  AI 生成云函数（cloud 模式，登录 + 每图 3 次配额校验）
 cloudfunctions/account/             用户中心云函数（登录/资料/邀请码）
 cloudfunctions/access/              访问控制云函数（配额/解锁/订单，PAY_MODE=mock）
-cloudfunctions/gallery/             图库云函数（入库/页码分页列表/单条详情 get/记录更新 update）
+cloudfunctions/gallery/             图库云函数（入库/页码分页列表/单条详情 get/记录更新 update/删除 delete）
 cloudfunctions/               其余为官方模板遗留云函数（本项目未使用）
 docs/superpowers/             设计文档与实施计划（历史过程文档，保留备查）
 ```

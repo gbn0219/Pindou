@@ -58,6 +58,10 @@
   padding: 0 var(--space-sm);
   font-size: var(--text-xs);
 }
+.pair-actions .btn--danger {
+  color: var(--color-accent-3);
+  border-color: rgba(255, 58, 93, 0.35);
+}
 .pair-meta {
   margin-top: var(--space-2xs);
   font-size: var(--text-xs);
