@@ -92,15 +92,18 @@ Page({
         const total = p.size * (cell + pattern.GAP) - pattern.GAP
         const areaW = (area && area.width) || 300
         const areaH = (area && area.height) || 300
-        // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
-        const ruler = pattern.RULER_SIZE
-        const innerW = areaW - ruler * 2
-        const innerH = areaH - ruler * 2
-        const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
-        this.view = {
-          scale,
-          ox: ruler + (innerW - total * scale) / 2,
-          oy: ruler + (innerH - total * scale) / 2
+        // 首次进入铺满视图并居中；切后台再回来保留缩放倍数与位置
+        if (!this.view) {
+          // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
+          const ruler = pattern.RULER_SIZE
+          const innerW = areaW - ruler * 2
+          const innerH = areaH - ruler * 2
+          const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
+          this.view = {
+            scale,
+            ox: ruler + (innerW - total * scale) / 2,
+            oy: ruler + (innerH - total * scale) / 2
+          }
         }
         canvas.width = areaW
         canvas.height = areaH

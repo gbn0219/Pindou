@@ -92,7 +92,6 @@ Page({
   draw() {
     const p = this.pattern
     if (!p) return
-    this.codeShown = false
     this.createSelectorQuery()
       .select('#canvasArea')
       .boundingClientRect()
@@ -115,15 +114,19 @@ Page({
           const total = p.size * (cell + pattern.GAP) - pattern.GAP
           const areaW = area.width
           const areaH = area.height
-          // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
-          const ruler = pattern.RULER_SIZE
-          const innerW = areaW - ruler * 2
-          const innerH = areaH - ruler * 2
-          const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
-          this.view = {
-            scale,
-            ox: ruler + (innerW - total * scale) / 2,
-            oy: ruler + (innerH - total * scale) / 2
+          // 首次进入铺满视图并隐藏编号；切后台再回来保留缩放倍数/位置/编号显示状态
+          if (!this.view) {
+            this.codeShown = false
+            // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
+            const ruler = pattern.RULER_SIZE
+            const innerW = areaW - ruler * 2
+            const innerH = areaH - ruler * 2
+            const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
+            this.view = {
+              scale,
+              ox: ruler + (innerW - total * scale) / 2,
+              oy: ruler + (innerH - total * scale) / 2
+            }
           }
           canvas.width = areaW
           canvas.height = areaH

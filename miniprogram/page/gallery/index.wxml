@@ -15,6 +15,7 @@
         <text class="pair-sub">{{item.timeText}} · {{item.size}}×{{item.size}} · {{item.set}} 色</text>
       </view>
       <view class="pair-actions">
+        <button class="btn btn--soft btn--sm" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onExport">导出</button>
         <button class="btn btn--soft btn--sm" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onEdit">编辑</button>
         <button class="btn btn--soft btn--sm btn--danger" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onDelete">删除</button>
       </view>

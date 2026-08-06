@@ -12,15 +12,17 @@ const EXPORT_CELL = 16 // 导出格边长 px（104 格 → 1767px，规避部分
 const GRID_LINE_COLOR = '#ff3a5d' // 每 N 格粗网格线颜色（与示例一致）
 const GRID_LINE_WIDTH = 2 // 粗网格线宽 px
 const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单），超出时整体等比缩小
-const EXPORT_COORD = 28 // 导出图四周坐标边距 px（上下左右各一排号空间）
+const EXPORT_COORD = 16 // 导出图四周坐标边距 px（与导出格同宽，坐标格像网格的延伸）
 const COORD_COLOR = '#8a919c' // 排号/列号颜色（细字，避免挤压）
 const BG_GRID_COLOR = '#e2e4e8' // 背景格浅灰格线（无色号格仍显示格子）
-const RULER_SIZE = 24 // 坐标轴条宽高 px（屏幕空间，固定画布四周）
+const RULER_SIZE = 26 // 坐标轴条宽高 px（屏幕空间，固定画布四周，缩放/拖动不跳动）
 const RULER_MAX_LABELS = 12 // 坐标轴每轴最多标签数（显示密度基准）
 const RULER_STEPS = [1, 2, 5, 10, 20, 50, 100, 200] // 显示密度档位（每 N 格一个标签）
 const RULER_BG = '#e8e9ec' // 坐标条灰色背景
-const RULER_LINE = '#d2d5db' // 坐标条分隔线/边框色
+const RULER_LINE = '#aab0b8' // 坐标条分隔线/边框色（清晰可见）
 const RULER_TEXT = '#5f6672' // 坐标条文字色
+const RULER_BG_VIEW = '#f2efe9' // 交互页坐标条背景（暖米色，与纸张观感一致）
+const RULER_LINE_VIEW = '#d6d1c5' // 交互页坐标条边框（暖灰细线）
 const WHITE_RGB_MIN = 230 // 判定为"白色系"的 RGB 下限（H1 纯白、H2 近白、奶油白等）
 
 // 底部色号清单布局（导出图）
@@ -315,15 +317,44 @@ function averageBlocks(data, size4, size, block) {
 
 
 /**
- * 绘制四周排号/列号（坐标系）：上/下为列号 1..size，左/右为行号 1..size。
- * 在当前变换坐标系内绘制，随视图缩放/拖动一起变化；细字重避免挤压。
+ * 绘制四周排号/列号（导出图）：上/下为列号 1..size，左/右为行号 1..size。
+ * 灰色坐标格与主网格同尺寸、逐格带边框，像图纸的一部分（参考拼豆图纸样式）。
  */
 function renderCoordinates(ctx, size, cellSize, gap, coord, opts) {
-  const color = (opts && opts.color) || COORD_COLOR
+  const color = (opts && opts.color) || RULER_TEXT
+  const line = (opts && opts.line) || RULER_LINE
+  const bg = (opts && opts.bg) || RULER_BG
   const weight = (opts && opts.weight) || '400'
-  const font = (opts && opts.font) || Math.max(10, Math.min(18, Math.round(cellSize * 0.65)))
+  const font = (opts && opts.font) || Math.max(8, Math.min(14, Math.round(cellSize * 0.55)))
   const step = cellSize + gap
   const gridTotal = size * step - gap
+  const totalW = gridTotal + coord * 2
+  // 四周灰色坐标条
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, totalW, coord)
+  ctx.fillRect(0, coord + gridTotal, totalW, coord)
+  ctx.fillRect(0, 0, coord, gridTotal + coord * 2)
+  ctx.fillRect(coord + gridTotal, 0, coord, gridTotal + coord * 2)
+  // 每个编号格与主网格对齐的边框
+  ctx.strokeStyle = line
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  for (let c = 0; c <= size; c++) {
+    const x = coord + c * step + 0.5
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, coord)
+    ctx.moveTo(x, coord + gridTotal)
+    ctx.lineTo(x, coord + gridTotal + coord)
+  }
+  for (let r = 0; r <= size; r++) {
+    const y = coord + r * step + 0.5
+    ctx.moveTo(0, y)
+    ctx.lineTo(coord, y)
+    ctx.moveTo(coord + gridTotal, y)
+    ctx.lineTo(coord + gridTotal + coord, y)
+  }
+  ctx.stroke()
+  // 编号
   ctx.fillStyle = color
   ctx.font = weight + ' ' + font + 'px sans-serif'
   ctx.textAlign = 'center'
@@ -351,11 +382,12 @@ function rulerStep(visibleCount) {
 
 /**
  * 在画布四周绘制固定坐标轴（屏幕空间，不随内容缩放/移动）。
- * 根据当前 view 计算可见行列区间，按 rulerStep 密度标出实际行/列号（随平移实时变化）。
+ * 固定厚度的暖米色坐标条 + 1px 细边框，只标编号（密度自适应），无格框，缩放/拖动时视觉稳定。
  */
 function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
   if (!view || !view.scale || !size || !cellPx) return
   const cell = cellPx + gap
+  const band = RULER_SIZE
   const c0 = Math.max(0, Math.floor((0 - view.ox) / view.scale / cell))
   const c1 = Math.min(size - 1, Math.floor((areaW - view.ox) / view.scale / cell))
   const r0 = Math.max(0, Math.floor((0 - view.oy) / view.scale / cell))
@@ -365,16 +397,17 @@ function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
   const show = (i, step) => i === 0 || (i + 1) % step === 0
   ctx.save()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  // 四周灰色坐标条（像网格的一部分）
-  ctx.fillStyle = RULER_BG
-  ctx.fillRect(0, 0, areaW, RULER_SIZE)
-  ctx.fillRect(0, areaH - RULER_SIZE, areaW, RULER_SIZE)
-  ctx.fillRect(0, 0, RULER_SIZE, areaH)
-  ctx.fillRect(areaW - RULER_SIZE, 0, RULER_SIZE, areaH)
-  // 内容区边框（坐标条与格子之间的分界）
-  ctx.strokeStyle = RULER_LINE
+  // 四周暖米色坐标条（固定厚度）
+  ctx.fillStyle = RULER_BG_VIEW
+  ctx.fillRect(0, 0, areaW, band)
+  ctx.fillRect(0, areaH - band, areaW, band)
+  ctx.fillRect(0, 0, band, areaH)
+  ctx.fillRect(areaW - band, 0, band, areaH)
+  // 内容区边框：1px 暖灰细线，分隔坐标条与格子
+  ctx.strokeStyle = RULER_LINE_VIEW
   ctx.lineWidth = 1
-  ctx.strokeRect(RULER_SIZE + 0.5, RULER_SIZE + 0.5, areaW - RULER_SIZE * 2 - 1, areaH - RULER_SIZE * 2 - 1)
+  ctx.strokeRect(band + 0.5, band + 0.5, areaW - band * 2 - 1, areaH - band * 2 - 1)
+  // 编号（密度自适应，居中于对应格子；不做格框，缩放时更干净）
   ctx.fillStyle = RULER_TEXT
   ctx.font = '400 12px sans-serif'
   ctx.textAlign = 'center'
@@ -382,35 +415,16 @@ function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
   for (let c = c0; c <= c1; c++) {
     if (!show(c, cStep)) continue
     const x = view.ox + c * cell * view.scale + (cellPx * view.scale) / 2
-    if (x < RULER_SIZE || x > areaW - RULER_SIZE) continue
-    // 与网格对齐的分隔线：让坐标条看起来像格子的延伸
-    ctx.strokeStyle = RULER_LINE
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(x + 0.5, 0)
-    ctx.lineTo(x + 0.5, RULER_SIZE)
-    ctx.moveTo(x + 0.5, areaH - RULER_SIZE)
-    ctx.lineTo(x + 0.5, areaH)
-    ctx.stroke()
-    ctx.fillStyle = RULER_TEXT
-    ctx.fillText(String(c + 1), x, RULER_SIZE / 2)
-    ctx.fillText(String(c + 1), x, areaH - RULER_SIZE / 2)
+    if (x < band || x > areaW - band) continue
+    ctx.fillText(String(c + 1), x, band / 2)
+    ctx.fillText(String(c + 1), x, areaH - band / 2)
   }
   for (let r = r0; r <= r1; r++) {
     if (!show(r, rStep)) continue
     const y = view.oy + r * cell * view.scale + (cellPx * view.scale) / 2
-    if (y < RULER_SIZE || y > areaH - RULER_SIZE) continue
-    ctx.strokeStyle = RULER_LINE
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(0, y + 0.5)
-    ctx.lineTo(RULER_SIZE, y + 0.5)
-    ctx.moveTo(areaW - RULER_SIZE, y + 0.5)
-    ctx.lineTo(areaW, y + 0.5)
-    ctx.stroke()
-    ctx.fillStyle = RULER_TEXT
-    ctx.fillText(String(r + 1), RULER_SIZE / 2, y)
-    ctx.fillText(String(r + 1), areaW - RULER_SIZE / 2, y)
+    if (y < band || y > areaH - band) continue
+    ctx.fillText(String(r + 1), band / 2, y)
+    ctx.fillText(String(r + 1), areaW - band / 2, y)
   }
   ctx.restore()
 }

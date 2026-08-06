@@ -2,6 +2,7 @@
 const user = require('../../utils/user.js')
 const pager = require('../../utils/pager.js')
 const pattern = require('../../utils/pattern.js')
+const color = require('../../utils/color.js')
 const exportUtil = require('../../utils/export.js')
 const PAGE_SIZE = 10
 
@@ -101,6 +102,50 @@ Page({
       wx.hideLoading()
       wx.showToast({ title: (err && err.message) || '图纸加载失败', icon: 'none' })
     }
+  },
+
+  // 导出图纸：与生成后的导出同一逻辑（取回 grid → 生成带编号与数目的图纸 → 保存相册）
+  async onExport(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    wx.showLoading({ title: '生成图纸…', mask: true })
+    try {
+      const r = await user.getGalleryItem(id)
+      const item = r.item
+      if (!item.grid) throw new Error('该图纸暂无像素数据，无法导出')
+      const grid = pattern.parseGrid(item.grid, item.size)
+      const palette = color.buildPalette(item.set)
+      const bgMask = pattern.findBackgroundMask(grid, pattern.findWhiteishCodes(palette))
+      const filePath = await exportUtil.renderPatternExport(grid, palette, { bgMask, gridEvery: 5 })
+      wx.hideLoading()
+      this.saveToAlbum(filePath)
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '导出失败', icon: 'none' })
+    }
+  },
+
+  saveToAlbum(filePath) {
+    wx.saveImageToPhotosAlbum({
+      filePath,
+      success: () => {
+        wx.showToast({ title: '已保存到相册', icon: 'success' })
+      },
+      fail: (err) => {
+        if (err.errMsg && err.errMsg.indexOf('auth deny') >= 0) {
+          wx.showModal({
+            title: '需要相册权限',
+            content: '请在设置中开启"保存到相册"权限。',
+            confirmText: '去设置',
+            success: (r) => {
+              if (r.confirm) wx.openSetting()
+            }
+          })
+        } else {
+          wx.showToast({ title: '保存失败', icon: 'none' })
+        }
+      }
+    })
   },
 
   // 老数据回填：缺缩略图/预览图时后台下载全图 → 压缩 → 上传 → 更新记录（一次性，失败静默）
