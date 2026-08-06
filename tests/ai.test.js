@@ -296,21 +296,6 @@ const prompt = require('../tools/prompt.js')
     delete global.wx
   }
 
-  // 云函数返回 imageFileID（大图走云存储）时，前端应直接透传
-  global.wx = {
-    cloud: {
-      callFunction() {
-        return Promise.resolve({ result: { imageFileID: 'cloud://ai-tmp/test_pattern.png' } })
-      }
-    }
-  }
-  try {
-    const res = await ai.callAiGenerate({ imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '' })
-    assert.strictEqual(res.imageFileID, 'cloud://ai-tmp/test_pattern.png', '应透传云函数返回的 imageFileID')
-  } finally {
-    delete global.wx
-  }
-
   console.log('ai.test.js 全部通过 ✓')
 })().catch((e) => {
   console.error(e)

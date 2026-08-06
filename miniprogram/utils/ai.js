@@ -147,7 +147,7 @@ function callAiGenerate(params) {
       .callFunction({ name: 'ai-generate-pattern', data })
       .then((res) => {
         const result = res && res.result
-        if (!result || (!result.image && !result.imageFileID)) {
+        if (!result || !result.image) {
           throw new Error((result && result.error) || '云函数调用失败')
         }
         return result
@@ -168,25 +168,7 @@ function callAiGenerate(params) {
  */
 async function generateGrid(params) {
   const resp = await callAiGenerate(params)
-  if (!resp.imageFileID) return imageToGrid(resp.image, params.size, params.set)
-  try {
-    const tempPath = await downloadFileID(resp.imageFileID)
-    return await fileToGrid(tempPath, params.size, params.set)
-  } finally {
-    // 图纸已读取完成，尽力删除云端临时文件；失败则留给云函数下次同会话生成时清理
-    wx.cloud.deleteFile({ fileList: [resp.imageFileID] }).catch(() => {})
-  }
-}
-
-// 云函数只返回 fileID，大图走云存储 CDN 下载，避免 base64 穿过函数响应触发大小限制
-function downloadFileID(fileID) {
-  return new Promise((resolve, reject) => {
-    wx.cloud.downloadFile({
-      fileID,
-      success: (res) => resolve(res.tempFilePath),
-      fail: (err) => reject(new Error('图纸图片下载失败: ' + ((err && err.errMsg) || '')))
-    })
-  })
+  return imageToGrid(resp.image, params.size, params.set)
 }
 
 /**
@@ -325,13 +307,6 @@ async function imageToGrid(dataUrl, size, setKey) {
       fail: (err) => reject(new Error('图纸图片保存失败: ' + ((err && err.errMsg) || '')))
     })
   })
-  return fileToGrid(tempPath, size, setKey)
-}
-
-/**
- * 从本地临时文件加载图片 → 读整幅像素 → 主色分块映射为色号网格（cloud 模式下载 fileID 后走这里）。
- */
-async function fileToGrid(tempPath, size, setKey) {
   const loader = wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 })
   const img = await image.loadImageOnce(loader, tempPath)
   const canvas = wx.createOffscreenCanvas({ type: '2d', width: img.width, height: img.height })
