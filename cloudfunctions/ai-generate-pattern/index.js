@@ -1,6 +1,7 @@
 // AI 生成拼豆图纸云函数（图像方案，与本地代理服务 tools/ai-generate-server.js 保持一致）
 // 流程：接收原图 base64 → 调用火山方舟 Seedream（doubao-seedream-5-0-260128，OpenAI 兼容
-// images/generations 接口）图生图生成像素风格图纸 → 下载图片转 base64 → 返回 { image }
+// images/generations 接口）图生图生成像素风格图纸 → 下载图片上传云存储 → 返回 { imageFileID }
+// （大图走云存储，避免大 base64 穿过函数响应触发大小限制）
 // 环境变量：ARK_API_KEY（必填）、ARK_MODEL（可选，默认 doubao-seedream-5-0-260128）
 // 注意：云函数超时需在控制台调大（建议 60s）；部署目录内需包含 ref-pack.jpg。
 const http = require('http')
@@ -117,13 +118,13 @@ function buildPrompt(size, style, styleKey, cutout, extra) {
       : '「参考图」第二张图是参考拼图：两张「原图转像素图」示例，请参照它们的转换思路，把真实照片抽象成方块像素画，保留人物的姿态、表情、发型、服装特征，简化背景与细节；最终风格以「风格」章节的要求为准。\n') +
     (realistic
       ? '「五官参考」第三张图仅供学习像素颗粒表达；写实风下五官必须忠实还原「第一张图」原图的比例、形状、光影与表情，禁止卡通大眼、粗眼线、圆腮红画法。\n'
-      : '「五官参考」第三张图是五官表达示例（5 个拼豆像素画人脸）：请学习并借鉴其中的五官画法——大而有神的眼睛（上眼睑线、瞳孔、左上角高光，避免豆豆眼）、清晰的眉毛、小巧的鼻子、上扬微笑的嘴巴、脸颊圆形腮红、圆润可爱的脸型。\n') +
+      : '「五官参考」第三张图是五官表达示例（5 个拼豆像素画人脸）：请学习并借鉴其中的五官画法——大而有神的眼睛（上眼睑线、瞳孔、左上角高光）、清晰的眉毛、小巧的鼻子、上扬微笑的嘴巴、脸颊圆形腮红、圆润可爱的脸型。这只是默认画法，如果用户有别的需求（见额外要求部分），请先忠于额外要求\n') +
     '⚠ 重点：这些示例只用于学习五官的画法与风格，禁止照搬、复制或生成示例中的任何角色、动物、造型、服装、背景或具体内容（如米老鼠、小熊、圣诞帽、示例中的具体人物），五官以外的构图与内容必须完全来自「第一张图」（用户照片）。\n' +
     '「重要」不要模仿参考图中的文字、水印、贴纸、标语或广告元素，输出画面中不得出现任何文字、数字或水印。\n' +
-    '「构图」人物居中，头部到肩部或半身特写，主体占画面 70% 以上。\n' +
+    '「构图」请把主体居中，主体占画面 70% 以上。如果照片主体是人物，请遵循以下要求；如果不是人物，就按照原先形象生成，忽略人物相关的要求。\n' +
     (realistic
       ? '「肤色」忠实还原原图肤色与明暗：脸部用 2~3 档色阶表现受光与阴影，阴影色从原图取，禁止整体偏色，也不要加深为深棕/深灰。\n'
-      : '「肤色」最重要的颜色要求：脸部大面积肤色必须统一使用 G1 色号的 RGB(255,228,211)（#FFE4D3），脸部主色占比 80% 以上；额头、面颊、鼻子、下巴等脸部主体一律用这个浅色。禁止用深棕、小麦色、暗肤色、灰色或大面积深色阴影画脸；阴影最多占脸部 10%，阴影色必须是浅暖色（接近 RGB 240,205,185），不得使用深色。\n') +
+      : '「肤色」最重要的颜色要求：脸部大面积肤色必须统一使用 G1 色号的 RGB(255,228,211)（#FFE4D3），脸部主色占比 80% 以上；额头、面颊、鼻子、下巴等脸部主体一律用这个浅色。禁止用深棕、小麦色、暗肤色、灰色或大面积深色阴影画脸（除非照片本身就是黑人）；阴影最多占脸部 10%，阴影色必须是浅暖色（接近 RGB 240,205,185），不得使用深色。\n') +
     (realistic
       ? '「五官（写实）」严格按照原图的比例、形状、间距与表情绘制五官：眼睛大小与原图一致，保留瞳孔、高光与眼白；眉毛、鼻子、嘴巴按原图的形状与明暗归纳成色块，禁止放大眼睛、粗黑眼线、腮红圆块等卡通化处理。\n'
       : '「眼睛（像素画法）」每只眼睛约 5~7 格宽、4~6 格高的横向椭圆：上眼皮用 1 格深的黑色或深棕色粗线，下眼皮用细线；眼白用浅米白色；瞳孔为 2×2 格深棕或黑色，位于眼睛中央偏下；瞳孔左上角必须有 1~2 格纯白高光；两眼睛间距约 4 格。若原图戴眼镜，必须把眼镜画清晰：1 格粗的深色镜框包裹双眼，镜片为浅色，镜腿延伸到脸两侧。\n' +
@@ -146,11 +147,11 @@ function buildPrompt(size, style, styleKey, cutout, extra) {
     '「风格」' +
     style +
     '\n' +
-    (extraReq ? '「额外要求」' + extraReq + '\n' : '') +
+    (extraReq ? '「额外要求」额外要求部分优先级最高，如果这部分和之前之后的文字有冲突，以这部分为主：' + extraReq + '\n' : '') +
     '「轮廓闭合」最重要的结构要求：人物轮廓线必须首尾相接、完全闭合，不能有缺口、断线或开口；人物与背景之间必须由连续的深色或非白色像素链完全隔开。人物内部的任何白色或浅色区域（眼白、高光、白色衣物等）必须被其他颜色完全包围，禁止与画面边缘的白色背景连通——否则内部白色会被误判为背景。\n' +
     (cutout
       ? '「抠图」最重要的要求：背景只允许使用纯白色——每一个背景像素必须严格等于 RGB(255,255,255)（#FFFFFF），不允许任何近白色、米白、奶白、浅灰、灰白、阴影、渐变、晕影或轻微杂色；人物边缘与背景交界必须干净利落、无混色过渡、无残留背景色。人物以外不得出现任何原背景物体、家具、墙面、植物、阴影、渐变或装饰，如同把人物从照片中完整抠出后放在纯白画布上。\n'
-      : '「背景」背景必须是纯白色（RGB 255,255,255），不要任何背景颜色、渐变或装饰。\n') +
+      : '「背景」背景按照原图进行设计。\n') +
     '「禁止」不要画网格线、辅助线、边框；不要渐变或抗锯齿混色；不要文字、数字、水印、贴纸；不要多格拼接或九宫格。'
   )
 }
@@ -161,7 +162,7 @@ function extractImageUrl(resp) {
   return null
 }
 
-async function generate(apiKey, model, data) {
+async function generate(apiKey, model, data, openid) {
   const size = Number(data.size)
   if (!Number.isInteger(size) || size < BOARD_MIN || size > BOARD_MAX) {
     throw new Error('图像生成仅支持 ' + BOARD_MIN + '×' + BOARD_MIN + ' ~ ' + BOARD_MAX + '×' + BOARD_MAX + ' 的整数盘面')
@@ -206,7 +207,29 @@ async function generate(apiKey, model, data) {
     throw new Error('生成服务未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
   }
   const { buffer, contentType } = await downloadBinary(url, 60000, 5)
-  return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }
+  const ext = /png/i.test(contentType || '') ? 'png' : 'jpg'
+  const cloudPath = 'ai-tmp/' + openid + '/' + Date.now() + '_pattern.' + ext
+  const up = await cloud.uploadFile({ cloudPath, fileContent: buffer })
+  // 清理同一 (openid, imageHash) 会话上一张临时图纸，避免 ai-tmp 无限堆积；失败不影响本次结果
+  try {
+    const db = cloud.database()
+    const hit = await db
+      .collection('ai_sessions')
+      .where({ _openid: openid, imageHash: data.imageHash || '' })
+      .limit(1)
+      .get()
+    const prev = hit.data && hit.data[0] && hit.data[0].lastPatternFileID
+    if (prev) {
+      await cloud.deleteFile({ fileList: [prev] }).catch(() => {})
+    }
+    await db
+      .collection('ai_sessions')
+      .where({ _openid: openid, imageHash: data.imageHash || '' })
+      .update({ data: { lastPatternFileID: up.fileID } })
+  } catch (e) {
+    // 忽略清理错误
+  }
+  return { imageFileID: up.fileID }
 }
 
 async function checkQuota(openid, event) {
@@ -241,7 +264,7 @@ exports.main = async (event) => {
   const model = process.env.ARK_MODEL || DEFAULT_MODEL
   try {
     await checkQuota(OPENID, event || {})
-    return await generate(apiKey, model, event || {})
+    return await generate(apiKey, model, event || {}, OPENID)
   } catch (e) {
     return { error: e.message }
   }
