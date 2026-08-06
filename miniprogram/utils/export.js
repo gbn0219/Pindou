@@ -1,8 +1,8 @@
 // miniprogram/utils/export.js
 /**
  * 图纸资产生成（展示页导出、图库保存、修改页保存共用）：
- * - renderPatternExport：整图导出（图纸 + 底部色号清单），输出分辨率 ×EXPORT_UPSCALE，
- *   画布始终不超过 EXPORT_MAX_DIM，规避部分设备 2048px 画布上限；
+ * - renderPatternExport：整图导出（图纸 + 四周坐标 + 底部色号清单），输出分辨率 ×EXPORT_UPSCALE，
+ *   画布优先按 4096 上限渲染（高清），个别设备失败自动回退 2048；
  * - renderPatternJpeg：图纸 JPEG（与导出图同一布局：含色号与图例，按宽度缩放，作图库缩略图/预览图）；
  * - renderSquareJpeg：原图 contain 缩放到方形 JPEG（白底补齐）。
  * 依赖 wx.createOffscreenCanvas，仅在小程序环境可用。
@@ -22,11 +22,13 @@ function toTempFile(canvas, opts) {
   })
 }
 
+const EXPORT_MAX_DIM_HIGH = 4096 // 高清导出画布上限（iOS 真机超 4096 会静默失败，失败自动回退 2048）
+
 /**
- * 整图导出：按 layoutExport 计算布局（≤EXPORT_MAX_DIM），绘制图纸 + 色号清单，
+ * 整图导出：按 layoutExport 计算布局（≤maxDim），绘制图纸 + 四周坐标 + 色号清单，
  * 输出 PNG 分辨率 = 画布 ×EXPORT_UPSCALE。opts：{ bgMask, gridEvery }。
  */
-function renderPatternExport(grid, palette, opts) {
+async function renderPatternExportAt(grid, palette, opts, maxDim) {
   const bgMask = opts && opts.bgMask
   const gridEvery = opts && opts.gridEvery
   const codes = palette.map((i) => i.code)
@@ -35,7 +37,7 @@ function renderPatternExport(grid, palette, opts) {
   palette.forEach((i) => { hexByCode[i.code] = i.hex })
   const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
   const layout = pattern.layoutExport(grid, { cellSize: pattern.EXPORT_CELL, gap: 1, legendItems })
-  const scale = Math.min(1, pattern.EXPORT_MAX_DIM / Math.max(layout.width, layout.height))
+  const scale = Math.min(1, maxDim / Math.max(layout.width, layout.height))
   const width = Math.max(1, Math.round(layout.width * scale))
   const height = Math.max(1, Math.round(layout.height * scale))
   const canvas = wx.createOffscreenCanvas({ type: '2d', width, height })
@@ -54,6 +56,12 @@ function renderPatternExport(grid, palette, opts) {
     destWidth: width * EXPORT_UPSCALE,
     destHeight: height * EXPORT_UPSCALE
   })
+}
+
+function renderPatternExport(grid, palette, opts) {
+  // 先按 4096 高清画布尝试；个别设备画布上限较低时自动回退 2048（原行为）
+  return renderPatternExportAt(grid, palette, opts, EXPORT_MAX_DIM_HIGH)
+    .catch(() => renderPatternExportAt(grid, palette, opts, pattern.EXPORT_MAX_DIM))
 }
 
 /**

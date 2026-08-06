@@ -39,4 +39,23 @@ function viewportPinchStep(start, current, t1, t2) {
   return { scale, ox, oy }
 }
 
-module.exports = { viewportPinchStep, MIN_SCALE, MAX_SCALE }
+/**
+ * 把视图约束在坐标条框内：内容不进入四周坐标条区域（不遮挡坐标）。
+ * total 为内容世界尺寸（正方形网格边长）；ruler 为每侧坐标条宽高（屏幕 px）。
+ * 内容小于内区时锁定居中；大于内区时平移范围受限在框内。
+ */
+function clampView(view, total, areaW, areaH, ruler) {
+  const innerW = areaW - ruler * 2
+  const innerH = areaH - ruler * 2
+  const w = total * view.scale
+  const h = total * view.scale
+  let ox = view.ox
+  let oy = view.oy
+  if (w <= innerW) ox = ruler + (innerW - w) / 2
+  else ox = Math.max(ruler + innerW - w, Math.min(ruler, ox))
+  if (h <= innerH) oy = ruler + (innerH - h) / 2
+  else oy = Math.max(ruler + innerH - h, Math.min(ruler, oy))
+  return { scale: view.scale, ox, oy }
+}
+
+module.exports = { viewportPinchStep, clampView, MIN_SCALE, MAX_SCALE }

@@ -288,6 +288,7 @@ function fakeCtx() {
     fill() { calls.push(['fill']) },
     save() {},
     restore() {},
+    translate() {},
     measureText(text) { return { width: String(text).length * 10 } }
   }
 }
@@ -314,9 +315,9 @@ const legendItems = [
   { code: 'A4', count: 2, hex: '#e60012' }
 ]
 const layout = pattern.layoutExport(one, { cellSize: 16, gap: 1, legendItems })
-assert.strictEqual(layout.width, 16, '导出宽度应等于图纸宽度')
+assert.strictEqual(layout.width, 16 + pattern.EXPORT_COORD * 2, '导出宽度应等于图纸宽度 + 四周坐标边距')
 assert.ok(layout.height > 16, '含色号清单时高度应大于图纸高度')
-assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 16, '无色号清单时高度应等于图纸高度')
+assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 16 + pattern.EXPORT_COORD * 2, '无色号清单时高度应等于图纸高度 + 四周坐标边距')
 
 {
   const ctx = fakeCtx()
@@ -334,7 +335,7 @@ assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 1
   for (let i = 0; i < 50; i++) gridWide.push(new Array(50).fill('A1'))
   const many = []
   for (let i = 0; i < 20; i++) many.push({ code: 'A1', count: 1, hex: '#ffffff' })
-  const legendNarrow = pattern.layoutExport(one, { cellSize: 16, gap: 1, legendItems: many }).height - 16
+  const legendNarrow = pattern.layoutExport(one, { cellSize: 16, gap: 1, legendItems: many }).height - (16 + pattern.EXPORT_COORD * 2)
   const legendWide = pattern.layoutExport(gridWide, { cellSize: 16, gap: 1, legendItems: many }).height - pattern.layoutExport(gridWide, { cellSize: 16, gap: 1 }).height
   assert.ok(legendWide < legendNarrow, '宽度更大时清单行数应更少')
 }
@@ -350,6 +351,14 @@ assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 1
 }
 
 assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
+
+// ---- renderRulers 显示密度 ----
+{
+  assert.strictEqual(pattern.rulerStep(12), 1, '少量可见格每格都标')
+  assert.strictEqual(pattern.rulerStep(52), 5, '52 盘可见时每 5 格标一个')
+  assert.strictEqual(pattern.rulerStep(104), 10, '104 盘每 10 格标一个')
+  assert.strictEqual(pattern.rulerStep(208), 20, '208 盘每 20 格标一个')
+}
 
 // ---- serializeGrid / parseGrid（图库 grid 存储） ----
 {

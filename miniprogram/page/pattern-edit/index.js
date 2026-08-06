@@ -115,12 +115,15 @@ Page({
           const total = p.size * (cell + pattern.GAP) - pattern.GAP
           const areaW = area.width
           const areaH = area.height
-          // 画布 = 可视区域，内容用 ctx 变换（scale + 平移）呈现，触摸坐标无缩放歧义
-          const scale = Math.max(0.05, Math.min(1, Math.min(areaW, areaH) / total))
+          // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
+          const ruler = pattern.RULER_SIZE
+          const innerW = areaW - ruler * 2
+          const innerH = areaH - ruler * 2
+          const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
           this.view = {
             scale,
-            ox: (areaW - total * scale) / 2,
-            oy: (areaH - total * scale) / 2
+            ox: ruler + (innerW - total * scale) / 2,
+            oy: ruler + (innerH - total * scale) / 2
           }
           canvas.width = areaW
           canvas.height = areaH
@@ -139,6 +142,13 @@ Page({
     this.ctx.setTransform(v.scale, 0, 0, v.scale, v.ox, v.oy)
   },
 
+  clampView() {
+    const p = this.pattern
+    const cell = this.cellPx || pattern.CELL
+    const total = p.size * (cell + pattern.GAP) - pattern.GAP
+    this.view = gesture.clampView(this.view, total, this.canvas.width, this.canvas.height, pattern.RULER_SIZE)
+  },
+
   drawGrid() {
     if (!this.canvas || !this.ctx) return
     // 先以单位变换清空整块画布，否则缩放/拖动后旧图残留在原位（残影）
@@ -152,6 +162,8 @@ Page({
       highlight: this.highlight,
       noCodeMask: this.bgMask
     })
+    // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
+    pattern.renderRulers(this.ctx, this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
   },
 
   redrawCanvas() {
@@ -273,6 +285,7 @@ Page({
   handlePinch(t1, t2) {
     if (!this.pinch || !this.view) return
     this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
+    this.clampView()
     const show = this.view.scale >= CODE_MIN_SCALE
     if (show !== this.codeShown) {
       this.codeShown = show

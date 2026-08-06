@@ -105,4 +105,21 @@ function screenOf(view, localX, localY) {
   assert.ok(oy > -1 && oy + total * scale <= areaH + 1, '208 盘初始应完整落在区域内（y）')
 }
 
+// clampView：内容始终约束在坐标条框内（不进入坐标条，不遮挡）
+{
+  const ruler = pattern.RULER_SIZE
+  const areaW = 300
+  const areaH = 260
+  const total = 100
+  const innerW = areaW - ruler * 2
+  const innerH = areaH - ruler * 2
+  // 内容小于内区：锁定居中
+  const small = gesture.clampView({ scale: 0.5, ox: 0, oy: 50 }, total, areaW, areaH, ruler)
+  assert.strictEqual(small.ox, ruler + (innerW - total * small.scale) / 2, '内容小于内区时应居中（x）')
+  assert.strictEqual(small.oy, ruler + (innerH - total * small.scale) / 2, '内容小于内区时应居中（y）')
+  // 内容大于内区：平移受限在框内
+  const big = gesture.clampView({ scale: 3, ox: 1000, oy: -1000 }, total, areaW, areaH, ruler)
+  assert.strictEqual(big.ox, ruler, 'x 方向应被钳制在左边界')
+  assert.strictEqual(big.oy, ruler + innerH - total * big.scale, 'y 方向应被钳制在下边界')
+}
 console.log('gesture.test.js 全部通过 ✓')

@@ -12,6 +12,15 @@ const EXPORT_CELL = 16 // 导出格边长 px（104 格 → 1767px，规避部分
 const GRID_LINE_COLOR = '#ff3a5d' // 每 N 格粗网格线颜色（与示例一致）
 const GRID_LINE_WIDTH = 2 // 粗网格线宽 px
 const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单），超出时整体等比缩小
+const EXPORT_COORD = 28 // 导出图四周坐标边距 px（上下左右各一排号空间）
+const COORD_COLOR = '#8a919c' // 排号/列号颜色（细字，避免挤压）
+const BG_GRID_COLOR = '#e2e4e8' // 背景格浅灰格线（无色号格仍显示格子）
+const RULER_SIZE = 24 // 坐标轴条宽高 px（屏幕空间，固定画布四周）
+const RULER_MAX_LABELS = 12 // 坐标轴每轴最多标签数（显示密度基准）
+const RULER_STEPS = [1, 2, 5, 10, 20, 50, 100, 200] // 显示密度档位（每 N 格一个标签）
+const RULER_BG = '#e8e9ec' // 坐标条灰色背景
+const RULER_LINE = '#d2d5db' // 坐标条分隔线/边框色
+const RULER_TEXT = '#5f6672' // 坐标条文字色
 const WHITE_RGB_MIN = 230 // 判定为"白色系"的 RGB 下限（H1 纯白、H2 近白、奶油白等）
 
 // 底部色号清单布局（导出图）
@@ -205,9 +214,14 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   const y = r * (cellSize + gap)
   ctx.fillStyle = hex
   ctx.fillRect(x, y, cellSize, cellSize)
-  if (showCode && !noCode) {
+  if (noCode) {
+    // 背景格：不显示编号，但画浅灰格子线，保证白色区域能看到格子
+    ctx.strokeStyle = BG_GRID_COLOR
+    ctx.lineWidth = 1
+    ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1)
+  } else if (showCode) {
     ctx.fillStyle = luminance(hex) > 150 ? '#12171b' : '#ffffff'
-    ctx.font = '600 ' + Math.max(7, Math.round(cellSize * 0.45)) + 'px sans-serif'
+    ctx.font = '600 ' + Math.max(4, Math.round(cellSize * 0.45)) + 'px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(code, x + cellSize / 2, y + cellSize / 2 + 0.5)
@@ -299,6 +313,107 @@ function averageBlocks(data, size4, size, block) {
   return rgbArr
 }
 
+
+/**
+ * 绘制四周排号/列号（坐标系）：上/下为列号 1..size，左/右为行号 1..size。
+ * 在当前变换坐标系内绘制，随视图缩放/拖动一起变化；细字重避免挤压。
+ */
+function renderCoordinates(ctx, size, cellSize, gap, coord, opts) {
+  const color = (opts && opts.color) || COORD_COLOR
+  const weight = (opts && opts.weight) || '400'
+  const font = (opts && opts.font) || Math.max(10, Math.min(18, Math.round(cellSize * 0.65)))
+  const step = cellSize + gap
+  const gridTotal = size * step - gap
+  ctx.fillStyle = color
+  ctx.font = weight + ' ' + font + 'px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (let c = 0; c < size; c++) {
+    const x = coord + c * step + cellSize / 2
+    ctx.fillText(String(c + 1), x, coord / 2)
+    ctx.fillText(String(c + 1), x, coord + gridTotal + coord / 2)
+  }
+  for (let r = 0; r < size; r++) {
+    const y = coord + r * step + cellSize / 2
+    ctx.fillText(String(r + 1), coord / 2, y)
+    ctx.fillText(String(r + 1), coord + gridTotal + coord / 2, y)
+  }
+}
+
+/**
+ * 坐标轴显示密度：可见格数越多间隔越大，保证每轴标签不超过 RULER_MAX_LABELS。
+ */
+function rulerStep(visibleCount) {
+  const raw = Math.ceil((visibleCount || 1) / RULER_MAX_LABELS)
+  for (const s of RULER_STEPS) if (s >= raw) return s
+  return 500
+}
+
+/**
+ * 在画布四周绘制固定坐标轴（屏幕空间，不随内容缩放/移动）。
+ * 根据当前 view 计算可见行列区间，按 rulerStep 密度标出实际行/列号（随平移实时变化）。
+ */
+function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
+  if (!view || !view.scale || !size || !cellPx) return
+  const cell = cellPx + gap
+  const c0 = Math.max(0, Math.floor((0 - view.ox) / view.scale / cell))
+  const c1 = Math.min(size - 1, Math.floor((areaW - view.ox) / view.scale / cell))
+  const r0 = Math.max(0, Math.floor((0 - view.oy) / view.scale / cell))
+  const r1 = Math.min(size - 1, Math.floor((areaH - view.oy) / view.scale / cell))
+  const cStep = rulerStep(c1 - c0 + 1)
+  const rStep = rulerStep(r1 - r0 + 1)
+  const show = (i, step) => i === 0 || (i + 1) % step === 0
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  // 四周灰色坐标条（像网格的一部分）
+  ctx.fillStyle = RULER_BG
+  ctx.fillRect(0, 0, areaW, RULER_SIZE)
+  ctx.fillRect(0, areaH - RULER_SIZE, areaW, RULER_SIZE)
+  ctx.fillRect(0, 0, RULER_SIZE, areaH)
+  ctx.fillRect(areaW - RULER_SIZE, 0, RULER_SIZE, areaH)
+  // 内容区边框（坐标条与格子之间的分界）
+  ctx.strokeStyle = RULER_LINE
+  ctx.lineWidth = 1
+  ctx.strokeRect(RULER_SIZE + 0.5, RULER_SIZE + 0.5, areaW - RULER_SIZE * 2 - 1, areaH - RULER_SIZE * 2 - 1)
+  ctx.fillStyle = RULER_TEXT
+  ctx.font = '400 12px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (let c = c0; c <= c1; c++) {
+    if (!show(c, cStep)) continue
+    const x = view.ox + c * cell * view.scale + (cellPx * view.scale) / 2
+    if (x < RULER_SIZE || x > areaW - RULER_SIZE) continue
+    // 与网格对齐的分隔线：让坐标条看起来像格子的延伸
+    ctx.strokeStyle = RULER_LINE
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x + 0.5, 0)
+    ctx.lineTo(x + 0.5, RULER_SIZE)
+    ctx.moveTo(x + 0.5, areaH - RULER_SIZE)
+    ctx.lineTo(x + 0.5, areaH)
+    ctx.stroke()
+    ctx.fillStyle = RULER_TEXT
+    ctx.fillText(String(c + 1), x, RULER_SIZE / 2)
+    ctx.fillText(String(c + 1), x, areaH - RULER_SIZE / 2)
+  }
+  for (let r = r0; r <= r1; r++) {
+    if (!show(r, rStep)) continue
+    const y = view.oy + r * cell * view.scale + (cellPx * view.scale) / 2
+    if (y < RULER_SIZE || y > areaH - RULER_SIZE) continue
+    ctx.strokeStyle = RULER_LINE
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, y + 0.5)
+    ctx.lineTo(RULER_SIZE, y + 0.5)
+    ctx.moveTo(areaW - RULER_SIZE, y + 0.5)
+    ctx.lineTo(areaW, y + 0.5)
+    ctx.stroke()
+    ctx.fillStyle = RULER_TEXT
+    ctx.fillText(String(r + 1), RULER_SIZE / 2, y)
+    ctx.fillText(String(r + 1), areaW - RULER_SIZE / 2, y)
+  }
+  ctx.restore()
+}
 
 function legendColumns(width) {
   return Math.max(1, Math.floor((width - LEGEND_PAD * 2 + LEGEND_GAP) / (LEGEND_UNIT_W + LEGEND_GAP)))
@@ -400,8 +515,9 @@ function layoutExport(grid, opts) {
   const gap = (opts && opts.gap) || 1
   const size = grid.length
   const gridTotal = size * (cellSize + gap) - gap
+  const width = gridTotal + EXPORT_COORD * 2 // 四周坐标边距
   const items = (opts && opts.legendItems) || []
-  return { width: gridTotal, height: gridTotal + legendHeight(items, gridTotal) }
+  return { width, height: gridTotal + EXPORT_COORD * 2 + legendHeight(items, width) }
 }
 
 /**
@@ -411,22 +527,33 @@ function layoutExport(grid, opts) {
 function renderExport(ctx, grid, palette, opts) {
   const cellSize = (opts && opts.cellSize) || EXPORT_CELL
   const gap = (opts && opts.gap) || 1
-  const gridTotal = renderGrid(ctx, grid, palette, {
+  const size = grid.length
+  const gridTotal = size * (cellSize + gap) - gap
+  const width = gridTotal + EXPORT_COORD * 2
+  const baseH = gridTotal + EXPORT_COORD * 2
+  // 边距区域铺白底（坐标区域不能透明）
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, width, baseH)
+  ctx.save()
+  ctx.translate(EXPORT_COORD, EXPORT_COORD)
+  renderGrid(ctx, grid, palette, {
     cellSize,
     gap,
     code: opts && opts.code !== false,
     gridEvery: opts && opts.gridEvery,
     noCodeMask: opts && opts.noCodeMask
   })
+  ctx.restore()
+  renderCoordinates(ctx, size, cellSize, gap, EXPORT_COORD)
   let legendH = 0
   if (opts && opts.legendItems && opts.legendItems.length) {
     legendH = renderLegend(ctx, opts.legendItems, {
-      width: gridTotal,
-      size: grid.length,
-      y: gridTotal
+      width,
+      size,
+      y: baseH
     })
   }
-  return { width: gridTotal, height: gridTotal + legendH }
+  return { width, height: baseH + legendH }
 }
 
 module.exports = {
@@ -444,11 +571,16 @@ module.exports = {
   renderGrid,
   renderLegend,
   renderExport,
+  renderCoordinates,
+  renderRulers,
+  rulerStep,
   layoutExport,
   drawCell,
+  EXPORT_COORD,
   CELL,
   GAP,
   EXPORT_CELL,
   EXPORT_MAX_DIM,
+  RULER_SIZE,
   LEGEND_UNIT_W
 }
