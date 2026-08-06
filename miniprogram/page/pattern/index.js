@@ -4,7 +4,7 @@ const color = require('../../utils/color.js')
 const gesture = require('../../utils/gesture.js')
 const config = require('../../config.js')
 const ai = require('../../utils/ai.js')
-const image = require('../../utils/image.js')
+const exportUtil = require('../../utils/export.js')
 const user = require('../../utils/user.js')
 const hash = require('../../utils/hash.js')
 const session = require('../../utils/session.js')
@@ -99,8 +99,6 @@ Page({
           ox: (areaW - total * scale) / 2,
           oy: (areaH - total * scale) / 2
         }
-        this.canvasW = areaW
-        this.canvasH = areaH
         canvas.width = areaW
         canvas.height = areaH
         this.canvas = canvas
@@ -298,69 +296,19 @@ Page({
   },
 
   makeExportFile() {
-    const canvas = this.canvas
-    const p = this.pattern
-    return new Promise((resolve, reject) => {
-      if (!canvas) return reject(new Error('画布未就绪'))
-      const codes = this.palette.map((i) => i.code)
-      const counts = pattern.countColors(p.grid, codes, this.bgMask)
-      const hexByCode = {}
-      this.palette.forEach((i) => { hexByCode[i.code] = i.hex })
-      const legendItems = counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] }))
-      const layout = pattern.layoutExport(p.grid, { cellSize: pattern.EXPORT_CELL, gap: 1, legendItems })
-      const scale = Math.min(1, pattern.EXPORT_MAX_DIM / Math.max(layout.width, layout.height))
-      canvas.width = Math.max(1, Math.round(layout.width * scale))
-      canvas.height = Math.max(1, Math.round(layout.height * scale))
-      const ctx = canvas.getContext('2d')
-      ctx.scale(scale, scale)
-      pattern.renderExport(ctx, p.grid, this.palette, {
-        cellSize: pattern.EXPORT_CELL,
-        gap: 1,
-        code: true,
-        gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
-        legendItems,
-        noCodeMask: this.bgMask
-      })
-      wx.canvasToTempFilePath({
-        canvas,
-        success: (res) => {
-          this.restoreDisplay(canvas)
-          resolve(res.tempFilePath)
-        },
-        fail: reject
-      })
+    return exportUtil.renderPatternExport(this.pattern.grid, this.palette, {
+      bgMask: this.bgMask,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0
     })
   },
 
   makeSquareJpeg(src, px) {
-    const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
-    const ctx = canvas.getContext('2d')
-    return image.loadImageOnce(canvas, src).then((img) => {
-      const scale = Math.min(px / img.width, px / img.height)
-      const dw = img.width * scale
-      const dh = img.height * scale
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, px, px)
-      ctx.drawImage(img, (px - dw) / 2, (px - dh) / 2, dw, dh)
-      return new Promise((resolve, reject) => {
-        wx.canvasToTempFilePath({ canvas, fileType: 'jpg', quality: 0.8, success: (r) => resolve(r.tempFilePath), fail: reject })
-      })
-    })
+    return exportUtil.renderSquareJpeg(src, px)
   },
   makeGridJpeg(px) {
-    const canvas = wx.createOffscreenCanvas({ type: '2d', width: px, height: px })
-    const ctx = canvas.getContext('2d')
-    const p = this.pattern
-    const cell = Math.max(2, Math.floor(px / p.size))
-    const total = p.size * (cell + pattern.GAP) - pattern.GAP
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, px, px)
-    ctx.translate(Math.floor((px - total) / 2), Math.floor((px - total) / 2))
-    pattern.renderGrid(ctx, p.grid, this.palette, { cellSize: cell, gap: pattern.GAP, code: false, gridEvery: 0, noCodeMask: this.bgMask })
-    return new Promise((resolve, reject) => {
-      wx.canvasToTempFilePath({ canvas, fileType: 'jpg', quality: 0.8, success: (r) => resolve(r.tempFilePath), fail: reject })
-      })
+    return exportUtil.renderGridJpeg(this.pattern.grid, this.palette, px, { bgMask: this.bgMask })
   },
+
   async saveToGallery() {
     const app = getApp()
     const u = app.globalData.user
@@ -369,15 +317,15 @@ Page({
     try {
       const patternFile = await this.makeExportFile()
       const ts = Date.now()
-      const ext = (this.pattern.imagePath.match(/\.(\w+)$/) || [ , 'jpg'])[1]
       const base = 'gallery/' + u.openid + '/' + ts
       const upload = (cloudPath, filePath) => wx.cloud.uploadFile({ cloudPath, filePath })
-      // 压缩小图（不裁剪）：缩略图 360px / 预览图 1080px，JPEG
+      // 压缩小图（不裁剪）：原图 ≤1280px、缩略图 360px / 预览图 1080px，JPEG
+      const originalJpg = await this.makeSquareJpeg(this.pattern.imagePath, 1280)
       const originalThumb = await this.makeSquareJpeg(this.pattern.imagePath, 360)
       const patternThumb = await this.makeGridJpeg(360)
       const originalPreview = await this.makeSquareJpeg(this.pattern.imagePath, 1080)
       const patternPreview = await this.makeGridJpeg(1080)
-      const original = await upload(base + '_original.' + ext, this.pattern.imagePath)
+      const original = await upload(base + '_original.jpg', originalJpg)
       const patternImg = await upload(base + '_pattern.png', patternFile)
       const originalThumbUp = await upload(base + '_original_thumb.jpg', originalThumb)
       const patternThumbUp = await upload(base + '_pattern_thumb.jpg', patternThumb)
@@ -390,6 +338,7 @@ Page({
         patternThumbFileID: patternThumbUp.fileID,
         originalPreviewFileID: originalPreviewUp.fileID,
         patternPreviewFileID: patternPreviewUp.fileID,
+        grid: pattern.serializeGrid(this.pattern.grid),
         mode: this.pattern.mode,
         style: this.pattern.style || '',
         size: this.pattern.size,
@@ -411,13 +360,6 @@ Page({
         wx.hideLoading()
         wx.showToast({ title: '导出失败', icon: 'none' })
       })
-  },
-
-  restoreDisplay(canvas) {
-    canvas.width = this.canvasW
-    canvas.height = this.canvasH
-    this.ctx = canvas.getContext('2d')
-    this.drawGrid()
   },
 
   saveToAlbum(filePath) {

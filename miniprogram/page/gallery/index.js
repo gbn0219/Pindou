@@ -1,12 +1,14 @@
 // miniprogram/page/gallery/index.js
 const user = require('../../utils/user.js')
 const pager = require('../../utils/pager.js')
+const pattern = require('../../utils/pattern.js')
+const exportUtil = require('../../utils/export.js')
 const PAGE_SIZE = 10
 
 function downloadFile(fileID, ms) {
   return Promise.race([
     wx.cloud.downloadFile({ fileID }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('下载超时')), ms || 15000))
+    new Promise((_, reject) => setTimeout(() => reject(new Error('下载超时')), ms || 60000))
   ]).then((res) => res.tempFilePath)
 }
 
@@ -51,6 +53,7 @@ Page({
         total: r.total || 0,
         pageNos: pager.pageWindow(r.totalPages || 1, p)
       })
+      this.backfillThumbs(items)
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '图库加载失败', icon: 'none' })
     } finally {
@@ -66,23 +69,81 @@ Page({
     const fileID = e.currentTarget.dataset.fileid
     const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
     if (!fileID || !pair) return
-    // 预览用压缩图（老数据回退原图），下载到本地再打开，不依赖域名白名单
+    // 预览直接传 cloud:// 云文件 ID（基础库 2.2.3+ 支持），优先压缩预览图，老数据回退缩略图/原图
     const isOriginal = fileID === pair.originalFileID
-    const ids = [
-      isOriginal ? (pair.originalPreviewFileID || pair.originalFileID) : (pair.patternPreviewFileID || pair.patternFileID),
-      isOriginal ? (pair.patternPreviewFileID || pair.patternFileID) : (pair.originalPreviewFileID || pair.originalFileID)
-    ]
-    wx.showLoading({ title: '加载中…', mask: true })
-    Promise.all(ids.map((id) => downloadFile(id, 15000)))
-      .then((paths) => {
-        wx.hideLoading()
-        wx.previewImage({ urls: paths, current: paths[0], complete: () => wx.hideLoading() })
-      })
-      .catch(() => {
-        wx.hideLoading()
-        wx.showToast({ title: '图片加载失败', icon: 'none' })
-      })
+    const pick = (it) => it.originalPreviewFileID || it.originalThumbFileID || it.originalFileID
+    const ppick = (it) => it.patternPreviewFileID || it.patternThumbFileID || it.patternFileID
+    const urls = isOriginal ? [pick(pair), ppick(pair)] : [ppick(pair), pick(pair)]
+    wx.previewImage({ urls, current: urls[0] })
   },
+
+  async onEdit(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    wx.showLoading({ title: '加载图纸…', mask: true })
+    try {
+      const r = await user.getGalleryItem(id)
+      const item = r.item
+      if (!item.grid) throw new Error('该图纸暂无像素数据，无法编辑')
+      const grid = pattern.parseGrid(item.grid, item.size)
+      getApp().globalData.pattern = {
+        grid,
+        size: item.size,
+        set: item.set,
+        mode: item.mode || 'photo',
+        style: item.style || '',
+        galleryId: id,
+        imagePath: ''
+      }
+      wx.hideLoading()
+      wx.navigateTo({ url: '/page/pattern-edit/index' })
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '图纸加载失败', icon: 'none' })
+    }
+  },
+
+  // 老数据回填：缺缩略图/预览图时后台下载全图 → 压缩 → 上传 → 更新记录（一次性，失败静默）
+  async backfillThumbs(items) {
+    if (this._backfilling) return
+    this._backfilling = true
+    try {
+      const u = getApp().globalData.user
+      if (!u || !u.openid) return
+      for (const it of items) {
+        const need = []
+        if (it.originalFileID && !it.originalThumbFileID) need.push(['originalThumbFileID', it.originalFileID, 360])
+        if (it.originalFileID && !it.originalPreviewFileID) need.push(['originalPreviewFileID', it.originalFileID, 1080])
+        if (it.patternFileID && !it.patternThumbFileID) need.push(['patternThumbFileID', it.patternFileID, 360])
+        if (it.patternFileID && !it.patternPreviewFileID) need.push(['patternPreviewFileID', it.patternFileID, 1080])
+        if (!need.length) continue
+        const ts = Date.now()
+        const base = 'gallery/' + u.openid + '/' + ts + '_backfill'
+        const updates = {}
+        for (let i = 0; i < need.length; i++) {
+          const field = need[i][0]
+          const fileID = need[i][1]
+          const px = need[i][2]
+          const tmp = await downloadFile(fileID, 60000)
+          const small = await exportUtil.renderSquareJpeg(tmp, px)
+          const up = await wx.cloud.uploadFile({ cloudPath: base + '_' + field + '.jpg', filePath: small })
+          updates[field] = up.fileID
+        }
+        await user.updateGallery(Object.assign({ id: it._id }, updates))
+        const idx = this.data.items.findIndex((x) => x._id === it._id)
+        if (idx >= 0) {
+          const items2 = this.data.items.slice()
+          items2[idx] = Object.assign({}, items2[idx], updates)
+          this.setData({ items: items2 })
+        }
+      }
+    } catch (err) {
+      // 回填失败不影响列表展示
+    } finally {
+      this._backfilling = false
+    }
+  },
+
   async onPullDownRefresh() {
     await this.load(this.data.page)
     wx.stopPullDownRefresh()

@@ -32,4 +32,6 @@ function createOrder(sessionId, imageHash) { return call('access', 'createOrder'
 function unlock(sessionId) { return call('access', 'unlock', { sessionId }) }
 function saveGallery(payload) { return call('gallery', 'save', payload) }
 function listGallery(page, pageSize) { return call('gallery', 'list', { page, pageSize }) }
-module.exports = { call, login, saveProfile, applyInvite, consumeQuota, checkAccess, createOrder, unlock, saveGallery, listGallery }
+function getGalleryItem(id) { return call('gallery', 'get', { id }) }
+function updateGallery(payload) { return call('gallery', 'update', payload) }
+module.exports = { call, login, saveProfile, applyInvite, consumeQuota, checkAccess, createOrder, unlock, saveGallery, listGallery, getGalleryItem, updateGallery }

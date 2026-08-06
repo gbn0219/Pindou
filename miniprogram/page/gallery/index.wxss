@@ -48,6 +48,16 @@
   height: 100%;
   background: var(--color-paper-2);
 }
+.pair-actions {
+  margin-top: var(--space-2xs);
+  display: flex;
+  justify-content: flex-end;
+}
+.pair-actions .btn--sm {
+  height: 56rpx;
+  padding: 0 var(--space-sm);
+  font-size: var(--text-xs);
+}
 .pair-meta {
   margin-top: var(--space-2xs);
   font-size: var(--text-xs);

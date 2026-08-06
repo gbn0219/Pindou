@@ -97,6 +97,29 @@ function replaceColor(grid, fromCode, toCode) {
 }
 
 /**
+ * 序列化网格：按行优先用逗号连接为字符串（如 "A1,B1,C1,..."），用于图库云端存储。
+ * 方形网格维度由 size 字段决定，无需在字符串中携带行分隔。
+ */
+function serializeGrid(grid) {
+  if (!grid || !grid.length) return ''
+  return grid.map((row) => row.join(',')).join(',')
+}
+
+/**
+ * 解析序列化网格：按 size×size 重塑二维数组。size 非法或串长度不符时抛错。
+ */
+function parseGrid(str, size) {
+  const codes = str ? String(str).split(',') : []
+  const n = Number(size) || 0
+  if (!n || codes.length !== n * n) throw new Error('图纸数据不完整')
+  const grid = []
+  for (let r = 0; r < n; r++) {
+    grid.push(codes.slice(r * n, (r + 1) * n))
+  }
+  return grid
+}
+
+/**
  * 白色系色号：RGB 三个通道都 >= WHITE_RGB_MIN 的套装颜色（纯白 H1、近白 H2、奶油白等）。
  * 背景不一定是纯白 H1（生成图/照片背景常映射到 H2 或奶油白），需要把整组近白色都视为背景候选。
  */
@@ -413,6 +436,8 @@ module.exports = {
   countColors,
   countColor,
   replaceColor,
+  serializeGrid,
+  parseGrid,
   displayCell,
   findWhiteishCodes,
   findBackgroundMask,

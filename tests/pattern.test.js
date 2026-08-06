@@ -351,4 +351,30 @@ assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 1
 
 assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
 
+// ---- serializeGrid / parseGrid（图库 grid 存储） ----
+{
+  const g = [
+    ['A1', 'B2'],
+    ['C3', 'A1']
+  ]
+  const str = pattern.serializeGrid(g)
+  assert.strictEqual(str, 'A1,B2,C3,A1', '序列化应按行优先逗号连接')
+  assert.deepStrictEqual(pattern.parseGrid(str, 2), g, '解析应还原二维网格')
+}
+{
+  assert.strictEqual(pattern.serializeGrid([]), '', '空网格序列化应为空串')
+  assert.throws(() => pattern.parseGrid('A1', 2), /图纸数据不完整/, '长度不符应抛错')
+  assert.throws(() => pattern.parseGrid('', 0), /图纸数据不完整/, '非法尺寸应抛错')
+}
+{
+  // 104 盘往返
+  const g = []
+  for (let r = 0; r < 104; r++) {
+    const row = []
+    for (let c = 0; c < 104; c++) row.push('A' + (c % 22 + 1))
+    g.push(row)
+  }
+  assert.deepStrictEqual(pattern.parseGrid(pattern.serializeGrid(g), 104), g, '104 盘往返应一致')
+}
+
 console.log('pattern.test.js 全部通过 ✓')

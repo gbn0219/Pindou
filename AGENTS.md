@@ -11,7 +11,7 @@
 3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改；创意生成结果先以"锁定预览"展示（纯色、不可交互），解锁后才进入完整交互
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 5. 个人中心 `miniprogram/page/profile/index`（tab）：微信登录（云开发 openid）、头像昵称、邀请码（GBNLY99 免费）、图库入口
-6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、点击保存到相册）
+6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、缩略图/预览图压缩、点击图片 cloud:// 直接预览、条目"编辑"按钮进入修改页；旧数据缺缩略图/预览图时后台回填）
 
 ## 生成方式（核心）
 
@@ -52,7 +52,8 @@ miniprogram/
   page/pattern/               展示页
   page/pattern-edit/          修改页
   utils/color.js              sRGB→CIELAB、最近色匹配、按套装构建调色板（纯函数，node 可测）
-  utils/pattern.js            网格映射/计数/canvas 绘制 + 照片还原采样（averageBlocks / mapRgb / countColors / renderGrid，node 可测）
+  utils/pattern.js            网格映射/计数/canvas 绘制 + 照片还原采样（averageBlocks / mapRgb / countColors / renderGrid / serializeGrid / parseGrid，node 可测）
+  utils/export.js            图纸资产生成（整图导出 ×EXPORT_UPSCALE 放大 / 网格缩略图 / 原图方形压缩，小程序环境可用）
   utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、读 AI 图纸像素映射色号（imageToGrid / imageDataToGrid / dominantBlockRgb，node 可测）
   utils/image.js              图片加载工具（唯一临时路径绕过 iOS createImage 缓存，带超时+重试）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
@@ -67,7 +68,7 @@ tests/                        无框架 node 单测（断言失败即非 0 退�
 cloudfunctions/ai-generate-pattern/  AI 生成云函数（cloud 模式，登录 + 每图 3 次配额校验）
 cloudfunctions/account/             用户中心云函数（登录/资料/邀请码）
 cloudfunctions/access/              访问控制云函数（配额/解锁/订单，PAY_MODE=mock）
-cloudfunctions/gallery/             图库云函数（入库/页码分页列表）
+cloudfunctions/gallery/             图库云函数（入库/页码分页列表/单条详情 get/记录更新 update）
 cloudfunctions/               其余为官方模板遗留云函数（本项目未使用）
 docs/superpowers/             设计文档与实施计划（历史过程文档，保留备查）
 ```
@@ -81,7 +82,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - **AI 优化图纸：已移除**，不再保留任何入口与后端
 - 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本），展示/修改页共享，不持久化
 - 创意生成会话：`getApp().globalData.aiSession = { sessionId, imageHash, candidates, index, params }`（每张原图最多 3 个候选，仅内存）
-- 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`
+- 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`；`gallery` 记录含 `grid`（行优先逗号色号串，`serializeGrid`/`parseGrid` 序列化），列表接口用字段投影排除 `grid`、编辑时按需 `get`，编辑保存/缩略图回填走 `update`
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
 
 ## 前端要点（canvas 相关，改动前先理解）
@@ -90,7 +91,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - **必须**同时给 movable-view 和 canvas 设置显式 CSS 宽高（数据字段 `canvasPx`），否则画布会缩在左上角；初始缩放 `initScale` 与位移 `viewX/viewY` 由页面 JS 测量展示区后计算（铺满并居中），见两个页面各自的 `drawPattern()` / `draw()`
 - 修改页触摸定位：`col = floor(touch.x / this.data.scale / (CELL+GAP))`，`scale` 初始等于 `initScale`，双指缩放由 `bindscale` 更新；真机坐标换算若有偏差以真机实测为准；轻点判定：touchstart→touchend 位移 ≤16px 且耗时 ≤400ms 才视为点格涂色，拖拽移动不触发涂色
 - 编号显示：展示/修改页默认铺满视图**隐藏编号**（纯色图预览清晰）；放大到每格 ≥13.6px（scale ≥0.65）自动显示编号；导出图固定带编号
-- 导出：临时把 canvas 分辨率切成 `EXPORT_CELL=16`（104 格 → 1767px，规避部分设备 2048px 画布上限），导出后恢复展示分辨率
+- 导出：画布按 `layoutExport` 布局且不超过 `EXPORT_MAX_DIM=2048`（规避部分设备画布上限），输出经 `canvasToTempFilePath` 的 `destWidth/destHeight` ×`EXPORT_UPSCALE=2` 放大（104 盘约 3900px，纯色块颜色保持精确）；导出与图库缩略图/预览图统一走 `utils/export.js`
 - 修改页绘制带"节点未就绪/尺寸为 0 自动重试"（最多 8 次，120ms 间隔）；movable-view 关闭位置动画（`animation="{{false}}"`）且不使用 `out-of-bounds`，避免初始定位把画布带出视野；改动渲染逻辑时保持该兜底
 
 ## 验证

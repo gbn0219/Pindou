@@ -1,5 +1,6 @@
 <view class="page">
   <view class="top-bar">
+    <button class="btn btn--soft btn--sm" wx:if="{{fromGallery}}" hover-class="btn--pressed" disabled="{{saving}}" bindtap="save">保存</button>
     <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
     <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canUndo}}" bindtap="undo">撤销</button>
     <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canRedo}}" bindtap="redo">重做</button>

@@ -14,6 +14,9 @@
         <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>
         <text class="pair-sub">{{item.timeText}} · {{item.size}}×{{item.size}} · {{item.set}} 色</text>
       </view>
+      <view class="pair-actions">
+        <button class="btn btn--soft btn--sm" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onEdit">编辑</button>
+      </view>
     </view>
   </view>
   <view wx:else class="empty">还没有图纸，去首页生成一张吧</view>

@@ -2,6 +2,8 @@
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const gesture = require('../../utils/gesture.js')
+const exportUtil = require('../../utils/export.js')
+const user = require('../../utils/user.js')
 
 const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号
 const MAX_HISTORY = 30 // 撤销/重做最大步数（单格修改、批量替换各算一步）
@@ -33,6 +35,8 @@ Page({
     replaceSource: '',
     canUndo: false,
     canRedo: false,
+    fromGallery: false,
+    saving: false,
     cellInfo: MODE_HINTS.paint
   },
 
@@ -54,7 +58,8 @@ Page({
     this.setData({
       groups: this.buildGroups(),
       selected: first.code,
-      selectedHex: first.hex
+      selectedHex: first.hex,
+      fromGallery: !!(p.galleryId)
     })
   },
 
@@ -480,6 +485,46 @@ Page({
 
   updateHistoryButtons() {
     this.setData({ canUndo: this.history.length > 0, canRedo: this.redoStack.length > 0 })
+  },
+
+  async save() {
+    if (this.data.saving) return
+    const p = this.pattern
+    if (!p || !p.galleryId) {
+      wx.navigateBack()
+      return
+    }
+    this.setData({ saving: true })
+    wx.showLoading({ title: '保存中…', mask: true })
+    try {
+      this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+      const patternFile = await exportUtil.renderPatternExport(p.grid, this.palette, { bgMask: this.bgMask, gridEvery: 5 })
+      const thumb = await exportUtil.renderGridJpeg(p.grid, this.palette, 360, { bgMask: this.bgMask })
+      const preview = await exportUtil.renderGridJpeg(p.grid, this.palette, 1080, { bgMask: this.bgMask })
+      const u = getApp().globalData.user
+      if (!u || !u.openid) throw new Error('请先登录')
+      const ts = Date.now()
+      const base = 'gallery/' + u.openid + '/' + ts
+      const upload = (cloudPath, filePath) => wx.cloud.uploadFile({ cloudPath, filePath })
+      const patternUp = await upload(base + '_pattern_edited.png', patternFile)
+      const thumbUp = await upload(base + '_pattern_thumb.jpg', thumb)
+      const previewUp = await upload(base + '_pattern_preview.jpg', preview)
+      await user.updateGallery({
+        id: p.galleryId,
+        patternFileID: patternUp.fileID,
+        patternThumbFileID: thumbUp.fileID,
+        patternPreviewFileID: previewUp.fileID,
+        grid: pattern.serializeGrid(p.grid)
+      })
+      wx.hideLoading()
+      wx.showToast({ title: '已保存到图库', icon: 'success' })
+      setTimeout(() => wx.navigateBack(), 600)
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: (err && err.message) || '保存失败', icon: 'none' })
+    } finally {
+      this.setData({ saving: false })
+    }
   },
 
   finish() {
