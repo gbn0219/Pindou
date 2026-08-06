@@ -4,7 +4,7 @@
  * imageToGrid 依赖 wx 环境；imageDataToGrid 为纯函数，可在 Node 中测试。
  *
  * 图像方案：后端调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）
- * 生成 2K（约 2048×2048）像素风格图纸，前端把图片写入临时文件 → offscreen canvas 读整幅像素 →
+ * 生成 1K（约 1024×1024）像素风格图纸，前端把图片写入临时文件 → offscreen canvas 读整幅像素 →
  * dominantBlockRgb 按盘面 floor 分块取主色 → CIELAB 最近色映射到套装色号。
  * 不输出文字色号，无输出 token 上限问题。
  */

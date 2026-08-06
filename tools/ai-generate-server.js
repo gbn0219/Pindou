@@ -8,9 +8,9 @@
 // 1) 文字色号方案（qwen3-vl function call）实测在 ~300 token 处提前截断，2704 个色号一次输出必失败；
 //    分块生成又导致块与块之间风格不统一。
 // 2) 改为调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 OpenAI 兼容接口
-//    images/generations）直接生成一张像素风格的图纸图片（2K ≈ 2048×2048），
+//    images/generations）直接生成一张像素风格的图纸图片（1K ≈ 1024×1024），
 //    由前端读取图片像素映射为拼豆色号，完全绕开输出 token 上限。
-//    52/78/104 三种盘面统一用 2K 输出，前端 dominantBlockRgb 按盘面 floor 分块取主色，
+//    52/78/104 三种盘面统一用 1K 输出，前端 dominantBlockRgb 按盘面 floor 分块取主色，
 //    不依赖"每格 16px"的精确尺寸。
 const http = require('http')
 const https = require('https')
@@ -22,7 +22,7 @@ const { buildPrompt } = require('./prompt')
 const GEN_HOST = 'ark.cn-beijing.volces.com'
 const GEN_PATH = '/api/v3/images/generations'
 const DEFAULT_MODEL = 'doubao-seedream-5-0-260128' // 可在 .env 里用 ARK_MODEL 覆盖
-const GEN_SIZE = '2K' // Seedream 2K（默认 2048×2048 方形），前端按盘面 floor 分块映射
+const GEN_SIZE = '1K' // Seedream 1K（约 1024×1024 方形），前端按盘面 floor 分块映射
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
 // 参考素材合成一张参考拼图：两张"原图转像素图"示例（源图在 convert-examples/ 中），
