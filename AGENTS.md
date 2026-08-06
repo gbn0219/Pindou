@@ -26,7 +26,7 @@
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
 - `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `ARK_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开；若报 ERR_ADDRESS_UNREACHABLE 说明不在同一局域网（公司/校园网常见 AP 隔离），改用手机热点：手机开热点 → 电脑连热点 → 按启动日志的新 IP 更新 localUrl）
-- `cloud`：云函数 `ai-generate-pattern`（**旧文字色号实现，尚未同步图像方案**，本地验证通过后再改造）
+- `cloud`：云函数 `ai-generate-pattern`（**图像方案，与本地服务同步**；部署时需配置 `ARK_API_KEY`、控制台调大超时到 60s，部署目录含 ref-pack.jpg / realistic-ref.jpg / face-ref.jpg）
 
 后端以**图像生成方案**调用火山方舟 OpenAI 兼容接口（默认模型 `doubao-seedream-5-0-260128`，`ARK_MODEL` 可覆盖）：
 - 请求 `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`，多图输入：原图（base64）+ 一张参考拼图（两张「原图转像素图」示例，见 `tools/style-refs/ref-pack.jpg`，作为第二张参考图）+ 一张五官画法示例拼图（5 张拼豆像素画人脸合成，见 `tools/face-refs/face-ref.jpg`，作为第三张参考图；仅用于学习五官画法，提示词明确禁止复制示例角色/内容），`size` 统一取 `2K`（约 2048×2048，前端按盘面 floor 分块，不依赖每格 16px），`watermark: false`（默认会加"AI生成"水印）；
