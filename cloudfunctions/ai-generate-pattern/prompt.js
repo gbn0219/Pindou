@@ -1,3 +1,5 @@
+// 本文件是 tools/prompt.js 的同步副本：云函数部署需自带依赖，不能 require 项目根目录文件。
+// 修改提示词时请同时修改 tools/prompt.js，并保持两份内容一致。
 // tools/prompt.js
 /**
  * AI 生成提示词构造（纯函数，Node 可测）。

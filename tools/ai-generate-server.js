@@ -25,14 +25,10 @@ const DEFAULT_MODEL = 'doubao-seedream-5-0-260128' // 可在 .env 里用 ARK_MOD
 const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
-// 参考素材合成一张参考拼图：两张"原图转像素图"示例（源图在 convert-examples/ 中），
-// 随请求作为第二张参考图发送（Seedream 多图输入：image 数组）。改图后需重新生成 ref-pack.jpg。
-const REF_PACK_PATH = path.join(__dirname, 'style-refs', 'ref-pack.jpg')
-// 写实风参考样例：两张「原图转拼豆图纸」对比图（布偶猫照片、动漫插画）上下拼接而成，
-// 风格为 realistic 时作为第二张参考图替换通用参考拼图。
-const REALISTIC_REF_PATH = path.join(__dirname, 'style-refs', 'realistic-ref.jpg')
-// 五官画法示例拼图：5 张拼豆像素画人脸合成（tools/face-refs/build-face-ref.ps1 生成），
-// 作为第三张参考图随请求发送，仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
+// 风格参考拼图不再发送（tools/style-refs/ref-pack.jpg、realistic-ref.jpg 文件保留未删）：
+// Seedream 多图输入偶尔会直接返回参考图本身，画面引导改为提示词描述（tools/prompt.js）。
+// 五官画法示例仍作为第三张参考图随请求发送：5 张拼豆像素画人脸合成（tools/face-refs/build-face-ref.ps1 生成），
+// 仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
 const FACE_REF_PATH = path.join(__dirname, 'face-refs', 'face-ref.jpg')
 const TASK_TTL_MS = 10 * 60 * 1000
 const tasks = new Map()
@@ -152,7 +148,6 @@ function imageDataUrl(filePath) {
   const base64 = fs.readFileSync(filePath).toString('base64')
   return 'data:image/' + ext + ';base64,' + base64
 }
-
 function extractImageUrl(resp) {
   // OpenAI 兼容返回：{ data: [{ url }] }
   if (resp && resp.data && resp.data[0] && resp.data[0].url) return resp.data[0].url
@@ -168,8 +163,6 @@ async function generate(apiKey, model, data) {
     throw new Error('请求缺少 imageBase64')
   }
   const images = [data.imageBase64]
-  const styleRef = data.styleKey === 'realistic' ? REALISTIC_REF_PATH : REF_PACK_PATH
-  if (fs.existsSync(styleRef)) images.push(imageDataUrl(styleRef))
   if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
   const payload = {
     model,

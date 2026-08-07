@@ -2,12 +2,13 @@
 // 流程：接收原图 base64 → 调用火山方舟 Seedream（doubao-seedream-5-0-260128，OpenAI 兼容
 // images/generations 接口）图生图生成像素风格图纸 → 下载图片转 base64 → 返回 { image }
 // 环境变量：ARK_API_KEY（必填）、ARK_MODEL（可选，默认 doubao-seedream-5-0-260128）
-// 注意：云函数超时需在控制台调大（建议 60s）；部署目录内需包含 ref-pack.jpg。
+// 注意：云函数超时需在控制台调大（建议 60s）。提示词与本地服务共用 tools/prompt.js 的同步副本（./prompt.js）。
 const http = require('http')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const cloud = require('wx-server-sdk')
+const { buildPrompt } = require('./prompt')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const MAX_ATTEMPTS = 3 // 每张原图免费生成次数上限
@@ -18,10 +19,7 @@ const DEFAULT_MODEL = 'doubao-seedream-5-0-260128'
 const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
-const REF_PACK_PATH = path.join(__dirname, 'ref-pack.jpg')
-// 写实风参考样例（tools/style-refs/realistic-ref.jpg 复制而来），风格为 realistic 时作为第二张参考图。
-const REALISTIC_REF_PATH = path.join(__dirname, 'realistic-ref.jpg')
-// 五官画法示例拼图（tools/face-refs/face-ref.jpg 合成），作为第三张参考图随请求发送，
+// 五官画法示例拼图（tools/face-refs/face-ref.jpg 合成，部署目录内为其副本），作为第三张参考图随请求发送，
 // 仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
 const FACE_REF_PATH = path.join(__dirname, 'face-ref.jpg')
 
@@ -102,59 +100,6 @@ function imageDataUrl(filePath) {
   const base64 = fs.readFileSync(filePath).toString('base64')
   return 'data:image/' + ext + ';base64,' + base64
 }
-
-function buildPrompt(size, style, styleKey, cutout, extra) {
-  const realistic = styleKey === 'realistic'
-  const extraReq = String(extra || '').trim()
-  return (
-    '请把「第一张图」（用户照片）转换成 ' +
-    size +
-    '×' +
-    size +
-    ' 的拼豆像素图图纸：每个格子一个纯色块，格子紧密拼接、无缝隙，输出必须是单张完整的像素画，整体为 1:1 正方形。\n' +
-    (realistic
-      ? '「参考图」第二张图是写实风参考样例（两张「原图转拼豆图纸」对比图：一张布偶猫照片、一张动漫插画）：请参照它们的转换思路——保留原图的结构、光影、颜色、质感与风格，只把画面像素化为拼豆图纸，不简化造型、不卡通化；最终风格以「风格」章节的要求为准。\n'
-      : '「参考图」第二张图是参考拼图：两张「原图转像素图」示例，请参照它们的转换思路，把真实照片抽象成方块像素画，保留人物的姿态、表情、发型、服装特征，简化背景与细节；最终风格以「风格」章节的要求为准。\n') +
-    (realistic
-      ? '「五官参考」第三张图仅供学习像素颗粒表达；写实风下五官必须忠实还原「第一张图」原图的比例、形状、光影与表情，禁止卡通大眼、粗眼线、圆腮红画法。\n'
-      : '「五官参考」第三张图是五官表达示例（5 个拼豆像素画人脸）：请学习并借鉴其中的五官画法——大而有神的眼睛（上眼睑线、瞳孔、左上角高光，避免豆豆眼）、清晰的眉毛、小巧的鼻子、上扬微笑的嘴巴、脸颊圆形腮红、圆润可爱的脸型。\n') +
-    '⚠ 重点：这些示例只用于学习五官的画法与风格，禁止照搬、复制或生成示例中的任何角色、动物、造型、服装、背景或具体内容（如米老鼠、小熊、圣诞帽、示例中的具体人物），五官以外的构图与内容必须完全来自「第一张图」（用户照片）。\n' +
-    '「重要」不要模仿参考图中的文字、水印、贴纸、标语或广告元素，输出画面中不得出现任何文字、数字或水印。\n' +
-    '「构图」人物居中，头部到肩部或半身特写，主体占画面 70% 以上。\n' +
-    (realistic
-      ? '「肤色」忠实还原原图肤色与明暗：脸部用 2~3 档色阶表现受光与阴影，阴影色从原图取，禁止整体偏色，也不要加深为深棕/深灰。\n'
-      : '「肤色」最重要的颜色要求：脸部大面积肤色必须统一使用 G1 色号的 RGB(255,228,211)（#FFE4D3），脸部主色占比 80% 以上；额头、面颊、鼻子、下巴等脸部主体一律用这个浅色。禁止用深棕、小麦色、暗肤色、灰色或大面积深色阴影画脸；阴影最多占脸部 10%，阴影色必须是浅暖色（接近 RGB 240,205,185），不得使用深色。\n') +
-    (realistic
-      ? '「五官（写实）」严格按照原图的比例、形状、间距与表情绘制五官：眼睛大小与原图一致，保留瞳孔、高光与眼白；眉毛、鼻子、嘴巴按原图的形状与明暗归纳成色块，禁止放大眼睛、粗黑眼线、腮红圆块等卡通化处理。\n'
-      : '「眼睛（像素画法）」每只眼睛约 5~7 格宽、4~6 格高的横向椭圆：上眼皮用 1 格深的黑色或深棕色粗线，下眼皮用细线；眼白用浅米白色；瞳孔为 2×2 格深棕或黑色，位于眼睛中央偏下；瞳孔左上角必须有 1~2 格纯白高光；两眼睛间距约 4 格。若原图戴眼镜，必须把眼镜画清晰：1 格粗的深色镜框包裹双眼，镜片为浅色，镜腿延伸到脸两侧。\n' +
-    '「眉毛」每条约 5~7 格宽、1 格高的细长弧形，用比头发浅的棕色，位于眼睛上方 1~2 格，略微上挑。\n' +
-    '「鼻子」极简：只用 1 格浅肉色或淡粉色点表示鼻尖，位于两眼连线中点下方 2~4 格。\n' +
-    '「嘴巴」微笑弧线，4~6 格宽、1~2 格高，粉红色或珊瑚粉，嘴角微微上翘，颜色比腮红稍深。\n' +
-    '「腮红」两颊各一个约 3×3 格的淡粉或蜜桃粉色块，位于眼睛斜下方、鼻翼外侧。\n') +
-    (realistic
-      ? '「头发」按原图的发型轮廓、发丝方向与受光分区，用 3~4 档色阶表现发色与高光。\n'
-      : '「头发」用三层颜色表现：外层深色（黑或深棕）勾勒发型轮廓，中层为发色主体，内层用 1~2 格宽的浅色高光条带；发丝缩成块、方向统一，不要细碎杂点。\n') +
-    (realistic
-      ? '「衣服」按原图的服装款式与明暗褶皱，用 3~5 档色阶表现体积，主色严格对照原图取色。\n'
-      : '「衣服」用 2~3 种纯色块平涂，衣服主色必须与原图衣服的主色完全一致（严格对照原图取色，禁止换色、禁止偏色、禁止加深或减淡），领口、袖口用色块分界，不要花纹和细小褶皱，深色描边勾勒轮廓；整套服装配色统一协调，与肤色、发色有明显区分。\n') +
-    (realistic
-      ? '「描边」不添加描边：轮廓与明暗边界按原图自然呈现，只保留原图本身就有的深色边缘，不额外勾线。\n'
-      : '「描边」人物外轮廓用深色（黑或深棕）粗描边，内部线条少而粗。\n') +
-    (realistic
-      ? '「颜色」整体控制在 20~40 种颜色内，按原图层次保留明暗与质感，配色与原图一致。\n'
-      : '「颜色」整体控制在 12~20 种颜色内，配色与原图主色一致，低饱和、柔和。\n') +
-    '「风格」' +
-    style +
-    '\n' +
-    (extraReq ? '「额外要求」' + extraReq + '\n' : '') +
-    '「轮廓闭合」最重要的结构要求：人物轮廓线必须首尾相接、完全闭合，不能有缺口、断线或开口；人物与背景之间必须由连续的深色或非白色像素链完全隔开。人物内部的任何白色或浅色区域（眼白、高光、白色衣物等）必须被其他颜色完全包围，禁止与画面边缘的白色背景连通——否则内部白色会被误判为背景。\n' +
-    (cutout
-      ? '「抠图」最重要的要求：背景只允许使用纯白色——每一个背景像素必须严格等于 RGB(255,255,255)（#FFFFFF），不允许任何近白色、米白、奶白、浅灰、灰白、阴影、渐变、晕影或轻微杂色；人物边缘与背景交界必须干净利落、无混色过渡、无残留背景色。人物以外不得出现任何原背景物体、家具、墙面、植物、阴影、渐变或装饰，如同把人物从照片中完整抠出后放在纯白画布上。\n'
-      : '「背景」背景必须是纯白色（RGB 255,255,255），不要任何背景颜色、渐变或装饰。\n') +
-    '「禁止」不要画网格线、辅助线、边框；不要渐变或抗锯齿混色；不要文字、数字、水印、贴纸；不要多格拼接或九宫格。'
-  )
-}
-
 function extractImageUrl(resp) {
   // OpenAI 兼容返回：{ data: [{ url }] }
   if (resp && resp.data && resp.data[0] && resp.data[0].url) return resp.data[0].url
@@ -170,12 +115,17 @@ async function generate(apiKey, model, data) {
     throw new Error('请求缺少 imageBase64')
   }
   const images = [data.imageBase64]
-  const styleRef = data.styleKey === 'realistic' ? REALISTIC_REF_PATH : REF_PACK_PATH
-  if (fs.existsSync(styleRef)) images.push(imageDataUrl(styleRef))
   if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
   const payload = {
     model,
-    prompt: buildPrompt(size, data.style || '卡通', data.styleKey, data.cutout, data.extra),
+    prompt: buildPrompt({
+      size,
+      style: data.style || '卡通',
+      styleKey: data.styleKey || 'cartoon',
+      cutout: data.cutout,
+      subject: data.subject || 'auto',
+      extra: data.extra
+    }),
     image: images,
     size: GEN_SIZE,
     response_format: 'url',

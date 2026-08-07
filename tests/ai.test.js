@@ -133,7 +133,7 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('禁止放大眼睛、粗黑眼线、腮红圆块') >= 0, '写实风应禁止卡通化五官')
   assert.ok(p.indexOf('圆润可爱的脸型') < 0, '写实风不应包含卡通脸型画法')
   assert.ok(p.indexOf('粗描边') < 0, '写实风不应包含粗描边要求')
-  assert.ok(p.indexOf('写实风参考样例') >= 0, '写实风应使用拼接的写实参考样例描述')
+  assert.ok(p.indexOf('第二张图') < 0 && p.indexOf('五官参考') >= 0, '写实风提示词不再引用风格参考图，但保留五官参考引导')
 }
 
 // 自动判断主体 + 写实风：应使用写实五官规则
@@ -188,6 +188,19 @@ const prompt = require('../tools/prompt.js')
   const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'virtual' })
   assert.ok(p.indexOf('虚拟形象') >= 0, '虚拟形象提示词应包含主体要求')
 }
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'scenery' })
+  assert.ok(p.indexOf('场景') >= 0, '风景提示词应包含场景要求')
+  assert.ok(p.indexOf('肤色') < 0 && p.indexOf('腮红') < 0, '风景提示词不应包含人物专属要求')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '写实风', styleKey: 'realistic', subject: 'scenery' })
+  assert.ok(p.indexOf('场景') >= 0, '写实风风景提示词应包含场景要求')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person' })
+  assert.ok(p.indexOf('第二张图') < 0 && p.indexOf('五官参考') >= 0, '人物提示词保留五官参考引导，不再引用风格参考图')
+}
 
 // 抠图/背景：主体措辞
 {
@@ -215,8 +228,10 @@ const prompt = require('../tools/prompt.js')
     p.indexOf('人物') >= 0 &&
       p.indexOf('动物') >= 0 &&
       p.indexOf('物体') >= 0 &&
-      p.indexOf('虚拟形象') >= 0,
-    '自动模式应包含全部主体类别规则'
+      p.indexOf('虚拟形象') >= 0 &&
+      p.indexOf('风景') >= 0 &&
+      p.indexOf('不要强行套用人物规则') >= 0,
+    '自动模式应包含全部主体类别规则与人物优先的兜底引导'
   )
   assert.ok(p.indexOf('G1') >= 0, '自动模式应保留人物肤色 G1 规则')
 }
