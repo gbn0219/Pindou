@@ -18,8 +18,9 @@ const MAX_SIZE = 768 // 原图压缩边长 px
 const REQUEST_TIMEOUT = 20000 // 单次 wx.request 超时
 const POLL_INTERVAL = 3000 // 轮询间隔
 const POLL_MAX_MS = 300000 // 总等待上限 5 分钟
-const CLOUD_RETRY_MAX = 2 // 云函数 60s 超时上限：超时后最多自动重试次数（总尝试 3 次）
+const CLOUD_RETRY_MAX = 2 // 云函数异步任务失败后最多自动重提次数（总尝试 3 次）
 const CLOUD_RETRY_DELAY = 1500 // 自动重试间隔 ms
+const POLL_TASK_MAX_MS = 90000 // 云函数异步任务单次总等待上限（后台生成 30~60s，超出视为超时并重提）
 
 async function compressToBase64(src, maxSize) {
   const px = maxSize || MAX_SIZE
@@ -74,10 +75,12 @@ function pollTask(ai, taskId, resolve, reject, start) {
         return
       }
       if (r.statusCode === 200 && d.status === 'error') {
+        console.error('[ai-generate] 本地任务失败:', taskId, d.error || '本地生成服务生成失败')
         reject(new Error(d.error || '本地生成服务生成失败'))
         return
       }
       if (Date.now() - start > POLL_MAX_MS) {
+        console.error('[ai-generate] 本地任务轮询超时:', taskId, Math.round(POLL_MAX_MS / 1000) + 's')
         reject(new Error('生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
         return
       }
@@ -86,6 +89,7 @@ function pollTask(ai, taskId, resolve, reject, start) {
     .catch(() => {
       // 轮询网络抖动时继续重试，直到总等待上限
       if (Date.now() - start > POLL_MAX_MS) {
+        console.error('[ai-generate] 本地任务轮询超时:', taskId, Math.round(POLL_MAX_MS / 1000) + 's')
         reject(new Error('生成超时（超过 ' + Math.round(POLL_MAX_MS / 1000) + ' 秒），请重试'))
         return
       }
@@ -126,6 +130,110 @@ function isTimeoutError(err) {
   return /time\s*out|timed\s*out|time\s*limit|timelimit|超时|FUNCTION_EXCEED|504002|exceeded/i.test(msg)
 }
 
+function callCloudFunction(name, data) {
+  return wx.cloud
+    .callFunction({ name, data })
+    .then((res) => {
+      const result = res && res.result
+      if (!result || result.ok === false) {
+        const msg = (result && result.error) || '云函数调用失败'
+        const detail = result && result.detail
+        if (detail) console.error('[ai-generate] 云函数返回错误详情:', detail)
+        throw new Error(detail ? msg + '：' + detail : msg)
+      }
+      return result
+    })
+}
+
+function readFileBase64(filePath) {
+  return new Promise((resolve, reject) => {
+    wx.getFileSystemManager().readFile({
+      filePath,
+      encoding: 'base64',
+      success: (r) => resolve(r.data),
+      fail: (err) => reject(new Error('生成结果读取失败: ' + ((err && err.errMsg) || '')))
+    })
+  })
+}
+
+async function downloadResultFile(fileID, ext) {
+  const extName = ext || 'jpg'
+  let lastErr = null
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await new Promise((resolve, reject) => {
+        wx.cloud.downloadFile({
+          fileID,
+          success: resolve,
+          fail: (err) => reject(new Error((err && err.errMsg) || '生成结果下载失败'))
+        })
+      })
+      const base64 = await readFileBase64(res.tempFilePath)
+      return 'data:image/' + extName + ';base64,' + base64
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr || new Error('生成结果下载失败')
+}
+
+function pollCloudTask(taskId) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now()
+    const tick = () => {
+      callCloudFunction('ai-generate-pattern', { action: 'status', taskId })
+        .then((d) => {
+          if (d.status === 'done' && d.fileID) {
+            resolve(d)
+            return
+          }
+          if (d.status === 'error') {
+            console.error('[ai-generate] 云函数任务失败（status=error）:', taskId, d.error || '生成失败')
+            reject(new Error(d.error || '生成失败'))
+            return
+          }
+          if (Date.now() - start > POLL_TASK_MAX_MS) {
+            console.error('[ai-generate] 云函数任务轮询超时:', taskId, Math.round(POLL_TASK_MAX_MS / 1000) + 's')
+            reject(new Error('生成超时'))
+            return
+          }
+          setTimeout(tick, POLL_INTERVAL)
+        })
+        .catch(() => {
+          // 轮询网络抖动时继续重试，直到单次总等待上限
+          if (Date.now() - start > POLL_TASK_MAX_MS) {
+            console.error('[ai-generate] 云函数任务轮询超时:', taskId, Math.round(POLL_TASK_MAX_MS / 1000) + 's')
+            reject(new Error('生成超时'))
+            return
+          }
+          setTimeout(tick, POLL_INTERVAL)
+        })
+    }
+    tick()
+  })
+}
+
+function callCloudTask(data, onRetry) {
+  const attempt = (left) =>
+    callCloudFunction('ai-generate-pattern', Object.assign({ action: 'start' }, data))
+      .then((d) => {
+        if (!d.taskId) throw new Error((d && d.error) || '云函数未返回任务 ID')
+        return pollCloudTask(d.taskId)
+      })
+      .then((r) => downloadResultFile(r.fileID, r.ext))
+      .then((dataUrl) => ({ image: dataUrl }))
+      .catch((err) => {
+        const used = CLOUD_RETRY_MAX - left + 1
+        console.error('[ai-generate] 云函数任务第 ' + used + '/' + (CLOUD_RETRY_MAX + 1) + ' 次尝试失败:', err && (err.message || err))
+        if (left > 0) {
+          if (onRetry) onRetry(used, CLOUD_RETRY_MAX)
+          return new Promise((resolve) => setTimeout(resolve, CLOUD_RETRY_DELAY)).then(() => attempt(left - 1))
+        }
+        throw new Error('生成失败，请稍后重试：' + (err && err.message ? err.message : err))
+      })
+  return attempt(CLOUD_RETRY_MAX)
+}
+
 function callAiGenerate(params) {
   const ai = (config && config.aiGenerate) || {}
   const data = {
@@ -136,39 +244,40 @@ function callAiGenerate(params) {
     styleKey: params.styleKey,
     extra: params.extra || '',
     cutout: !!params.cutout,
+    refImageBase64: params.refImageBase64 || '', // 重新生成：上一版生成图（清洗后压缩）作为第二张参考图
+    regenerate: !!params.regenerate,
     imageHash: params.imageHash || '',
     sessionId: params.sessionId || ''
   }
   if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
-  // 云函数 60s 超时上限，生成偶发超时：自动重试（最多 CLOUD_RETRY_MAX 次），避免用户手动重按
-  const onRetry = params.onRetry
-  const attempt = (left) =>
-    wx.cloud
-      .callFunction({ name: 'ai-generate-pattern', data })
-      .then((res) => {
-        const result = res && res.result
-        if (!result || !result.image) {
-          throw new Error((result && result.error) || '云函数调用失败')
-        }
-        return result
-      })
-      .catch((err) => {
-        if (left > 0 && isTimeoutError(err)) {
-          const used = CLOUD_RETRY_MAX - left + 1
-          if (onRetry) onRetry(used, CLOUD_RETRY_MAX)
-          return new Promise((resolve) => setTimeout(resolve, CLOUD_RETRY_DELAY)).then(() => attempt(left - 1))
-        }
-        throw new Error((err && err.errMsg) || '云函数调用失败')
-      })
-  return attempt(CLOUD_RETRY_MAX)
+  // 云函数异步任务：start 立即返回 taskId → 后台生成结果写云存储 → 前端轮询 status 后下载；
+  // 任何环节失败（含后台 status='error'、轮询超时）自动重新提交，最多 CLOUD_RETRY_MAX 次；
+  // 重试耗尽后只抛友好文案，绝不向用户暴露 -404012 等云函数原始报错
+  return callCloudTask(data, params.onRetry)
+}
+
+function canvasToTempFile(canvas, px) {
+  return new Promise((resolve, reject) => {
+    wx.canvasToTempFilePath({
+      canvas,
+      fileType: 'jpg',
+      quality: 0.8,
+      destWidth: px,
+      destHeight: px,
+      success: (r) => resolve(r.tempFilePath),
+      fail: reject
+    })
+  })
 }
 
 /**
- * 生成并映射网格：base64 已在 params.imageBase64，返回当前套装色号网格。
+ * 生成并映射网格：base64 已在 params.imageBase64。
+ * 返回 { grid, prevImage }：grid 为当前套装色号网格；prevImage 为"清洗后"的生成图
+ * （背景已处理为白色，缩至 MAX_SIZE），供重新生成时作为第二张参考图，可能为空字符串。
  */
 async function generateGrid(params) {
   const resp = await callAiGenerate(params)
-  return imageToGrid(resp.image, params.size, params.set)
+  return imageToGrid(resp.image, params.size, params.set, { cutout: !!params.cutout, savePrev: true })
 }
 
 /**
@@ -197,7 +306,7 @@ function skinNormalize(r, g, b) {
   return [r, g, b]
 }
 
-function dominantBlockRgb(imageData, srcW, srcH, size) {
+function dominantBlockRgb(imageData, srcW, srcH, size, bgMask) {
   const data = imageData.data
   const bw = Math.floor(srcW / size)
   const bh = Math.floor(srcH / size)
@@ -208,11 +317,13 @@ function dominantBlockRgb(imageData, srcW, srcH, size) {
       const y0 = r * bh
       const buckets = new Map()
       let total = 0
+      let bgTotal = 0
       for (let dy = 0; dy < bh; dy++) {
         const rowBase = (y0 + dy) * srcW + x0
         for (let dx = 0; dx < bw; dx++) {
           const i = (rowBase + dx) * 4
           if (data[i + 3] < 128) continue
+          if (bgMask && bgMask[rowBase + dx]) bgTotal++
           const key = ((data[i] >> 5) << 10) | ((data[i + 1] >> 5) << 5) | (data[i + 2] >> 5)
           let b = buckets.get(key)
           if (!b) {
@@ -227,6 +338,11 @@ function dominantBlockRgb(imageData, srcW, srcH, size) {
         }
       }
       if (total === 0) {
+        rgbArr.push([255, 255, 255])
+        continue
+      }
+      // 背景格：块内标记色背景占比 >= 50% 时强制映射为白色（H1），确保后续白色连通域识别
+      if (bgMask && bgTotal / total >= 0.5) {
         rgbArr.push([255, 255, 255])
         continue
       }
@@ -275,9 +391,9 @@ function dominantBlockRgb(imageData, srcW, srcH, size) {
 /**
  * 纯函数：整幅生成图纸像素 → 主色分块 → 当前套装色号网格。
  */
-function imageDataToGrid(imageData, srcW, srcH, size, setKey) {
+function imageDataToGrid(imageData, srcW, srcH, size, setKey, opts) {
   return pattern.mapRgb(
-    dominantBlockRgb(imageData, srcW, srcH, size),
+    dominantBlockRgb(imageData, srcW, srcH, size, opts && opts.bgMask),
     size,
     color.buildPalette(setKey)
   )
@@ -285,8 +401,10 @@ function imageDataToGrid(imageData, srcW, srcH, size, setKey) {
 
 /**
  * 把生成的图片 data URL 写入临时文件 → 加载 → 读整幅像素 → 主色分块映射为色号网格。
+ * opts：{ cutout, savePrev }。cutout 时用洋红标记色识别背景（未检测到标记色则回退近白清洗）；
+ * savePrev 时返回清洗后的压缩版生成图路径（供重新生成作第二张参考图）。
  */
-async function imageToGrid(dataUrl, size, setKey) {
+async function imageToGrid(dataUrl, size, setKey, opts) {
   const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,/.exec(dataUrl)
   if (!m) throw new Error('生成的图片格式不正确')
   const fs = wx.getFileSystemManager()
@@ -315,8 +433,25 @@ async function imageToGrid(dataUrl, size, setKey) {
   ctx.fillRect(0, 0, img.width, img.height)
   ctx.drawImage(img, 0, 0, img.width, img.height)
   const imageData = ctx.getImageData(0, 0, img.width, img.height)
-  background.cleanImageData(imageData) // 背景近白噪声 → 纯白，不影响主体内容
-  return imageDataToGrid(imageData, img.width, img.height, size, setKey)
+  let bgMask = null
+  if (opts && opts.cutout) {
+    // 洋红标记背景 → 纯白；噪点上限按盘面格子面积估算（约 4 格 = 2×2 格，吸收背景中漂浮的浅灰/杂色小块），
+    // 把背景中漂浮的孤立彩色碎块一并并入背景；未检测到标记色时回退近白清洗
+    const cellArea = Math.round((img.width / size) * (img.height / size))
+    bgMask = background.cleanMarkerBackground(imageData, { noiseMax: Math.max(128, cellArea * 4) })
+    console.log('[ai-generate] 抠图背景处理:', bgMask ? '识别到洋红标记背景' : '未识别到标记色，回退近白清洗')
+    if (!bgMask) background.cleanImageData(imageData)
+  } else {
+    background.cleanImageData(imageData) // 背景近白噪声 → 纯白，不影响主体内容
+  }
+  const grid = imageDataToGrid(imageData, img.width, img.height, size, setKey, { bgMask })
+  let prevImage = ''
+  if (opts && opts.savePrev) {
+    // 保留"清洗后"的生成图（背景已为白色），供重新生成时作第二张参考图
+    ctx.putImageData(imageData, 0, 0)
+    prevImage = await canvasToTempFile(canvas, MAX_SIZE)
+  }
+  return { grid, prevImage }
 }
 
 module.exports = { compressToBase64, callAiGenerate, generateGrid, isTimeoutError, CLOUD_RETRY_MAX, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }

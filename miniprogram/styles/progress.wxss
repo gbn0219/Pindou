@@ -1,0 +1,45 @@
+/* 生成进度浮层（index / pattern 页共用，需先 @import tokens.wxss） */
+.progress-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 23, 27, 0.35);
+}
+.progress-card {
+  width: 480rpx;
+  padding: var(--space-lg) var(--space-md);
+  border-radius: var(--radius-card);
+  background: var(--color-paper);
+  box-shadow: 0 24rpx 64rpx -24rpx var(--color-shadow);
+  text-align: center;
+}
+.progress-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  margin-bottom: var(--space-md);
+}
+.progress-bar {
+  height: 12rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-3);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-2);
+  transition: width var(--dur-short) var(--ease-out);
+}
+.progress-pct {
+  margin-top: var(--space-sm);
+  font-family: var(--font-label);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-ink);
+}

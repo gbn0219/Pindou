@@ -72,46 +72,6 @@
   color: var(--color-neutral);
   font-family: var(--font-label);
 }
-.vip-badge {
-  display: inline-block;
-  margin-top: var(--space-2xs);
-  background: var(--color-accent);
-  color: var(--color-accent-ink);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  padding: 6rpx 20rpx;
-  white-space: nowrap;
-}
-
-.section-title {
-  font-size: var(--text-md);
-  font-weight: 700;
-  margin-bottom: var(--space-sm);
-}
-.invite-row {
-  display: flex;
-  gap: var(--space-sm);
-}
-.invite-input {
-  flex: 1;
-  height: 88rpx;
-  padding: 0 var(--space-md);
-  background: var(--color-paper);
-  border-radius: var(--radius-input);
-  border: 2rpx solid var(--color-rule);
-  font-size: var(--text-base);
-}
-.invite-btn {
-  width: 176rpx;
-  height: 88rpx;
-  font-size: var(--text-base);
-}
-.section-hint {
-  font-size: var(--text-sm);
-  color: var(--color-neutral);
-  margin-top: var(--space-sm);
-}
 
 .menu-card {
   display: flex;
@@ -128,4 +88,82 @@
 }
 .menu-card--pressed {
   background: var(--color-paper-2);
+}
+
+.modal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(18, 23, 27, 0.45);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+.modal {
+  width: 100%;
+  max-width: 640rpx;
+  background: var(--color-bead-bg);
+  border-radius: var(--radius-card);
+  padding: var(--space-lg);
+  box-shadow: 0 24rpx 48rpx -16rpx var(--color-shadow);
+}
+.modal-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: var(--space-md);
+}
+.faq-list {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.faq-item {
+  margin-bottom: var(--space-md);
+}
+.faq-q {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.faq-a {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  margin-top: var(--space-2xs);
+}
+.modal-btn {
+  margin-top: var(--space-sm);
+}
+.about-logo {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 32rpx;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-size: var(--text-md);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-sm);
+  box-shadow: 0 8rpx 0 0 var(--color-accent-deep);
+}
+.about-name {
+  text-align: center;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+.about-desc {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  margin-top: var(--space-sm);
+}
+.about-version {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--color-neutral);
+  margin-top: var(--space-xs);
 }

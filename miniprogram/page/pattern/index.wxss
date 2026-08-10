@@ -1,5 +1,6 @@
 /* Hallmark · macrostructure: Workbench · theme: Hum · genre: playful */
 @import "../../styles/tokens.wxss";
+@import "../../styles/progress.wxss";
 
 .page {
   padding: var(--space-md) var(--space-md) calc(180rpx + 48rpx);
@@ -161,33 +162,48 @@
 .action-btn {
   flex: 1;
 }
-.locked-bar {
-  position: fixed;
-  left: var(--space-md);
-  right: var(--space-md);
-  bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-  background: var(--color-bead-bg);
-  border-radius: var(--radius-card);
-  padding: var(--space-md);
-  box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
-  z-index: var(--z-raised);
-}
-.locked-tip {
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
-  text-align: center;
-  margin-bottom: var(--space-sm);
-}
-.locked-actions {
+.version-bar {
   display: flex;
+  align-items: center;
   gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
 }
-.locked-actions .action-btn {
+.version-info {
+  font-family: var(--font-label);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+  flex-shrink: 0;
+}
+.version-actions {
   flex: 1;
+  display: flex;
+  gap: var(--space-2xs);
+}
+.version-actions .action-btn {
+  flex: none;
+  width: 200rpx; /* 紧凑固定宽度，避免默认按钮样式（外边距/最小宽）撑破页面 */
   min-width: 0;
-  height: 80rpx;
+  height: 72rpx;
+  margin: 0;
   padding: 0 var(--space-xs);
   font-size: var(--text-sm);
   white-space: nowrap;
   line-height: 1;
+}
+.regenerate {
+  padding: var(--space-sm) var(--space-md);
+}
+.regenerate-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin-bottom: var(--space-sm);
+  padding: 0 24rpx;
+  border-radius: var(--radius-input);
+  background: var(--color-paper-2);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-sm);
+  color: var(--color-ink);
 }

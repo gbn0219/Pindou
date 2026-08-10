@@ -1,7 +1,7 @@
 // cloudfunctions/access/index.js
 /**
  * 访问控制云函数：consumeQuota / checkAccess / createOrder / unlock。
- * PAY_MODE=mock（默认）直接模拟支付成功；邀请码用户 freeVip 全部免费。
+ * PAY_MODE=mock（默认）直接模拟支付成功；createOrder/unlock 保留兼容旧版客户端（freeVip 仅历史数据）。
  */
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -23,25 +23,8 @@ async function getSession(openid, sessionId) {
 }
 
 async function consumeQuota(openid, event) {
-  const col = db.collection('ai_sessions')
-  const res = await col.where({ _openid: openid, imageHash: event.imageHash }).limit(1).get()
-  const u = await getUser(openid)
-  if (u.freeVip) return ok({ attempts: res.data.length ? res.data[0].attempts : 1, remaining: -1 })
-  if (!event.imageHash) return fail('NO_HASH', '缺少 imageHash')
-  if (res.data.length === 0) {
-    await col.add({
-      data: {
-        _openid: openid, sessionId: event.sessionId || '', imageHash: event.imageHash,
-        attempts: 1, unlocked: false, createdAt: db.serverDate(), updatedAt: db.serverDate()
-      }
-    })
-    return ok({ attempts: 1, remaining: MAX_ATTEMPTS - 1 })
-  }
-  const doc = res.data[0]
-  if (doc.unlocked) return ok({ attempts: doc.attempts, remaining: -1 })
-  if (doc.attempts >= MAX_ATTEMPTS) return fail('QUOTA_EXCEED', '已达该图片免费生成上限（3 次），请解锁一张或更换图片')
-  await col.doc(doc._id).update({ data: { attempts: doc.attempts + 1, updatedAt: db.serverDate() } })
-  return ok({ attempts: doc.attempts + 1, remaining: MAX_ATTEMPTS - doc.attempts - 1 })
+  // 免费模式：不再限制生成次数（历史调用直接放行；createOrder/unlock 保留兼容旧版客户端）
+  return ok({ attempts: 1, remaining: -1 })
 }
 
 exports.main = async (event) => {
@@ -57,7 +40,7 @@ exports.main = async (event) => {
   if (action === 'createOrder') {
     let s = await getSession(OPENID, event.sessionId || '')
     if (!s) {
-      // 旧版本生成或会话未落库：解锁时自动补建（已付费/邀请码，不破坏计费规则）
+      // 旧版本生成或会话未落库：解锁时自动补建（兼容旧版计费流程）
       const imageHash = String(event.imageHash || '')
       const add = await db.collection('ai_sessions').add({
         data: {

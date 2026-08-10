@@ -211,7 +211,9 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   const noCode = opts && opts.noCode // 白色背景格不显示编号
   const highlight = opts && opts.highlight
   const code = grid[r][c]
-  const hex = cellItem(palette, code).hex
+  // 背景格（noCode）统一填纯白：近白灰格若用自身色号会既无编号又非白色；
+  // 非背景格仍用色号对应的颜色
+  const hex = noCode ? '#ffffff' : cellItem(palette, code).hex
   const x = c * (cellSize + gap)
   const y = r * (cellSize + gap)
   ctx.fillStyle = hex

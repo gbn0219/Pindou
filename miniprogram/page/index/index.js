@@ -3,10 +3,9 @@ const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const ai = require('../../utils/ai.js')
 const image = require('../../utils/image.js')
-const config = require('../../config.js')
-const user = require('../../utils/user.js')
 const hash = require('../../utils/hash.js')
 const session = require('../../utils/session.js')
+const progressUtil = require('../../utils/progress.js')
 
 const MIN_SIZE = 15 // 拼豆盘最小边长
 const MAX_SIZE = 208 // 拼豆盘最大边长
@@ -21,14 +20,16 @@ Page({
     mode: 'ai', // 默认创意生成（'photo' 照片还原 | 'ai' 创意生成）
     styles: [
       { key: 'cartoon', name: '卡通', desc: '简化造型、粗黑描边、平涂色块、五官夸张' },
-      { key: 'macaron', name: '马卡龙', desc: '低饱和马卡龙色系、圆润柔和、减少硬边' },
       { key: 'realistic', name: '写实风', desc: '保留原图的光影、结构与真实质感，仅像素化为拼豆图纸，不卡通化、不加描边' }
     ],
     selectedStyle: 'cartoon',
     customStyle: '',
     extraReq: '', // 额外要求（不覆盖风格，如删掉画面中的某些元素）
     aiCutout: true, // 抠出主体（背景变白），默认开启
-    generating: false
+    generating: false,
+    progressShow: false,
+    progressPct: 0,
+    progressTip: ''
   },
 
   onShow() {
@@ -39,6 +40,13 @@ Page({
     if (result && result.path) {
       this.setData({ imagePath: result.path })
       delete getApp().globalData.cropResult
+    }
+  },
+
+  onUnload() {
+    if (this._progressTimer) {
+      clearInterval(this._progressTimer)
+      this._progressTimer = null
     }
   },
 
@@ -166,7 +174,7 @@ Page({
     wx.showModal({
       title: '创意生成图纸',
       content:
-        '将原图按所选风格生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒并按次计费，偶发超时会自动重试，继续吗？',
+        '将原图按所选风格生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒，偶发超时会自动重试，继续吗？',
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
@@ -177,10 +185,13 @@ Page({
 
   async runAiGenerate(style) {
     this.setData({ generating: true })
-    wx.showLoading({ title: '生成中…', mask: true })
+    const prog = progressUtil.createProgress()
+    progressUtil.startOverlay(this, prog)
     try {
       const g = getApp().globalData
+      prog.bump(5) // 压缩原图
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
+      prog.bump(12) // 提交生成
       const imageHash = hash.fnv1a64(imageBase64)
       if (!g.aiSession || g.aiSession.imageHash !== imageHash) {
         g.aiSession = session.createSession(imageHash)
@@ -195,10 +206,8 @@ Page({
         }
       }
       const s = g.aiSession
-      if (config.aiGenerate.backend === 'local') {
-        await user.consumeQuota({ sessionId: s.sessionId, imageHash })
-      }
-      const grid = await ai.generateGrid({
+      prog.climb(12, 88) // 等待出图（真实进度未知，按 60 秒时间估算）
+      const res = await ai.generateGrid({
         imageBase64,
         size: this.data.size,
         set: this.data.set,
@@ -208,12 +217,19 @@ Page({
         extra: this.data.extraReq.trim(),
         imageHash,
         sessionId: s.sessionId,
-        onRetry: (used, total) => wx.showLoading({ title: '超时重试 ' + used + '/' + total, mask: true })
+        onRetry: (used, total) => {
+          prog.bump(Math.min(88, 20 + used * 15))
+          this.setData({ progressTip: '生成遇到问题，自动重试 ' + used + '/' + total + '…' })
+        }
       })
-      g.aiSession = session.addCandidate(g.aiSession, grid)
-      this.finish(grid, 'ai', style, true)
+      prog.bump(95) // 出图完成，解析映射
+      g.aiSession = session.addCandidate(g.aiSession, res.grid)
+      if (g.aiSession.params) g.aiSession.params.prevImage = res.prevImage
+      prog.finish()
+      progressUtil.stopOverlay(this)
+      this.finish(res.grid, 'ai', style)
     } catch (err) {
-      wx.hideLoading()
+      progressUtil.stopOverlay(this)
       wx.showModal({
         title: '生成失败',
         content:
@@ -227,15 +243,14 @@ Page({
     }
   },
 
-  finish(grid, mode, style, locked) {
+  finish(grid, mode, style) {
     getApp().globalData.pattern = {
       grid,
       size: this.data.size,
       set: this.data.set,
       imagePath: this.data.imagePath,
       mode,
-      style,
-      locked: !!locked
+      style
     }
     wx.hideLoading()
     wx.navigateTo({ url: '/page/pattern/index' })

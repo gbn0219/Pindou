@@ -16,7 +16,7 @@
     "bigPackageSizeSupport": false,
     "checkInvalidKey": true,
     "useIsolateContext": false,
-    "ignoreDevUnusedFiles": true
+    "ignoreDevUnusedFiles": false
   },
   "libVersion": "3.16.2"
 }

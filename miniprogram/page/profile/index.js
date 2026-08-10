@@ -14,7 +14,15 @@ Page({
     loading: false,
     uploading: false,
     avatarBroken: false,
-    inviteCode: ''
+    faqShow: false,
+    aboutShow: false,
+    version: '1.0.0',
+    faqList: [
+      { q: '怎么生成一张图纸？', a: '首页导入图片 → 选生成方式（照片还原 / 创意生成）→ 选色系与盘面大小 → 生成。' },
+      { q: '色号怎么用？', a: '每个格子对应一个色号，展示页有色号数量清单，按清单选择对应颜色的拼豆即可。' },
+      { q: '图纸存在哪里？', a: '生成的图纸会自动保存到“我的图库”，也可以在展示页导出图片存到相册。' },
+      { q: '生成失败怎么办？', a: '会自动重试，仍失败请稍后再试。' }
+    ]
   },
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
@@ -76,23 +84,23 @@ Page({
       wx.showToast({ title: '昵称保存失败', icon: 'none' })
     }
   },
-  onInviteInput(e) {
-    this.setData({ inviteCode: e.detail.value })
-  },
-  async onApplyInvite() {
-    const code = this.data.inviteCode.trim()
-    if (!code) return
-    try {
-      const r = await user.applyInvite(code)
-      const merged = Object.assign({}, this.data.user, r.user)
-      if (!merged.openid && merged._openid) merged.openid = merged._openid
-      this.setData({ user: merged, openidTail: (merged.openid || merged._openid || '').slice(-6) })
-      wx.showToast({ title: '邀请码激活成功', icon: 'success' })
-    } catch (err) {
-      wx.showToast({ title: (err && err.message) || '邀请码无效', icon: 'none' })
-    }
+  goHome() {
+    wx.switchTab({ url: '/page/index/index' })
   },
   goGallery() {
     wx.navigateTo({ url: '/page/gallery/index' })
-  }
+  },
+  showFaq() {
+    this.setData({ faqShow: true })
+  },
+  hideFaq() {
+    this.setData({ faqShow: false })
+  },
+  showAbout() {
+    this.setData({ aboutShow: true })
+  },
+  hideAbout() {
+    this.setData({ aboutShow: false })
+  },
+  noop() {}
 })

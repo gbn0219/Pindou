@@ -1,6 +1,6 @@
 // tests/ai.test.js
 /**
- * AI 生成前端纯函数测试：dominantBlockRgb / imageDataToGrid（整幅像素 → 主色分块 → 色号网格）。
+ * 前端纯函数测试：dominantBlockRgb / imageDataToGrid（整幅像素 → 主色分块 → 色号网格）。
  * 运行： node tests/ai.test.js
  */
 const assert = require('assert')
@@ -15,7 +15,7 @@ const rgbOf = (code) => palette.find((i) => i.code === code).rgb
 const codeOf = (r, g, b) => color.nearestColor(r, g, b, palette).code
 
 // 构造 8×8 像素图：2×2 格子（每格 4×4 块），格子间有 1px 深色网格线
-// 网格线像素为 (60,60,60)，模拟 AI 输出自带的辅助线
+// 网格线像素为 (60,60,60)，模拟输出自带的辅助线
 function makeGridImage() {
   const w = 8
   const data = new Uint8ClampedArray(w * w * 4)
@@ -144,6 +144,45 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('圆润可爱的脸型') < 0, '自动判断 + 写实风不应包含卡通脸型画法')
 }
 
+// 重新生成：应引用第二张图（上一版结果），并保留抠图标记色要求
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '卡通',
+    styleKey: 'cartoon',
+    subject: 'person',
+    cutout: true,
+    extra: '嘴巴要微笑',
+    regenerate: true
+  })
+  assert.ok(p.indexOf('第二张图') >= 0 && p.indexOf('上一版生成结果') >= 0, '重新生成应引用上一版生成结果')
+  assert.ok(p.indexOf('不要整体重画') >= 0, '应要求仅按额外要求调整、不整体重画')
+  assert.ok(p.indexOf('RGB(255,0,255)') >= 0, '抠图 + 重新生成仍应要求洋红标记背景')
+}
+{
+  const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', regenerate: false })
+  assert.ok(p.indexOf('第二张图') < 0, '非重新生成不应引用第二张图')
+}
+
+// 背景掩码：块内标记色背景占比 >= 50% 时强制映射为白色（H1），其余块正常取主色
+{
+  const img4 = makeGridImage() // 2×2 格、每格 4×4 像素
+  const mask = new Uint8Array(8 * 8)
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 4; x++) {
+      const i = (y * 8 + x) * 4
+      img4.data[i] = 255
+      img4.data[i + 1] = 0
+      img4.data[i + 2] = 255
+      mask[y * 8 + x] = 1
+    }
+  }
+  const white = codeOf(255, 255, 255)
+  const grid4 = ai.imageDataToGrid(img4, 8, 8, 2, '48', { bgMask: mask })
+  assert.strictEqual(grid4[0][0], white, '背景格应强制映射为白色')
+  assert.deepStrictEqual(grid4, [[white, 'A6'], ['A6', 'A4']], '其余块正常主色分块')
+}
+
 // 额外要求：附加在所选风格之后，不覆盖风格
 {
   const p = prompt.buildPrompt({
@@ -206,7 +245,8 @@ const prompt = require('../tools/prompt.js')
 {
   const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person', cutout: true })
   assert.ok(p.indexOf('抠图') >= 0 && p.indexOf('主体') >= 0, '抠图提示词应使用主体措辞')
-  assert.ok(p.indexOf('只允许使用纯白色') >= 0 && p.indexOf('严格等于') >= 0, '抠图提示词应要求背景严格纯白')
+  assert.ok(p.indexOf('标记色') >= 0 && p.indexOf('RGB(255,0,255)') >= 0, '抠图提示词应要求背景洋红标记色')
+  assert.ok(p.indexOf('漂浮任何独立的小色块') >= 0, '抠图提示词应禁止背景中出现孤立色块')
   const q = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'person' })
   assert.ok(q.indexOf('背景') >= 0 && q.indexOf('抠图') < 0, '非抠图应使用背景措辞')
 }
@@ -267,48 +307,121 @@ const prompt = require('../tools/prompt.js')
   assert.ok(ai.CLOUD_RETRY_MAX >= 1, '应配置至少一次自动重试')
 }
 
-// 云函数超时自动重试：超时两次后成功 / 非超时错误不重试
-;(async () => {
-  const calls = []
-  global.wx = {
+// ---- 云函数异步任务（start → 轮询 status → 下载云存储结果）----
+// 模拟 wx 环境：start 立即返回 taskId；status 按脚本返回；downloadFile 给临时路径；readFile 给 base64。
+// 用立即执行的 setTimeout 跳过真实轮询/重试延迟（真实间隔由 POLL_INTERVAL / CLOUD_RETRY_DELAY 控制）。
+function cloudMock(script) {
+  const calls = [] // 每次 callFunction 的 data
+  const downloads = [] // 每次 downloadFile 的 fileID
+  const wx = {
     cloud: {
-      callFunction() {
-        calls.push(1)
-        if (calls.length < 3) return Promise.reject({ errMsg: 'cloud.callFunction:fail FUNCTION_EXCEED_TIME_LIMIT' })
-        return Promise.resolve({ result: { image: 'data:image/png;base64,AA==' } })
+      callFunction({ data }) {
+        calls.push(JSON.parse(JSON.stringify(data)))
+        const step = typeof script === 'function' ? script(calls.length, data) : script[calls.length - 1]
+        // 脚本耗尽时返回 status:error，避免轮询无限重试；callCloudTask 会在重试耗尽后抛友好文案
+        if (!step) return Promise.resolve({ result: { ok: true, status: 'error', error: 'mock 步骤耗尽' } })
+        if (step.reject) return Promise.reject(step.reject)
+        return Promise.resolve({ result: step.result })
+      },
+      downloadFile({ fileID, success, fail }) {
+        downloads.push(fileID)
+        const ext = (fileID.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '')
+        // downloadResultFile 使用 success 回调风格（wx.cloud.downloadFile 同时支持 Promise 风格）
+        success({ tempFilePath: '/tmp/result.' + ext })
+      }
+    },
+    getFileSystemManager() {
+      return {
+        readFile({ success }) {
+          success({ data: 'QUJD' }) // base64("ABC")，仅验证链路
+        }
       }
     }
   }
-  try {
-    const retries = []
-    const res = await ai.callAiGenerate({
-      imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '',
-      onRetry: (u, t) => retries.push([u, t])
-    })
-    assert.ok(res && res.image, '重试后应返回生成结果')
-    assert.strictEqual(calls.length, 3, '超时应自动重试到第 3 次尝试')
-    assert.deepStrictEqual(retries, [[1, 2], [2, 2]], '应上报重试进度 (1/2、2/2)')
-  } finally {
-    delete global.wx
+  return { wx, calls, downloads }
+}
+const immediate = (fn) => {
+  fn()
+  return 0
+}
+const baseParams = { imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '' }
+
+;(async () => {
+  // happy path：start → pending → done → 下载 → data URL
+  {
+    const m = cloudMock([
+      { result: { ok: true, taskId: 't1' } },
+      { result: { ok: true, status: 'pending' } },
+      { result: { ok: true, status: 'done', fileID: 'cloud://env/ai-tasks/u/t1.jpg', ext: 'jpg' } }
+    ])
+    global.wx = m.wx
+    const old = global.setTimeout
+    global.setTimeout = immediate
+    try {
+      const res = await ai.callAiGenerate(baseParams)
+      assert.ok(res && res.image, '应返回生成结果')
+      assert.strictEqual(res.image, 'data:image/jpg;base64,QUJD', '应下载云存储结果并转 data URL')
+      assert.strictEqual(m.calls[0].action, 'start', '首次调用应为 start')
+      assert.strictEqual(m.calls[1].action, 'status', '随后应轮询 status')
+      assert.strictEqual(m.calls[1].taskId, 't1', '轮询应携带 taskId')
+      assert.deepStrictEqual(m.downloads, ['cloud://env/ai-tasks/u/t1.jpg'], '应下载结果文件')
+    } finally {
+      delete global.wx
+      global.setTimeout = old
+    }
   }
 
-  const errCalls = []
-  global.wx = {
-    cloud: {
-      callFunction() {
-        errCalls.push(1)
-        return Promise.reject({ errMsg: 'cloud.callFunction:fail invalid api key' })
-      }
+  // 后台 status='error'：自动重新提交 start，成功后返回
+  {
+    const m = cloudMock([
+      { result: { ok: true, taskId: 't1' } },
+      { result: { ok: true, status: 'error', error: '生成服务返回错误: 429' } },
+      { result: { ok: true, taskId: 't2' } },
+      { result: { ok: true, status: 'done', fileID: 'cloud://env/ai-tasks/u/t2.png', ext: 'png' } }
+    ])
+    global.wx = m.wx
+    const old = global.setTimeout
+    global.setTimeout = immediate
+    try {
+      const retries = []
+      const res = await ai.callAiGenerate(Object.assign({}, baseParams, { onRetry: (u, t) => retries.push([u, t]) }))
+      assert.ok(res && res.image, '重提后应返回生成结果')
+      assert.strictEqual(res.image, 'data:image/png;base64,QUJD', '重提后应下载成功')
+      assert.strictEqual(m.calls[0].action, 'start', '第一次为 start')
+      assert.strictEqual(m.calls[2].action, 'start', '后台失败后应重新提交 start')
+      assert.strictEqual(m.calls[3].taskId, 't2', '第二次轮询应针对新任务')
+      assert.deepStrictEqual(retries, [[1, 2]], '应上报一次重提进度 (1/2)')
+    } finally {
+      delete global.wx
+      global.setTimeout = old
     }
   }
-  try {
-    await assert.rejects(
-      () => ai.callAiGenerate({ imageBase64: 'x', size: 52, set: '48', style: '卡通', styleKey: 'cartoon', cutout: false, extra: '' }),
-      /invalid api key/
-    )
-    assert.strictEqual(errCalls.length, 1, '非超时错误不应重试')
-  } finally {
-    delete global.wx
+
+  // 重试耗尽：只抛友好文案，不暴露云函数原始错误
+  {
+    const m = cloudMock([
+      { result: { ok: true, taskId: 't1' } },
+      { result: { ok: true, status: 'error', error: '生成服务返回错误: 500' } },
+      { result: { ok: true, taskId: 't2' } },
+      { result: { ok: true, status: 'error', error: '生成服务返回错误: 500' } },
+      { result: { ok: true, taskId: 't3' } },
+      { result: { ok: true, status: 'error', error: '生成服务返回错误: 500' } }
+    ])
+    global.wx = m.wx
+    const old = global.setTimeout
+    global.setTimeout = immediate
+    try {
+      await assert.rejects(
+        () => ai.callAiGenerate(baseParams),
+        /生成失败，请稍后重试/,
+        '重试耗尽后应抛出友好文案，不暴露云函数原始错误'
+      )
+      const starts = m.calls.filter((c) => c.action === 'start')
+      assert.strictEqual(starts.length, 3, '应总尝试 3 次')
+    } finally {
+      delete global.wx
+      global.setTimeout = old
+    }
   }
 
   console.log('ai.test.js 全部通过 ✓')

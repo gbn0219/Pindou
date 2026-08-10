@@ -123,4 +123,14 @@
     disabled="{{!imagePath || generating}}"
     bindtap="generate"
   >{{generating ? '生成中…' : '生成图纸'}}</button>
+
+  <view wx:if="{{progressShow}}" class="progress-mask">
+    <view class="progress-card">
+      <view class="progress-label">{{progressTip || '生成中…'}}</view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{progressPct}}%;"></view>
+      </view>
+      <view class="progress-pct">{{progressPct}}%</view>
+    </view>
+  </view>
 </view>

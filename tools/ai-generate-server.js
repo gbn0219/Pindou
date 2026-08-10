@@ -1,4 +1,4 @@
-// 本地 AI 生成代理服务（开发用，无需部署云函数）
+// 本地生成代理服务（开发用，无需部署云函数）
 // 用法：node tools/ai-generate-server.js（读取项目根目录 .env 中的 ARK_API_KEY，默认端口 8787）
 // 小程序端在开发者工具勾选"不校验合法域名"后，通过 config.aiGenerate.localUrl 调用本服务。
 //
@@ -163,6 +163,7 @@ async function generate(apiKey, model, data) {
     throw new Error('请求缺少 imageBase64')
   }
   const images = [data.imageBase64]
+  if (data.refImageBase64) images.push(data.refImageBase64) // 重新生成：上一版结果（清洗后压缩图）作为第二张参考图
   if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
   const payload = {
     model,
@@ -172,7 +173,8 @@ async function generate(apiKey, model, data) {
       styleKey: data.styleKey || 'cartoon',
       cutout: data.cutout,
       subject: data.subject || 'auto',
-      extra: data.extra
+      extra: data.extra,
+      regenerate: !!data.regenerate
     }),
     image: images,
     size: GEN_SIZE,
@@ -283,7 +285,7 @@ const server = http.createServer((req, res) => {
 })
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('AI 生成代理服务已启动: http://127.0.0.1:' + PORT)
+  console.log('生成代理服务已启动: http://127.0.0.1:' + PORT)
   const lans = lanAddresses()
   if (lans.length) {
     console.log(

@@ -1,7 +1,7 @@
 {
   "name": "ai-generate-pattern",
   "version": "1.0.0",
-  "description": "AI 生成拼豆图纸：火山方舟 Seedream 图像生成返回图纸图片 base64",
+  "description": "生成拼豆图纸调度：start/status 异步任务 + addDelayedFunctionTask 延时触发 ai-generate-worker",
   "main": "index.js",
   "dependencies": {
     "wx-server-sdk": "~2.6.3"

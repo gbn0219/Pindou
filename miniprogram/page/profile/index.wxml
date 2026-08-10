@@ -15,22 +15,29 @@
       <view class="profile-info">
         <input class="nickname-input" type="nickname" placeholder="点击设置昵称" value="{{user.nickname}}" bindblur="onNicknameBlur" />
         <view class="profile-tip">ID：{{openidTail}}</view>
-        <view wx:if="{{user.freeVip}}" class="vip-badge">邀请码用户 · 全部免费</view>
       </view>
-    </view>
-
-    <view class="card section">
-      <view class="section-title">邀请码</view>
-      <view class="invite-row">
-        <input class="invite-input" placeholder="输入邀请码" value="{{inviteCode}}" bindinput="onInviteInput" />
-        <button class="btn btn--primary invite-btn" hover-class="btn--pressed" bindtap="onApplyInvite">激活</button>
-      </view>
-      <view class="section-hint">输入邀请码可免费使用全部功能</view>
     </view>
 
     <view class="card menu-card" hover-class="menu-card--pressed" bindtap="goGallery">
       <view class="menu-title">我的图库</view>
       <view class="menu-arrow">›</view>
+    </view>
+    <view class="card menu-card" hover-class="menu-card--pressed" bindtap="showFaq">
+      <view class="menu-title">常见问题</view>
+      <view class="menu-arrow">›</view>
+    </view>
+
+    <view class="modal-mask" wx:if="{{faqShow}}" bindtap="hideFaq">
+      <view class="modal" catchtap="noop">
+        <view class="modal-title">常见问题</view>
+        <view class="faq-list">
+          <view class="faq-item" wx:for="{{faqList}}" wx:key="q">
+            <view class="faq-q">{{item.q}}</view>
+            <view class="faq-a">{{item.a}}</view>
+          </view>
+        </view>
+        <button class="btn btn--primary modal-btn" hover-class="btn--pressed" bindtap="hideFaq">我知道了</button>
+      </view>
     </view>
   </block>
 </view>

@@ -21,7 +21,7 @@
 
   </view>
 
-  <view wx:if="{{!locked}}" class="grid-opt card">
+  <view class="grid-opt card">
     <view class="opt-row">
       <text class="opt-label">网格线</text>
       <switch checked="{{gridOn}}" color="#009fef" bindchange="onGridToggle" />
@@ -34,7 +34,19 @@
     </view>
   </view>
 
-  <view wx:if="{{!locked}}" class="legend card">
+  <view wx:if="{{mode === 'ai'}}" class="regenerate card">
+    <view class="section-title">重新生成 · 可填写修改要求</view>
+    <input class="regenerate-input" placeholder="例如：嘴巴要微笑、人物比例再大一点" value="{{extraReq}}" bindinput="onExtraReqInput" confirm-type="done" />
+    <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="onRegenerate">按要求重新生成</button>
+  </view>
+  <view wx:if="{{candTotal > 1}}" class="version-bar card">
+    <view class="version-info">第 {{candIndex}}/{{candTotal}} 版</view>
+    <view class="version-actions">
+      <button class="btn btn--soft action-btn" disabled="{{candIndex <= 1}}" bindtap="onPrevCandidate">上一版</button>
+      <button class="btn btn--soft action-btn" disabled="{{candIndex >= candTotal}}" bindtap="onNextCandidate">下一版</button>
+    </view>
+  </view>
+  <view class="legend card">
     <view class="legend-head">
       <view class="section-title">用到的颜色</view>
       <view class="legend-total">共 {{total}} 格</view>
@@ -48,17 +60,18 @@
     </view>
   </view>
 
-  <view wx:if="{{!locked}}" class="action-bar">
+  <view class="action-bar">
     <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="goEdit">进入修改</button>
     <button class="btn btn--primary action-btn" hover-class="btn--pressed" bindtap="exportImage">导出图片</button>
   </view>
 
-  <view wx:if="{{locked}}" class="locked-bar card">
-    <view class="locked-tip">预览中 · 第 {{lockedIndex}}/{{lockedTotal}} 张 · 本次已用 {{lockedTotal}}/3 次预览机会</view>
-    <view class="locked-actions">
-      <button class="btn btn--soft action-btn" disabled="{{lockedTotal >= 3}}" bindtap="onRegenerate">再生成{{lockedTotal >= 3 ? '（已用尽）' : ''}}</button>
-
-      <button class="btn btn--primary action-btn" bindtap="onUnlock">解锁并交互</button>
+  <view wx:if="{{progressShow}}" class="progress-mask">
+    <view class="progress-card">
+      <view class="progress-label">{{progressTip || '生成中…'}}</view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{progressPct}}%;"></view>
+      </view>
+      <view class="progress-pct">{{progressPct}}%</view>
     </view>
   </view>
 </view>

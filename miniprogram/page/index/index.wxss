@@ -1,5 +1,6 @@
 /* Hallmark · macrostructure: Workbench · theme: Hum · genre: playful */
 @import "../../styles/tokens.wxss";
+@import "../../styles/progress.wxss";
 
 .page {
   padding: var(--space-xl) var(--space-md) calc(100rpx + env(safe-area-inset-bottom) + var(--space-lg));

@@ -14,7 +14,7 @@
 - **图纸展示**：canvas 绘制（逐格色号、双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册
 - **逐格修改**：点格换色，底部"小盒子陈列"取色面板（按色系分区，只显示当前套装颜色）
 - **创意生成风格**：卡通 / 马卡龙 / 写实风 + 自定义关键词；可开启"抠出主体（背景纯白）"；每张原图最多 3 个候选
-- **个人中心与图库**：微信登录（云开发 openid）、头像昵称、邀请码免费解锁、图纸自动入库（分页、缩略图/预览图、cloud:// 直接预览、编辑后回填）
+- **个人中心与图库**：微信登录（云开发 openid）、头像昵称、菜单区（去生成/我的图库/常见问题/关于拼豆）、图纸自动入库（分页、缩略图/预览图、cloud:// 直接预览、编辑后回填）
 
 ## 生成流程
 
@@ -68,7 +68,7 @@ miniprogram/
   page/crop/                 裁剪页（任意比例方框）
   page/pattern/              图纸展示页（缩放/拖动、色号清单、导出、锁定预览）
   page/pattern-edit/         图纸修改页（逐格改色 + 小盒子取色面板）
-  page/profile/              个人中心（登录、资料、邀请码、图库入口）
+  page/profile/              个人中心（登录、资料、菜单区、图库入口）
   page/gallery/              图库（分页列表、cloud:// 预览、编辑入口）
   utils/color.js             sRGB→CIELAB、最近色匹配、按套装构建调色板
   utils/pattern.js           网格映射/计数/序列化/canvas 绘制 + 照片还原采样
@@ -88,10 +88,11 @@ tools/prompt.js              AI 生成提示词构造（纯函数）
 tools/style-refs/            参考拼图源图（ref-pack.jpg / realistic-ref.jpg）
 tools/face-refs/             五官画法示例拼图（face-ref.jpg）
 cloudfunctions/
-  account/                   用户中心（login / saveProfile / applyInvite）
+  account/                   用户中心（login / getProfile / saveProfile）
   access/                    访问控制（consumeQuota / checkAccess / createOrder / unlock）
   gallery/                   图库（save / list / get / update）
-  ai-generate-pattern/       AI 生成云函数（Seedream 图像方案 + 配额校验）
+  ai-generate-pattern/       AI 生成调度云函数（start/status + 延时触发 worker）
+  ai-generate-worker/        AI 生成 worker（独立 60s 预算：Seedream 生成 + 上传云存储）
 tests/                       Node 单测（无框架，断言失败即非 0 退出）
 ```
 
@@ -101,16 +102,17 @@ tests/                       Node 单测（无框架，断言失败即非 0 退�
 
 | 云函数 | 职责 |
 |---|---|
-| `account` | 登录/资料/邀请码（邀请码 `GBNLY99` → `freeVip`） |
+| `account` | 登录/资料（login / getProfile / saveProfile） |
 | `access` | 配额计数、访问校验、下单与解锁（`PAY_MODE=mock` 默认模拟支付成功） |
 | `gallery` | 图库入库、分页列表、单条详情、编辑保存/回填 |
-| `ai-generate-pattern` | AI 生成（Seedream 图像方案，含每图 3 次配额校验） |
+| `ai-generate-pattern` | AI 生成调度（异步任务 start/status，延时触发 worker，仅校验登录） |
+| `ai-generate-worker` | AI 生成执行（独立调用、完整 60s 预算，Seedream 出图 + 上传云存储） |
 
 ### 数据库集合
 
 | 集合 | 用途 |
 |---|---|
-| `users` | 用户资料、`freeVip` 状态 |
+| `users` | 用户资料（昵称、头像） |
 | `ai_sessions` | 按 `(openid, imageHash)` 记录生成次数与解锁状态 |
 | `orders` | 解锁订单（mock 支付） |
 | `gallery` | 图纸记录：原图/图纸/缩略图/预览图 fileID + 序列化 `grid`（行优先逗号色号串） |
@@ -121,7 +123,7 @@ tests/                       Node 单测（无框架，断言失败即非 0 退�
 
 1. 用[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)导入项目根目录，点击"编译"
 2. 开通云开发环境，把 `miniprogram/config.js` 中的 `envId` 替换为自己的环境 ID
-3. 在开发者工具中分别右键 `account` / `access` / `gallery` / `ai-generate-pattern` → "上传并部署（云端安装依赖）"
+3. 在开发者工具中分别右键 `account` / `access` / `gallery` / `ai-generate-worker` / `ai-generate-pattern` → "上传并部署（云端安装依赖）"（先部署 worker，再部署调度函数，避免延时触发时找不到函数）
 4. 运行单测：
 
 ```bash
@@ -138,14 +140,13 @@ node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js 
 ### 云函数模式
 
 - `miniprogram/config.js` 的 `aiGenerate.backend` 设为 `'cloud'`
-- 云函数 `ai-generate-pattern` 需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）
-- 云函数超时建议在控制台调大到 60s；部署目录需包含 `ref-pack.jpg`、`realistic-ref.jpg`、`face-ref.jpg`
+- 云函数 `ai-generate-worker` 需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；`ai-generate-pattern` 无需密钥，仅负责调度
+- 云函数超时保持默认 60s：生成在 worker 独立调用中执行，每次调用拥有完整 60s 预算，无需（也无法）调大；`ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；部署目录含 `face-ref.jpg`
 
-### 配额与解锁
+### 生成与费用
 
-- 每张原图免费生成 3 次预览（服务端按 `(openid, imageHash)` 计数）
-- 邀请码 `GBNLY99` → `freeVip`，全部免费
-- 解锁默认走 `PAY_MODE=mock`（模拟支付成功，订单写入 `orders`）；接入真实支付时把 `PAY_MODE` 改为非 mock 并实现支付回调
+- 免费：登录后即可使用创意生成（AI 出图成本由开发者承担，用户不付费）；照片还原完全离线免费
+- 邀请码与配额逻辑已移除；`access` 云函数的 `createOrder`/`unlock` 分支保留兼容旧版客户端
 
 ## 测试
 
