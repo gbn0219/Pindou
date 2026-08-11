@@ -193,17 +193,17 @@ Page({
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
       prog.bump(12) // 提交生成
       const imageHash = hash.fnv1a64(imageBase64)
-      if (!g.aiSession || g.aiSession.imageHash !== imageHash) {
-        g.aiSession = session.createSession(imageHash)
-        g.aiSession.params = {
-          imagePath: this.data.imagePath,
-          size: this.data.size,
-          set: this.data.set,
-          style,
-          styleKey: this.getStyleKey(),
-          cutout: this.data.aiCutout,
-          extra: this.data.extraReq.trim()
-        }
+      // 主页面每次生成都是全新图纸：不继承上次同一张图的版本历史；
+      // 只有预览页的"按要求重新生成"才会在同一会话里追加版本
+      g.aiSession = session.createSession(imageHash)
+      g.aiSession.params = {
+        imagePath: this.data.imagePath,
+        size: this.data.size,
+        set: this.data.set,
+        style,
+        styleKey: this.getStyleKey(),
+        cutout: this.data.aiCutout,
+        extra: this.data.extraReq.trim()
       }
       const s = g.aiSession
       prog.climb(12, 88) // 等待出图（真实进度未知，按 60 秒时间估算）
