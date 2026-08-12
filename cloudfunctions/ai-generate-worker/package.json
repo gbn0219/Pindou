@@ -1,7 +1,7 @@
 {
   "name": "ai-generate-worker",
   "version": "1.0.0",
-  "description": "生成 worker：独立 60s 预算内调火山方舟 Seedream 生成图纸并上传云存储",
+  "description": "生成 worker：独立 900s 预算内调火山方舟 Seedream 生成图纸并上传云存储",
   "main": "index.js",
   "dependencies": {
     "wx-server-sdk": "~2.6.3"

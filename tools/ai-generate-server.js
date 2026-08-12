@@ -182,30 +182,18 @@ async function generate(apiKey, model, data) {
     watermark: false, // 默认 true 会加"AI生成"水印，拼豆图纸必须关闭
     seed: Math.floor(Math.random() * 2147483647) // 随机种子：不传时模型用固定默认种子，相同输入会返回同一张图
   }
-  // 调用火山方舟：429 / 5xx / 网络异常自动重试，避免用户连续生成被限流
-  let resp = null
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      resp = await postJson(GEN_HOST, GEN_PATH, payload, apiKey, 120000)
-    } catch (e) {
-      if (attempt >= 3) throw e
-      await new Promise((r) => setTimeout(r, 5000 * (attempt + 1)))
-      continue
-    }
-    const errMsg =
-      (resp && ((resp.error && resp.error.message) || resp.message || resp.code)) || ''
-    if (!errMsg) break
-    const retriable = /rate limit|429|5\d\d|throttl/i.test(errMsg)
-    if (!retriable || attempt >= 3) {
-      throw new Error('生成服务返回错误: ' + errMsg)
-    }
-    await new Promise((r) => setTimeout(r, 8000 * (attempt + 1)))
+  // 一次任务只调一次 Seedream（不做 429/5xx 自动重试，避免一次生成多次调模型）
+  const resp = await postJson(GEN_HOST, GEN_PATH, payload, apiKey, 300000)
+  const errMsg =
+    (resp && ((resp.error && resp.error.message) || resp.message || resp.code)) || ''
+  if (errMsg) {
+    throw new Error('生成服务返回错误: ' + errMsg)
   }
   const url = extractImageUrl(resp)
   if (!url) {
     throw new Error('生成服务未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
   }
-  const { buffer, contentType } = await downloadBinary(url, 60000, 5)
+  const { buffer, contentType } = await downloadBinary(url, 120000, 5)
   return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }
 }
 

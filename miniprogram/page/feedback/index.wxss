@@ -1,0 +1,48 @@
+/* miniprogram/page/feedback/index.wxss */
+@import '../../styles/tokens.wxss';
+
+.page {
+  padding: var(--space-lg) var(--space-md);
+}
+
+.card {
+  background: var(--color-bead-bg);
+  border-radius: var(--radius-card);
+  padding: var(--space-lg);
+  box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
+  margin-bottom: var(--space-md);
+}
+
+.section-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: var(--space-sm);
+}
+
+.feedback-input {
+  width: 100%;
+  min-height: 320rpx;
+  padding: var(--space-sm);
+  box-sizing: border-box;
+  border-radius: var(--radius-input);
+  background: var(--color-paper-2);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-base);
+  color: var(--color-ink);
+}
+
+.count {
+  margin-top: var(--space-2xs);
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--color-neutral);
+  font-family: var(--font-label);
+}
+
+.tip {
+  margin-top: var(--space-sm);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--color-neutral);
+}

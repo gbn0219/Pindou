@@ -1,16 +1,16 @@
 // 拼豆图纸生成调度云函数（与本地代理服务 tools/ai-generate-server.js 保持一致）
-// 异步任务模式：客户端 callFunction 单次等待约 15s 即超时（-404012），Seedream 生成需 30~60s，
-// 且微信云函数单次执行时长上限固定 60s（无法调大），生成无法塞进同一次调用；因此拆成两层独立调用：
+// 异步任务模式：客户端 callFunction 单次等待受基础库限制（超时会报 -404012），Seedream 生成可能更久，
+// 生成无法塞进同一次客户端等待内；因此拆成两层独立调用：
 //   start：校验登录 → 写 ai_tasks 任务记录（pending，生成参数存云存储 JSON）
 //          → 云调用 addDelayedFunctionTask 延时约 7s 触发独立 worker 云函数 ai-generate-worker
 //          → 立即返回 { ok, taskId }（毫秒级返回，不占用生成时长）
-//   worker（ai-generate-worker，独立部署）：拥有自己完整的 60s 执行预算，调火山方舟 Seedream
-//          （doubao-seedream-5-0-260128，OpenAI 兼容 images/generations）生成像素风格图纸 → 下载图片
-//          → 上传云存储 ai-tasks/<openid>/<taskId>.<ext> → 更新任务 done/error
+//   worker（ai-generate-worker，独立部署）：拥有完整 900s 执行预算（控制台配置超时 900s），
+//          调火山方舟 Seedream（doubao-seedream-5-0-260128，OpenAI 兼容 images/generations）
+//          生成像素风格图纸 → 下载图片 → 上传云存储 ai-tasks/<openid>/<taskId>.<ext> → 更新任务 done/error
 //   status：按 _openid + taskId 查询，返回 { ok, status, fileID, ext, error }，前端轮询后下载
 // 云调用权限：本函数目录 config.json 声明 openapi: ["cloudbase.addDelayedFunctionTask"]，
 //             重新上传部署后权限缓存约 10 分钟生效。
-// 环境变量：ARK_API_KEY / ARK_MODEL 配置在 ai-generate-worker；本函数无需配置，超时保持默认 60s。
+// 环境变量：ARK_API_KEY / ARK_MODEL 配置在 ai-generate-worker；本函数无需配置，超时保持默认即可。
 const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -65,11 +65,18 @@ exports.main = async (event) => {
 
   const taskId = newTaskId()
   const now = Date.now()
+  const requestId = String(event.requestId || '')
   let paramsFileID = ''
   try {
     await ensureTaskCollection()
-    // 生成参数含原图/上一版结果两张 base64 图，可能逼近数据库单条记录上限（512KB），
-    // 单独存云存储 JSON，worker 按 paramsFileID 下载还原；ai_tasks 记录只保留轻量元数据
+    // 幂等：同一次点击（同一 requestId）只建一个任务，避免基础库重试 start 造成重复任务/重复调模型
+    if (requestId) {
+      const exist = await cloud.database().collection(TASK_COLLECTION).where({ _openid: OPENID, requestId }).limit(1).get()
+      const old = exist.data && exist.data[0]
+      if (old) return { ok: true, taskId: old.taskId }
+    }
+    // 生成参数存云存储 JSON，worker 按 paramsFileID 下载还原；输入图片由客户端先上传云存储、
+    // 参数里只带 fileID（避免 callFunction 携带大 base64 触发客户端超时）；ai_tasks 记录只保留轻量元数据
     const paramsFile = await cloud.uploadFile({
       cloudPath: 'ai-tasks/' + OPENID + '/' + taskId + '.json',
       fileContent: Buffer.from(JSON.stringify(event), 'utf8')
@@ -82,6 +89,7 @@ exports.main = async (event) => {
         data: {
           _openid: OPENID,
           taskId,
+          requestId,
           status: 'pending',
           fileID: '',
           ext: 'jpg',
@@ -102,7 +110,7 @@ exports.main = async (event) => {
     return { ok: false, error: '任务创建失败: ' + e.message }
   }
   // 延时触发独立 worker（延时下限 6s，取 7s 保证记录与参数文件已提交）；
-  // worker 独立调用拥有完整 60s 预算。若调度失败，前端会立即得到失败并自动重提。
+  // worker 独立调用拥有完整 900s 预算。若调度失败，前端立即报错，由用户手动重试。
   try {
     await cloud.openapi.cloudbase.addDelayedFunctionTask({
       env: wxContext.ENV || process.env.TCB_ENV,

@@ -44,6 +44,9 @@
   border: 0;
   line-height: 1;
 }
+.avatar-btn--pressed {
+  transform: scale(0.96);
+}
 .avatar {
   width: 128rpx;
   height: 128rpx;

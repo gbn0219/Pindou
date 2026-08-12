@@ -74,6 +74,7 @@ miniprogram/
   utils/pattern.js           网格映射/计数/序列化/canvas 绘制 + 照片还原采样
   utils/export.js            图纸资产生成（整图导出 / 网格缩略图 / 原图方形压缩）
   utils/ai.js                AI 生成前端：压缩、调用、轮询、像素映射色号
+  utils/sec.js              内容安全检测封装（文本 msgSecCheck / 图片 imgSecCheck）
   utils/background.js        背景近白噪声清洗（flood fill）
   utils/image.js             图片加载（iOS 缓存绕过 + 超时重试）
   utils/gesture.js           双指缩放/拖动视图模型（纯函数）
@@ -92,7 +93,7 @@ cloudfunctions/
   access/                    访问控制（consumeQuota / checkAccess / createOrder / unlock）
   gallery/                   图库（save / list / get / update）
   ai-generate-pattern/       AI 生成调度云函数（start/status + 延时触发 worker）
-  ai-generate-worker/        AI 生成 worker（独立 60s 预算：Seedream 生成 + 上传云存储）
+  ai-generate-worker/        AI 生成 worker（独立 900s 预算：Seedream 生成 + 上传云存储）
 tests/                       Node 单测（无框架，断言失败即非 0 退出）
 ```
 
@@ -106,7 +107,8 @@ tests/                       Node 单测（无框架，断言失败即非 0 退�
 | `access` | 配额计数、访问校验、下单与解锁（`PAY_MODE=mock` 默认模拟支付成功） |
 | `gallery` | 图库入库、分页列表、单条详情、编辑保存/回填 |
 | `ai-generate-pattern` | AI 生成调度（异步任务 start/status，延时触发 worker，仅校验登录） |
-| `ai-generate-worker` | AI 生成执行（独立调用、完整 60s 预算，Seedream 出图 + 上传云存储） |
+| `ai-generate-worker` | AI 生成执行（独立调用、完整 900s 预算，Seedream 出图 + 上传云存储） |
+| `sec-check` | 内容安全检测（文本 msgSecCheck / 图片 imgSecCheck，所有用户发布场景生效） |
 
 ### 数据库集合
 
@@ -123,7 +125,7 @@ tests/                       Node 单测（无框架，断言失败即非 0 退�
 
 1. 用[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)导入项目根目录，点击"编译"
 2. 开通云开发环境，把 `miniprogram/config.js` 中的 `envId` 替换为自己的环境 ID
-3. 在开发者工具中分别右键 `account` / `access` / `gallery` / `ai-generate-worker` / `ai-generate-pattern` → "上传并部署（云端安装依赖）"（先部署 worker，再部署调度函数，避免延时触发时找不到函数）
+3. 在开发者工具中分别右键 `account` / `access` / `gallery` / `ai-generate-worker` / `ai-generate-pattern` / `sec-check` → "上传并部署（云端安装依赖）"（先部署 worker，再部署调度函数，避免延时触发时找不到函数；`sec-check` 的 `config.json` 声明了 `security.msgSecCheck` / `security.imgSecCheck` 云调用权限，需一并部署）
 4. 运行单测：
 
 ```bash
@@ -141,7 +143,8 @@ node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js 
 
 - `miniprogram/config.js` 的 `aiGenerate.backend` 设为 `'cloud'`
 - 云函数 `ai-generate-worker` 需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；`ai-generate-pattern` 无需密钥，仅负责调度
-- 云函数超时保持默认 60s：生成在 worker 独立调用中执行，每次调用拥有完整 60s 预算，无需（也无法）调大；`ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；部署目录含 `face-ref.jpg`
+- 客户端先把原图（重新生成时含上一版图）上传云存储 `ai-inputs/`，`start` 只带 fileID，避免 callFunction 携带大 base64 触发客户端超时
+- `ai-generate-worker` 超时在云开发控制台配置为 **900s**，生成在 worker 独立调用中执行，每次调用拥有完整 900s 预算；前端不自动重提（一张图一次模型调用），失败提示后由用户手动重试；`ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；部署目录含 `face-ref.jpg`
 
 ### 生成与费用
 

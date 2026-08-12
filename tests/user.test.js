@@ -37,4 +37,12 @@ assert.deepStrictEqual(pager.pageWindow(10, 1), [1, 2, 3, '...', 10], '首页窗
 assert.deepStrictEqual(pager.pageWindow(10, 10), [1, '...', 8, 9, 10], '末页窗口')
 assert.deepStrictEqual(pager.pageWindow(10, 5), [1, '...', 3, 4, 5, 6, 7, '...', 10], '中间页窗口')
 
+;(async () => {
+  global.wx = { cloud: { callFunction: () => Promise.resolve({ result: { ok: true, user: { nickname: 'n', avatarFileID: 'f' } } }) } }
+  const user = require('../miniprogram/utils/user.js')
+  const u = await user.saveProfile({ nickname: 'n' })
+  assert.strictEqual(u.nickname, 'n', 'saveProfile 直接返回 user 对象（含 nickname）')
+  assert.strictEqual(u.avatarFileID, 'f', 'saveProfile 返回的 user 含 avatarFileID')
+})().catch((e) => { console.error(e); process.exit(1) })
+
 console.log('user.test.js 全部通过 \u2713')

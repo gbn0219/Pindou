@@ -41,7 +41,7 @@ const progress = require('../miniprogram/utils/progress.js')
   assert.strictEqual(p.value(), 100, '超过 100 应钳制')
 }
 
-// 默认时长 60 秒：30 秒应到 50%
+// 默认时长 2 分钟：60 秒应到 50%
 {
   const origNow = Date.now
   let fakeNow = 0
@@ -49,8 +49,8 @@ const progress = require('../miniprogram/utils/progress.js')
   try {
     const p = progress.createProgress()
     p.climb(0, 100)
-    fakeNow = 30000
-    assert.strictEqual(p.value(), 50, '默认 60s 时 30s 应为 50%')
+    fakeNow = 60000
+    assert.strictEqual(p.value(), 50, '默认 120s 时 60s 应为 50%')
   } finally {
     Date.now = origNow
   }

@@ -17,10 +17,9 @@ const pattern = require('./pattern')
 const MAX_SIZE = 768 // 原图压缩边长 px
 const REQUEST_TIMEOUT = 20000 // 单次 wx.request 超时
 const POLL_INTERVAL = 3000 // 轮询间隔
-const POLL_MAX_MS = 300000 // 总等待上限 5 分钟
-const CLOUD_RETRY_MAX = 2 // 云函数异步任务失败后最多自动重提次数（总尝试 3 次）
-const CLOUD_RETRY_DELAY = 1500 // 自动重试间隔 ms
-const POLL_TASK_MAX_MS = 90000 // 云函数异步任务单次总等待上限（后台生成 30~60s，超出视为超时并重提）
+const POLL_MAX_MS = 300000 // 本地服务轮询总等待上限 5 分钟（开发调试用）
+const POLL_INTERVAL_SLOW = 10000 // 云函数轮询超过 1 分钟后放慢间隔，减少长等待期无效 status 调用
+const POLL_TASK_MAX_MS = 870000 // 云函数异步任务单次总等待上限（worker 配置 900s 超时，预留状态更新与下载余量）
 
 async function compressToBase64(src, maxSize) {
   const px = maxSize || MAX_SIZE
@@ -124,12 +123,6 @@ function callLocal(ai, data) {
   })
 }
 
-// 云函数超时判定：仅对超时类错误自动重试；缺 Key、模型权限、限流等业务错误直接失败
-function isTimeoutError(err) {
-  const msg = String((err && (err.errMsg || err.message || err.errCode)) || '')
-  return /time\s*out|timed\s*out|time\s*limit|timelimit|超时|FUNCTION_EXCEED|504002|exceeded/i.test(msg)
-}
-
 function callCloudFunction(name, data) {
   return wx.cloud
     .callFunction({ name, data })
@@ -180,6 +173,8 @@ async function downloadResultFile(fileID, ext) {
 function pollCloudTask(taskId) {
   return new Promise((resolve, reject) => {
     const start = Date.now()
+    // 前 1 分钟每 3s 轮询，之后放慢到 10s，减少长等待期无效 status 调用
+    const nextInterval = () => (Date.now() - start > 60000 ? POLL_INTERVAL_SLOW : POLL_INTERVAL)
     const tick = () => {
       callCloudFunction('ai-generate-pattern', { action: 'status', taskId })
         .then((d) => {
@@ -197,7 +192,7 @@ function pollCloudTask(taskId) {
             reject(new Error('生成超时'))
             return
           }
-          setTimeout(tick, POLL_INTERVAL)
+          setTimeout(tick, nextInterval())
         })
         .catch(() => {
           // 轮询网络抖动时继续重试，直到单次总等待上限
@@ -206,54 +201,106 @@ function pollCloudTask(taskId) {
             reject(new Error('生成超时'))
             return
           }
-          setTimeout(tick, POLL_INTERVAL)
+          setTimeout(tick, nextInterval())
         })
     }
     tick()
   })
 }
 
-function callCloudTask(data, onRetry) {
-  const attempt = (left) =>
-    callCloudFunction('ai-generate-pattern', Object.assign({ action: 'start' }, data))
-      .then((d) => {
-        if (!d.taskId) throw new Error((d && d.error) || '云函数未返回任务 ID')
-        return pollCloudTask(d.taskId)
+// 基础库层错误（-404012/-404005、callFunction 超时重试等）对用户无意义，统一换成友好文案
+function sanitizeCloudError(err) {
+  const msg = String((err && err.message) || '')
+  if (/cloud\.call(Function|Container)|-\d{5,6}|polling|FUNCTION_EXCEED|exceed max/.test(msg)) return ''
+  return msg
+}
+
+function callCloudTask(data) {
+  // 单次提交：一张图只触发一次模型调用；失败不自动重提，由用户手动重新生成
+  return callCloudFunction('ai-generate-pattern', Object.assign({ action: 'start' }, data))
+    .then((d) => {
+      if (!d.taskId) throw new Error((d && d.error) || '云函数未返回任务 ID')
+      return pollCloudTask(d.taskId)
+    })
+    .then((r) => downloadResultFile(r.fileID, r.ext))
+    .then((dataUrl) => ({ image: dataUrl }))
+    .catch((err) => {
+      console.error('[ai-generate] 云函数任务失败:', err && (err.message || err))
+      const detail = sanitizeCloudError(err)
+      throw new Error(detail ? '生成失败，请稍后重试：' + detail : '生成失败，请稍后重试')
+    })
+}
+
+function writeTempBase64(dataUrl) {
+  const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,/.exec(dataUrl || '')
+  if (!m) return Promise.reject(new Error('图片数据格式不正确'))
+  const fs = wx.getFileSystemManager()
+  const tempPath =
+    wx.env.USER_DATA_PATH +
+    '/ai_input_' +
+    Date.now() +
+    '_' +
+    Math.floor(Math.random() * 1000000) +
+    '.' +
+    m[1].toLowerCase()
+  return new Promise((resolve, reject) => {
+    fs.writeFile({
+      filePath: tempPath,
+      data: dataUrl.slice(dataUrl.indexOf(',') + 1),
+      encoding: 'base64',
+      success: () => resolve(tempPath),
+      fail: (err) => reject(new Error('图片临时文件写入失败: ' + ((err && err.errMsg) || '')))
+    })
+  })
+}
+
+function uploadInput(dataUrl, openid, key) {
+  if (!dataUrl) return Promise.resolve('')
+  return writeTempBase64(dataUrl).then((tempPath) =>
+    wx.cloud
+      .uploadFile({
+        cloudPath: 'ai-inputs/' + openid + '/' + key + '.' + (tempPath.split('.').pop() || 'jpg'),
+        filePath: tempPath
       })
-      .then((r) => downloadResultFile(r.fileID, r.ext))
-      .then((dataUrl) => ({ image: dataUrl }))
-      .catch((err) => {
-        const used = CLOUD_RETRY_MAX - left + 1
-        console.error('[ai-generate] 云函数任务第 ' + used + '/' + (CLOUD_RETRY_MAX + 1) + ' 次尝试失败:', err && (err.message || err))
-        if (left > 0) {
-          if (onRetry) onRetry(used, CLOUD_RETRY_MAX)
-          return new Promise((resolve) => setTimeout(resolve, CLOUD_RETRY_DELAY)).then(() => attempt(left - 1))
+      .then((r) => {
+        try {
+          wx.getFileSystemManager().unlinkSync(tempPath)
+        } catch (e) {
+          /* 临时文件清理失败可忽略 */
         }
-        throw new Error('生成失败，请稍后重试：' + (err && err.message ? err.message : err))
+        return r.fileID
       })
-  return attempt(CLOUD_RETRY_MAX)
+  )
 }
 
 function callAiGenerate(params) {
   const ai = (config && config.aiGenerate) || {}
-  const data = {
-    imageBase64: params.imageBase64,
+  const base = {
     size: params.size,
     set: params.set,
     style: params.style,
     styleKey: params.styleKey,
     extra: params.extra || '',
     cutout: !!params.cutout,
-    refImageBase64: params.refImageBase64 || '', // 重新生成：上一版生成图（清洗后压缩）作为第二张参考图
     regenerate: !!params.regenerate,
     imageHash: params.imageHash || '',
-    sessionId: params.sessionId || ''
+    sessionId: params.sessionId || '',
+    requestId: Date.now() + '_' + Math.floor(Math.random() * 1000000) // 每次点击唯一，调度函数幂等去重
   }
-  if (ai.backend === 'local' && ai.localUrl) return callLocal(ai, data)
-  // 云函数异步任务：start 立即返回 taskId → 后台生成结果写云存储 → 前端轮询 status 后下载；
-  // 任何环节失败（含后台 status='error'、轮询超时）自动重新提交，最多 CLOUD_RETRY_MAX 次；
-  // 重试耗尽后只抛友好文案，绝不向用户暴露 -404012 等云函数原始报错
-  return callCloudTask(data, params.onRetry)
+  if (ai.backend === 'local' && ai.localUrl) {
+    return callLocal(ai, Object.assign({ imageBase64: params.imageBase64, refImageBase64: params.refImageBase64 || '' }, base))
+  }
+  // 云模式：先把图片传到云存储（uploadFile 不受 callFunction 大小/超时限制），start 只带 fileID，
+  // 避免携带几百 KB base64 触发 callFunction 客户端超时（-404012）
+  const u = ((getApp && getApp()) && getApp().globalData && getApp().globalData.user) || {}
+  const openid = u.openid || u._openid || 'guest'
+  const key = (params.imageHash || Date.now()) + '_' + Math.floor(Math.random() * 1000000)
+  return Promise.all([
+    uploadInput(params.imageBase64, openid, 'img_' + key),
+    uploadInput(params.refImageBase64, openid, 'ref_' + key)
+  ]).then(([imageFileID, refImageFileID]) =>
+    callCloudTask(Object.assign({ imageFileID, refImageFileID }, base))
+  )
 }
 
 function canvasToTempFile(canvas, px) {
@@ -454,4 +501,4 @@ async function imageToGrid(dataUrl, size, setKey, opts) {
   return { grid, prevImage }
 }
 
-module.exports = { compressToBase64, callAiGenerate, generateGrid, isTimeoutError, CLOUD_RETRY_MAX, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }
+module.exports = { compressToBase64, callAiGenerate, generateGrid, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }

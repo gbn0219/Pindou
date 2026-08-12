@@ -2,18 +2,18 @@
 /**
  * 生成进度估算与浮层驱动（index / pattern 页共用，可在 Node 中测试估算逻辑）。
  *
- * 真实进度未知的生成阶段按时间线性估算（默认 60 秒走完一段），
+ * 真实进度未知的生成阶段按时间线性估算（默认 2 分钟走完一段，对应一次 AI 生成的实际耗时），
  * 阶段切换用 bump 直接跳变，避免进度长时间不动让用户以为卡死。
  *
  * 用法：
- *   const prog = progressUtil.createProgress()       // 默认 durationMs 60000
+ *   const prog = progressUtil.createProgress()       // 默认 durationMs 120000
  *   progressUtil.startOverlay(page, prog)            // 显示浮层并每 400ms 刷新百分比
  *   prog.bump(5)                                     // 阶段确定：直接跳到 5%
  *   prog.climb(12, 88)                               // 等待阶段：12% → 88% 按时间线性推进
  *   prog.finish() / progressUtil.stopOverlay(page)   // 完成：隐藏浮层
  */
 function createProgress(opts) {
-  const durationMs = (opts && opts.durationMs) || 60000
+  const durationMs = (opts && opts.durationMs) || 120000
   let running = false
   let startMs = 0
   let base = 0

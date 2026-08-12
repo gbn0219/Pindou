@@ -77,6 +77,7 @@ App({
     hasLogin: false,
     openid: null,
     user: null,
+    loggedOut: false,
     iconTabbar: '/page/weui/example/images/icon_tabbar.png',
   },
   // lazy loading openid
@@ -122,6 +123,13 @@ App({
     })
   },
   restoreLogin() {
+    const loggedOut = wx.getStorageSync('loggedOut')
+    if (loggedOut) {
+      // 用户主动退出登录：保持未登录，等待用户点“微信一键登录”再登录
+      this.globalData.loggedOut = true
+      this.globalData.user = null
+      return
+    }
     const user = wx.getStorageSync('user')
     if (user && (user.openid || user._openid)) {
       if (!user.openid && user._openid) user.openid = user._openid
@@ -129,6 +137,9 @@ App({
     }
   },
   ensureLogin() {
+    if (this.globalData.loggedOut) {
+      return Promise.reject(new Error('已退出登录'))
+    }
     if (this.globalData.user && (this.globalData.user.openid || this.globalData.user._openid)) {
       return Promise.resolve(this.globalData.user)
     }

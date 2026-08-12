@@ -23,12 +23,12 @@
 
 - 免费模式：仅登录用户可用；不再限制预览/生成次数（`ai_sessions` 不再作为配额计数字段）；生成后直接进入完整交互（缩放/色号/修改/导出），导出时自动入库图库
 - 重新生成：展示页可填写修改要求（如"嘴巴要微笑、人物比例再大一点"），重新生成时把**原图 + 上一版生成图（清洗后压缩 ~768px）+ 要求**一起发给 AI（仍只生成 1 张图）；候选保留最近 5 版，可上一版/下一版切换
-- 生成进度：AI 生成过程展示进度浮层（百分比进度条），真实进度未知的等待阶段按 60 秒时间线性估算、阶段切换直接跳变（`utils/progress.js` + `styles/progress.wxss`，index/pattern 页共用）
+- 生成进度：AI 生成过程展示进度浮层（百分比进度条），真实进度未知的等待阶段按 2 分钟时间线性估算、阶段切换直接跳变（`utils/progress.js` + `styles/progress.wxss`，index/pattern 页共用）
 
 选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格 → 原图压缩为 ~768px JPEG base64 → 调用后端（`config.aiGenerate.backend`）：
 
 - `local`：`tools/ai-generate-server.js`（读取根目录 `.env` 的 `ARK_API_KEY`，开发者工具需勾选"不校验合法域名"；真机调试时把 `config.aiGenerate.localUrl` 改为电脑局域网 IP——服务启动日志会打印可用 IP，手机与电脑需同一 Wi-Fi、防火墙放行 8787、用"真机调试"模式打开；若报 ERR_ADDRESS_UNREACHABLE 说明不在同一局域网（公司/校园网常见 AP 隔离），改用手机热点：手机开热点 → 电脑连热点 → 按启动日志的新 IP 更新 localUrl）
-- `cloud`：云函数 `ai-generate-pattern` + `ai-generate-worker`（**图像方案，与本地服务同步**；**异步任务模式**：`action:'start'` 写任务并延时触发独立 worker，立即返回 taskId，生成结果上传云存储 `ai-tasks/`，前端轮询 `action:'status'` 后下载；微信云函数单次执行上限固定 60s、无法调大，因此生成放在 worker 的独立调用里执行（每次调用拥有完整 60s 预算）；部署时 `ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`、创建集合 `ai_tasks`（代码会尝试自动创建），`ai-generate-worker` 配置 `ARK_API_KEY`，部署目录含 face-ref.jpg）
+- `cloud`：云函数 `ai-generate-pattern` + `ai-generate-worker`（**图像方案，与本地服务同步**；**异步任务模式**：`action:'start'` 写任务并延时触发独立 worker，立即返回 taskId，生成结果上传云存储 `ai-tasks/`，前端轮询 `action:'status'` 后下载；客户端 `callFunction` 单次等待受基础库限制，因此生成放在 worker 的独立调用里执行（worker 超时在云开发控制台配置为 900s，每次调用拥有完整 900s 预算）；部署时 `ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`、创建集合 `ai_tasks`（代码会尝试自动创建），`ai-generate-worker` 配置 `ARK_API_KEY`，部署目录含 face-ref.jpg）
 
 后端以**图像生成方案**调用火山方舟 OpenAI 兼容接口（默认模型 `doubao-seedream-5-0-260128`，`ARK_MODEL` 可覆盖）：
 - 请求 `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`，多图输入：原图（base64）+（重新生成时）上一版生成图（清洗后压缩 ~768px，作为第二张参考图）+ 一张五官画法示例拼图（5 张拼豆像素画人脸合成，见 `tools/face-refs/face-ref.jpg`，作为第三张参考图；仅用于学习五官画法，提示词明确禁止复制示例角色/内容），`size` 统一取 `2k`（约 2048×2048；Ark 尺寸参数只接受 WIDTHxHEIGHT / 2k / 3k / 4k，最小约 1920×1920），前端按盘面 floor 分块，不依赖每格 16px，`watermark: false`（默认会加"AI生成"水印）；
@@ -36,7 +36,7 @@
 - 前端把图片写入临时文件 → offscreen canvas 读整幅像素 → **主色分块**（`dominantBlockRgb`，每块取占比最高的颜色，抗 AI 自带的网格线/辅助线）→ CIELAB 最近色映射到当前套装色号 → 生成 grid；
 - **不输出文字色号**（2704 个色号一次输出会被 token 截断，分块生成又导致块间风格不统一），彻底绕开输出 token 上限；
 - 本地服务采用“提交任务 + 轮询”：`POST /ai-generate` 立即返回 taskId，客户端每 3s 轮询 `GET /ai-generate/status?taskId=xx`（wx.request 单次最长 60s，生成可能超时），最长等待 5 分钟。
-- 云函数模式同样采用“提交任务 + 轮询”：`ai-generate-pattern` 的 `action:'start'` 立即返回 taskId（写 `ai_tasks` 集合 + 生成参数 JSON 到云存储，再经云调用 `addDelayedFunctionTask` 延时约 7s 触发独立云函数 `ai-generate-worker`；worker 拥有完整 60s 执行预算，调用 Seedream 生成并把图纸上传云存储 `ai-tasks/<openid>/<taskId>.<ext>`），客户端每 3s 轮询 `action:'status'` 拿到 fileID 后下载；任何环节失败（含 worker `status:'error'`、轮询超时）前端自动重新提交（最多 3 次），失败只提示“生成失败，请稍后重试”，不暴露 -404012 等云函数原始报错。
+- 云函数模式同样采用“提交任务 + 轮询”：客户端先把原图（重新生成时含上一版图）上传云存储 `ai-inputs/<openid>/`，`start` 只带 fileID（避免 callFunction 携带大 base64 触发客户端超时）；`ai-generate-pattern` 的 `action:'start'` 立即返回 taskId（写 `ai_tasks` 集合 + 生成参数 JSON 到云存储，再经云调用 `addDelayedFunctionTask` 延时约 7s 触发独立云函数 `ai-generate-worker`；worker 拥有完整 60s 执行预算，调用 Seedream 生成并把图纸上传云存储 `ai-tasks/<openid>/<taskId>.<ext>`），客户端轮询 `action:'status'`（前 1 分钟每 3s、之后每 10s）拿到 fileID 后下载，总等待上限约 14.5 分钟；**不自动重提**（一张图只触发一次模型调用），失败只提示“生成失败，请稍后重试”，由用户手动重新生成，不暴露 -404012 等云函数原始报错。
 
 
 **风格**：前端内置 5 个示例（卡通、马卡龙、扁平插画、复古像素、水彩），用户也可在输入框填写自定义风格关键词；输入框留空用所选示例，填写后以自定义为准。两张「原图转像素图」示例合成为一张参考拼图（`tools/style-refs/ref-pack.jpg`），5 张拼豆像素画人脸合成为一张五官画法示例拼图（`tools/face-refs/face-ref.jpg`），两者每次 AI 生成固定随请求发送、前端无需选择；另有「抠出人物（背景变白）」开关。提示词对构图、五官（眼睛/眉毛/鼻子/嘴巴/腮红）、头发、衣服、皮肤（肤色锁定 G1：RGB 255,228,211，禁止深棕/深灰皮肤与深色阴影）、描边、配色、背景均有明确要求，并按示例的转换思路生成。AI 生成支持 52/78/104 三种盘面。
@@ -58,7 +58,7 @@ miniprogram/
   utils/pattern.js            网格映射/计数/canvas 绘制 + 照片还原采样（averageBlocks / mapRgb / countColors / renderGrid / serializeGrid / parseGrid，node 可测）
   utils/export.js            图纸资产生成（整图导出 ×EXPORT_UPSCALE 放大 / 网格缩略图 / 原图方形压缩，小程序环境可用）
   utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、读 AI 图纸像素映射色号（imageToGrid / imageDataToGrid / dominantBlockRgb，node 可测）
-  utils/progress.js           生成进度估算与浮层驱动（阶段跳变 + 60s 时间估算，node 可测）
+  utils/progress.js           生成进度估算与浮层驱动（阶段跳变 + 2 分钟时间估算，node 可测）
   utils/image.js              图片加载工具（唯一临时路径绕过 iOS createImage 缓存，带超时+重试）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
   data/colors.js              运行时数据模块（与 colors.json 同源；小程序 require JSON 不可靠，运行时统一加载 .js）
@@ -71,10 +71,11 @@ tools/face-refs/              五官画法示例源图 + 合成拼图 face-ref.j
 tools/convert-examples/        原图转像素图示例源图（合成进 ref-pack.jpg）
 tests/                        无框架 node 单测（断言失败即非 0 退出）
 cloudfunctions/ai-generate-pattern/  AI 生成调度云函数（cloud 模式异步任务：start/status + 延时触发 worker）
-cloudfunctions/ai-generate-worker/   AI 生成 worker（独立调用、完整 60s 预算：Seedream 生成 + 上传云存储）
+cloudfunctions/ai-generate-worker/   AI 生成 worker（独立调用、完整 900s 预算：Seedream 生成 + 上传云存储）
 cloudfunctions/account/             用户中心云函数（登录/资料）
 cloudfunctions/access/              访问控制云函数（免费模式：consumeQuota 直接放行；createOrder/unlock 保留兼容旧版）
 cloudfunctions/gallery/             图库云函数（入库/页码分页列表/单条详情 get/记录更新 update/删除 delete）
+cloudfunctions/sec-check/             内容安全检测云函数（文本 msgSecCheck / 图片 imgSecCheck）
 cloudfunctions/               其余为官方模板遗留云函数（本项目未使用）
 docs/superpowers/             设计文档与实施计划（历史过程文档，保留备查）
 ```
@@ -90,6 +91,12 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 创意生成会话：`getApp().globalData.aiSession = { sessionId, imageHash, candidates, index, params }`（免费模式不限制生成次数，候选保留最近 5 版供切换，仅内存；`params.prevImage` 保存上一版生成图路径）
 - 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`；`gallery` 记录含 `grid`（行优先逗号色号串，`serializeGrid`/`parseGrid` 序列化），列表接口用字段投影排除 `grid`、编辑时按需 `get`，编辑保存/缩略图回填走 `update`
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
+
+## 内容安全
+
+- 所有用户发布场景（昵称、头像、导入图片、创意生成风格与额外要求、重新生成要求）在提交前先经 `sec-check` 云函数检测：文本走 `msgSecCheck`（version 2，scene 1 资料 / 2 评论），图片走 `imgSecCheck`（先压缩至 ≤720px，满足接口 750×1334、≤1M 限制）；命中违规仅提示用户“内容包含违规信息”，不透出检测细节
+- 前端统一封装在 `utils/sec.js`（`checkText` / `checkImageFile`）；云函数不可用等基础设施错误放行并记日志，避免误伤正常用户
+- 部署 `sec-check` 时需保留其 `config.json`（声明 `security.msgSecCheck` / `security.imgSecCheck` 云调用权限）
 
 ## 前端要点（canvas 相关，改动前先理解）
 
@@ -108,7 +115,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
 - AI 生成本地模式：项目根目录 `.env` 填写 `ARK_API_KEY`（火山方舟 API Key，已有 `.env.example`），运行 `node tools/ai-generate-server.js`，开发者工具勾选"不校验合法域名"
 - 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"
-- 云函数 `ai-generate-worker`（cloud 模式）需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置（worker 与本地服务同为 Seedream 图像方案；部署目录含 face-ref.jpg 与 prompt.js）；`ai-generate-pattern` 负责调度、无需密钥，其目录 `config.json` 需声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；需在控制台创建集合 `ai_tasks`（代码会尝试自动创建）；云函数超时保持默认 60s 即可——生成在 worker 独立调用中执行，无需（也无法）调大
+- 云函数 `ai-generate-worker`（cloud 模式）需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置（worker 与本地服务同为 Seedream 图像方案；部署目录含 face-ref.jpg 与 prompt.js）；`ai-generate-pattern` 负责调度、无需密钥，其目录 `config.json` 需声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；需在控制台创建集合 `ai_tasks`（代码会尝试自动创建），并把 `ai-generate-worker` 的超时时间设为 **900s**；前端不自动重提，一张图一次模型调用
 
 ## 工作准则
 

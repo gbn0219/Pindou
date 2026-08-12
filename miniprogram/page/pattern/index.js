@@ -7,6 +7,7 @@ const exportUtil = require('../../utils/export.js')
 const user = require('../../utils/user.js')
 const session = require('../../utils/session.js')
 const progressUtil = require('../../utils/progress.js')
+const sec = require('../../utils/sec.js')
 
 const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号（默认铺满视图隐藏编号，避免乱码感）
 
@@ -284,11 +285,22 @@ Page({
   async onRegenerate() {
     const s = this.aiSession
     if (!s || !s.params) return
+    // 先启动进度浮层，再执行内容安全检测，避免检测期间无任何反馈
     const prog = progressUtil.createProgress()
     progressUtil.startOverlay(this, prog)
     try {
-      const p = s.params
       const req = this.data.extraReq.trim()
+      prog.bump(2) // 内容安全检测
+      try {
+        if (await sec.checkText(req, 2)) {
+          progressUtil.stopOverlay(this)
+          wx.showToast({ title: '修改要求包含违规信息，请重新填写', icon: 'none' })
+          return
+        }
+      } catch (err) {
+        console.error('[sec-check]', err)
+      }
+      const p = s.params
       const extra = [p.extra, req].filter(Boolean).join('；')
       prog.bump(5) // 压缩原图
       const imageBase64 = await ai.compressToBase64(p.imagePath)
@@ -298,7 +310,7 @@ Page({
         prog.bump(14) // 压缩上一版参考图
         refImageBase64 = await ai.compressToBase64(p.prevImage)
       }
-      prog.climb(15, 88) // 等待出图（真实进度未知，按 60 秒时间估算）
+      prog.climb(15, 88) // 等待出图（真实进度未知，按 2 分钟时间估算）
       const res = await ai.generateGrid({
         imageBase64,
         size: p.size,
@@ -310,11 +322,7 @@ Page({
         refImageBase64,
         regenerate: !!refImageBase64,
         imageHash: s.imageHash,
-        sessionId: s.sessionId,
-        onRetry: (used, total) => {
-          prog.bump(Math.min(88, 22 + used * 15))
-          this.setData({ progressTip: '生成遇到问题，自动重试 ' + used + '/' + total + '…' })
-        }
+        sessionId: s.sessionId
       })
       prog.bump(95) // 出图完成，解析映射
       p.extra = extra

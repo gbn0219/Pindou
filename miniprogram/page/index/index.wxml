@@ -120,7 +120,7 @@
   <button
     class="btn btn--primary btn--lg generate"
     hover-class="btn--pressed"
-    disabled="{{!imagePath || generating}}"
+    disabled="{{generating}}"
     bindtap="generate"
   >{{generating ? '生成中…' : '生成图纸'}}</button>
 

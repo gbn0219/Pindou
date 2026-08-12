@@ -1,0 +1,9 @@
+{
+  "name": "sec-check",
+  "version": "1.0.0",
+  "description": "内容安全检测：文本 msgSecCheck / 图片 imgSecCheck",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

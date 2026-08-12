@@ -24,10 +24,11 @@ function call(name, action, data) {
   })
 }
 function login() { return call('account', 'login') }
-function saveProfile(payload) { return call('account', 'saveProfile', payload) }
+function saveProfile(payload) { return call('account', 'saveProfile', payload).then((r) => r.user) }
+function submitFeedback(payload) { return call('feedback', 'submit', payload) }
 function saveGallery(payload) { return call('gallery', 'save', payload) }
 function listGallery(page, pageSize) { return call('gallery', 'list', { page, pageSize }) }
 function getGalleryItem(id) { return call('gallery', 'get', { id }) }
 function updateGallery(payload) { return call('gallery', 'update', payload) }
 function deleteGallery(id) { return call('gallery', 'delete', { id }) }
-module.exports = { call, login, saveProfile, saveGallery, listGallery, getGalleryItem, updateGallery, deleteGallery }
+module.exports = { call, login, saveProfile, submitFeedback, saveGallery, listGallery, getGalleryItem, updateGallery, deleteGallery }

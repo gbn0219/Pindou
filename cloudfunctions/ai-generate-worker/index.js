@@ -1,10 +1,12 @@
-// 生成 worker：独立云函数调用，拥有完整 60s 执行预算（微信云函数单次执行上限固定 60s，无法调大）。
+// 生成 worker：独立云函数调用，拥有完整 900s 执行预算（在云开发控制台将本函数超时配置为 900s）。
 // 由 ai-generate-pattern 的 start 通过云调用接口 addDelayedFunctionTask 延时触发：
-//   读取 ai_tasks 中 pending 任务 → 下载参数 JSON（云存储）→ 调火山方舟 Seedream
+//   读取 ai_tasks 中 pending 任务 → 下载参数 JSON 与输入图片（云存储 fileID，用完即删）
+//   → 调火山方舟 Seedream
 //   （doubao-seedream-5-0-260128，OpenAI 兼容 images/generations）生成像素风格图纸 → 下载图片
 //   → 上传云存储 ai-tasks/<openid>/<taskId>.<ext> → 更新任务 done/error。
-// 单次预算内优先保证完成一次生成；超预算或失败时任务落 error，由前端自动重新提交
-// （每次重提都是新的任务 ID + 新的 60s 预算），不向用户暴露云函数原始报错。
+// 单次预算内完成一次生成；一次任务只调一次 Seedream（无 429/5xx 自动重试）；
+// 超预算或失败时任务落 error，前端不再自动重提（一张图只调一次模型），
+// 由用户手动重新生成，不向用户暴露云函数原始报错。
 // 环境变量：ARK_API_KEY（必填）、ARK_MODEL（可选，默认 doubao-seedream-5-0-260128）。
 const http = require('http')
 const https = require('https')
@@ -25,7 +27,7 @@ const BOARD_MAX = 208 // 拼豆盘最大边长
 // 仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
 const FACE_REF_PATH = path.join(__dirname, 'face-ref.jpg')
 const TASK_COLLECTION = 'ai_tasks' // 异步任务记录集合（start 写 pending，worker 更新 done/error）
-const WORKER_BUDGET_MS = 55000 // 云函数上限 60s，预留写库与返回时间
+const WORKER_BUDGET_MS = 880000 // 云函数超时配置 900s，预留状态更新、上传与返回时间
 
 function postJson(host, pathname, payload, apiKey, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -138,37 +140,23 @@ async function generate(apiKey, model, data) {
     watermark: false, // 默认 true 会加"AI生成"水印，拼豆图纸必须关闭
     seed: Math.floor(Math.random() * 2147483647) // 随机种子：不传时模型用固定默认种子，相同输入会返回同一张图
   }
-  // 调用火山方舟：429 / 5xx / 网络异常自动重试，避免用户连续生成被限流
+  // 一次任务只调一次 Seedream（不做 429/5xx 自动重试，避免一次生成多次调模型）
   console.log('[ai-generate-worker] 调用 Seedream 开始，模型', model, '尺寸', GEN_SIZE, '提示词', payload.prompt.length, '字符，参考图', images.length, '张')
   const tApi = Date.now()
-  let resp = null
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      resp = await postJson(GEN_HOST, GEN_PATH, payload, apiKey, 120000)
-    } catch (e) {
-      if (attempt >= 3) throw new Error('生成调用失败: ' + e.message)
-      await new Promise((r) => setTimeout(r, 5000 * (attempt + 1)))
-      continue
-    }
-    const errMsg =
-      (resp && ((resp.error && resp.error.message) || resp.message || resp.code)) || ''
-    if (!errMsg) {
-      console.log('[ai-generate-worker] Seedream 返回成功，生成耗时', Math.round((Date.now() - tApi) / 1000) + 's')
-      break
-    }
-    const retriable = /rate limit|429|5\d\d|throttl/i.test(errMsg)
-    if (!retriable || attempt >= 3) {
-      throw new Error('生成服务返回错误: ' + errMsg)
-    }
-    await new Promise((r) => setTimeout(r, 8000 * (attempt + 1)))
+  const resp = await postJson(GEN_HOST, GEN_PATH, payload, apiKey, 300000)
+  const errMsg =
+    (resp && ((resp.error && resp.error.message) || resp.message || resp.code)) || ''
+  if (errMsg) {
+    throw new Error('生成服务返回错误: ' + errMsg)
   }
+  console.log('[ai-generate-worker] Seedream 返回成功，生成耗时', Math.round((Date.now() - tApi) / 1000) + 's')
   const url = extractImageUrl(resp)
   if (!url) {
     throw new Error('生成服务未返回图片 URL: ' + JSON.stringify(resp).slice(0, 300))
   }
   console.log('[ai-generate-worker] 开始下载结果图')
   const tDl = Date.now()
-  const { buffer, contentType } = await downloadBinary(url, 60000, 5)
+  const { buffer, contentType } = await downloadBinary(url, 120000, 5)
   console.log('[ai-generate-worker] 结果图下载完成，耗时', Math.round((Date.now() - tDl) / 1000) + 's', '大小', Math.round(buffer.length / 1024) + 'KB')
   return { image: 'data:' + (contentType || 'image/jpeg') + ';base64,' + buffer.toString('base64') }
 }
@@ -177,7 +165,7 @@ async function generate(apiKey, model, data) {
 function withDeadline(promise, ms) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error('生成超时（60 秒预算内未完成，请重试）')),
+      () => reject(new Error('生成超时（900 秒预算内未完成）')),
       ms
     )
     promise.then(
@@ -202,6 +190,11 @@ function extFromDataUrl(dataUrl) {
 async function readParams(fileID) {
   const res = await cloud.downloadFile({ fileID })
   return JSON.parse((res.fileContent || '').toString('utf8') || '{}')
+}
+
+async function loadInputDataUrl(fileID) {
+  const res = await cloud.downloadFile({ fileID })
+  return 'data:image/jpeg;base64,' + (res.fileContent || Buffer.from('')).toString('base64')
 }
 
 async function runTask(event) {
@@ -242,6 +235,16 @@ async function runTask(event) {
         console.error('[ai-generate-worker] 清理参数文件失败:', e)
       }
     }
+    // 输入图片由客户端先上传云存储，参数只带 fileID：下载转 base64 后即清理，避免积压
+    if (params.imageFileID || params.refImageFileID) {
+      params.imageBase64 = params.imageFileID ? await loadInputDataUrl(params.imageFileID) : (params.imageBase64 || '')
+      params.refImageBase64 = params.refImageFileID ? await loadInputDataUrl(params.refImageFileID) : (params.refImageBase64 || '')
+      try {
+        await cloud.deleteFile({ fileList: [params.imageFileID, params.refImageFileID].filter(Boolean) })
+      } catch (e) {
+        console.error('[ai-generate-worker] 清理输入图片失败:', e)
+      }
+    }
   } catch (e) {
     console.error('[ai-generate-worker] 任务参数读取失败:', taskId, e.message)
     await patch({ status: 'error', error: '任务参数读取失败: ' + e.message })
@@ -263,7 +266,7 @@ async function runTask(event) {
     await patch({ status: 'done', fileID: uploaded.fileID, ext })
     console.log('[ai-generate-worker] 任务成功:', taskId, '耗时', Math.round((Date.now() - startedAt) / 1000) + 's')
   } catch (e) {
-    // 失败只记录原因，由前端轮询到 status='error' 后自动重新提交
+    // 失败只记录原因，由前端轮询到 status='error' 后提示用户手动重试（不自动重提）
     console.error('[ai-generate-worker] 任务失败:', taskId, e.message, '耗时', Math.round((Date.now() - startedAt) / 1000) + 's')
     await patch({ status: 'error', error: e.message })
   }

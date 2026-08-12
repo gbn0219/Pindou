@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="card">
+    <view class="section-title">反馈内容</view>
+    <textarea
+      class="feedback-input"
+      placeholder="说说你的建议或遇到的问题…"
+      value="{{content}}"
+      maxlength="500"
+      bindinput="onContentInput"
+    />
+    <view class="count">{{content.length}}/500</view>
+  </view>
+  <button
+    class="btn btn--primary btn--lg"
+    hover-class="btn--pressed"
+    loading="{{submitting}}"
+    disabled="{{submitting}}"
+    bindtap="submit"
+  >提交反馈</button>
+  <view class="tip">我们会认真阅读每一条反馈</view>
+</view>

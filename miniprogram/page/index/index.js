@@ -6,6 +6,7 @@ const image = require('../../utils/image.js')
 const hash = require('../../utils/hash.js')
 const session = require('../../utils/session.js')
 const progressUtil = require('../../utils/progress.js')
+const sec = require('../../utils/sec.js')
 
 const MIN_SIZE = 15 // 拼豆盘最小边长
 const MAX_SIZE = 208 // 拼豆盘最大边长
@@ -55,6 +56,10 @@ Page({
       count: 1,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
+      fail: (err) => {
+        if (err && err.errMsg && err.errMsg.indexOf('cancel') >= 0) return
+        wx.showToast({ title: '选择图片失败', icon: 'none' })
+      },
       success: (res) => {
         const file = res.tempFiles && res.tempFiles[0]
         if (!file) return
@@ -133,7 +138,11 @@ Page({
   },
 
   generate() {
-    if (this.data.generating || !this.data.imagePath) return
+    if (this.data.generating) return
+    if (!this.data.imagePath) {
+      wx.showToast({ title: '请先导入图片', icon: 'none' })
+      return
+    }
     if (this.data.mode === 'ai') {
       this.generateByAi()
     } else {
@@ -145,6 +154,11 @@ Page({
     this.setData({ generating: true })
     wx.showLoading({ title: '生成中…', mask: true })
     try {
+      if (await sec.checkImageFile(this.data.imagePath, 2)) {
+        wx.hideLoading()
+        wx.showToast({ title: '图片包含违规信息，请更换图片', icon: 'none' })
+        return
+      }
       const grid = await this.buildGrid(this.data.imagePath, this.data.size, this.data.set)
       this.finish(grid, 'photo', '')
     } catch (err) {
@@ -174,7 +188,7 @@ Page({
     wx.showModal({
       title: '创意生成图纸',
       content:
-        '将原图按所选风格生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，约需 30~60 秒，偶发超时会自动重试，继续吗？',
+        '将原图按所选风格生成 ' + this.data.size + '×' + this.data.size + ' 拼豆图纸，可能需要 1~2 分钟，请耐心等待，继续吗？',
       confirmText: '开始生成',
       success: (r) => {
         if (!r.confirm) return
@@ -184,10 +198,23 @@ Page({
   },
 
   async runAiGenerate(style) {
+    // 先启动进度浮层，再执行内容安全检测，避免检测期间无任何反馈
     this.setData({ generating: true })
     const prog = progressUtil.createProgress()
     progressUtil.startOverlay(this, prog)
     try {
+      prog.bump(2) // 内容安全检测
+      try {
+        const secText = [style, this.data.extraReq].filter(Boolean).join(' ')
+        const risky = (await sec.checkText(secText, 2)) || (await sec.checkImageFile(this.data.imagePath, 2))
+        if (risky) {
+          progressUtil.stopOverlay(this)
+          wx.showToast({ title: '内容包含违规信息，请修改后重试', icon: 'none' })
+          return
+        }
+      } catch (err) {
+        console.error('[sec-check]', err)
+      }
       const g = getApp().globalData
       prog.bump(5) // 压缩原图
       const imageBase64 = await ai.compressToBase64(this.data.imagePath)
@@ -206,7 +233,7 @@ Page({
         extra: this.data.extraReq.trim()
       }
       const s = g.aiSession
-      prog.climb(12, 88) // 等待出图（真实进度未知，按 60 秒时间估算）
+      prog.climb(12, 88) // 等待出图（真实进度未知，按 2 分钟时间估算）
       const res = await ai.generateGrid({
         imageBase64,
         size: this.data.size,
@@ -216,11 +243,7 @@ Page({
         cutout: this.data.aiCutout,
         extra: this.data.extraReq.trim(),
         imageHash,
-        sessionId: s.sessionId,
-        onRetry: (used, total) => {
-          prog.bump(Math.min(88, 20 + used * 15))
-          this.setData({ progressTip: '生成遇到问题，自动重试 ' + used + '/' + total + '…' })
-        }
+        sessionId: s.sessionId
       })
       prog.bump(95) // 出图完成，解析映射
       g.aiSession = session.addCandidate(g.aiSession, res.grid)
