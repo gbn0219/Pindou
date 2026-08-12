@@ -2,12 +2,12 @@
 // 由 ai-generate-pattern 的 start 通过云调用接口 addDelayedFunctionTask 延时触发：
 //   读取 ai_tasks 中 pending 任务 → 下载参数 JSON 与输入图片（云存储 fileID，用完即删）
 //   → 调火山方舟 Seedream
-//   （doubao-seedream-5-0-260128，OpenAI 兼容 images/generations）生成像素风格图纸 → 下载图片
+//   （doubao-seedream-5.0-lite，OpenAI 兼容 images/generations）生成像素风格图纸 → 下载图片
 //   → 上传云存储 ai-tasks/<openid>/<taskId>.<ext> → 更新任务 done/error。
 // 单次预算内完成一次生成；一次任务只调一次 Seedream（无 429/5xx 自动重试）；
 // 超预算或失败时任务落 error，前端不再自动重提（一张图只调一次模型），
 // 由用户手动重新生成，不向用户暴露云函数原始报错。
-// 环境变量：ARK_API_KEY（必填）、ARK_MODEL（可选，默认 doubao-seedream-5-0-260128）。
+// 环境变量：ARK_API_KEY（必填）、ARK_MODEL（可选，默认 doubao-seedream-5.0-lite）。
 const http = require('http')
 const https = require('https')
 const fs = require('fs')
@@ -18,8 +18,8 @@ const { buildPrompt } = require('./prompt')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const GEN_HOST = 'ark.cn-beijing.volces.com'
-const GEN_PATH = '/api/v3/images/generations'
-const DEFAULT_MODEL = 'doubao-seedream-5-0-260128'
+const GEN_PATH = '/api/plan/v3/images/generations'
+const DEFAULT_MODEL = 'doubao-seedream-5.0-lite'
 const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长

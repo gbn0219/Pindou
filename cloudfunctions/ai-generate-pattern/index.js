@@ -5,7 +5,7 @@
 //          → 云调用 addDelayedFunctionTask 延时约 7s 触发独立 worker 云函数 ai-generate-worker
 //          → 立即返回 { ok, taskId }（毫秒级返回，不占用生成时长）
 //   worker（ai-generate-worker，独立部署）：拥有完整 900s 执行预算（控制台配置超时 900s），
-//          调火山方舟 Seedream（doubao-seedream-5-0-260128，OpenAI 兼容 images/generations）
+//          调火山方舟 Seedream（doubao-seedream-5.0-lite，OpenAI 兼容 images/generations）
 //          生成像素风格图纸 → 下载图片 → 上传云存储 ai-tasks/<openid>/<taskId>.<ext> → 更新任务 done/error
 //   status：按 _openid + taskId 查询，返回 { ok, status, fileID, ext, error }，前端轮询后下载
 // 云调用权限：本函数目录 config.json 声明 openapi: ["cloudbase.addDelayedFunctionTask"]，

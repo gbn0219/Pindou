@@ -7,7 +7,7 @@
 // 为什么用图像生成：
 // 1) 文字色号方案（qwen3-vl function call）实测在 ~300 token 处提前截断，2704 个色号一次输出必失败；
 //    分块生成又导致块与块之间风格不统一。
-// 2) 改为调用豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 OpenAI 兼容接口
+// 2) 改为调用豆包 Seedream（doubao-seedream-5.0-lite，火山方舟 OpenAI 兼容接口
 //    images/generations）直接生成一张像素风格的图纸图片（2K ≈ 2048×2048），
 //    由前端读取图片像素映射为拼豆色号，完全绕开输出 token 上限。
 //    52/78/104 三种盘面统一用 2K 输出，前端 dominantBlockRgb 按盘面 floor 分块取主色，
@@ -20,8 +20,8 @@ const path = require('path')
 const { buildPrompt } = require('./prompt')
 
 const GEN_HOST = 'ark.cn-beijing.volces.com'
-const GEN_PATH = '/api/v3/images/generations'
-const DEFAULT_MODEL = 'doubao-seedream-5-0-260128' // 可在 .env 里用 ARK_MODEL 覆盖
+const GEN_PATH = '/api/plan/v3/images/generations'
+const DEFAULT_MODEL = 'doubao-seedream-5.0-lite' // 可在 .env 里用 ARK_MODEL 覆盖
 const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
