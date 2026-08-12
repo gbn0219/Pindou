@@ -50,9 +50,10 @@ Page({
     this.pattern = p
     this.palette = color.buildPalette(p.set)
     this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
-    // 抠图模式优先用生成时识别的洋红背景掩码；固定掩码下用户改动的格子视为前景
+    // 背景掩码：优先用生成时识别的洋红背景掩码，照片模式回退白色连通域；
+    // 用户编辑过的格子（含涂回白色 H1）一律视为前景
     this.baseBgMask = p.bgMask || null
-    this.origGrid = p.bgMask ? p.grid.map((row) => row.slice()) : null
+    this.editedMask = p.grid.map((row) => row.map(() => false))
     this.refreshBgMask()
     this.highlight = null
     this.history = [] // 撤销栈：每次修改前的网格快照，最多 MAX_HISTORY 步
@@ -178,16 +179,17 @@ Page({
     this.drawGrid()
   },
 
-  // 背景掩码：抠图模式用生成时的洋红掩码（格子被用户改动后视为前景）；
-  // 照片还原等无固定掩码时回退白色连通域判定
+  // 背景掩码：AI 抠图用生成时的洋红掩码，照片模式回退白色连通域；
+  // 用户编辑过的格子一律视为前景（即使涂回白色 H1），编辑后把掩码回写 pattern
   refreshBgMask() {
-    if (this.baseBgMask) {
-      this.bgMask = this.baseBgMask.map((row, r) =>
-        row.map((v, c) => v && this.pattern.grid[r][c] === this.origGrid[r][c])
-      )
-    } else {
-      this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
-    }
+    const p = this.pattern
+    const base = this.baseBgMask || pattern.findBackgroundMask(p.grid, this.whiteCodes)
+    this.bgMask = pattern.applyEditedMask(base, this.editedMask)
+    if (p && (p.bgMask || this.hasEdits())) p.bgMask = this.bgMask
+  },
+
+  hasEdits() {
+    return this.editedMask.some((row) => row.some(Boolean))
   },
 
   // 触摸坐标统一换算为画布/可视区域坐标（视口坐标 - 区域左上角），避免 canvas 触摸的已知问题
@@ -371,7 +373,9 @@ Page({
   paintCell(row, col, isStroke) {
     const p = this.pattern
     const code = this.data.selected
-    if (p.grid[row][col] !== code) {
+    const gridChanged = p.grid[row][col] !== code
+    const maskChanged = !this.editedMask[row][col]
+    if (gridChanged || maskChanged) {
       if (isStroke) {
         // 拖动涂色：整段拖动只记一步撤销
         if (!this.strokePushed) {
@@ -381,7 +385,8 @@ Page({
       } else {
         this.pushHistory()
       }
-      p.grid[row][col] = code
+      if (gridChanged) p.grid[row][col] = code
+      this.editedMask[row][col] = true
       this.refreshBgMask()
     }
     const prev = this.highlight
@@ -428,7 +433,13 @@ Page({
       success: (r) => {
         if (!r.confirm) return
         this.pushHistory()
+        const before = this.history[this.history.length - 1].grid
         const replaced = pattern.replaceColor(p.grid, source, code)
+        for (let r = 0; r < p.grid.length; r++) {
+          for (let c = 0; c < p.grid[r].length; c++) {
+            if (before[r][c] !== p.grid[r][c]) this.editedMask[r][c] = true
+          }
+        }
         this.highlight = null
         this.replaceSource = ''
         this.setData({
@@ -482,7 +493,10 @@ Page({
   },
 
   snapshot() {
-    return this.pattern.grid.map((row) => row.slice())
+    return {
+      grid: this.pattern.grid.map((row) => row.slice()),
+      edited: this.editedMask.map((row) => row.slice())
+    }
   },
 
   pushHistory() {
@@ -496,7 +510,9 @@ Page({
     if (!this.history.length) return
     this.redoStack.push(this.snapshot())
     if (this.redoStack.length > MAX_HISTORY) this.redoStack.shift()
-    this.pattern.grid = this.history.pop()
+    const snap = this.history.pop()
+    this.pattern.grid = snap.grid
+    this.editedMask = snap.edited
     this.highlight = null
     this.updateHistoryButtons()
     this.redrawCanvas()
@@ -507,7 +523,9 @@ Page({
     if (!this.redoStack.length) return
     this.history.push(this.snapshot())
     if (this.history.length > MAX_HISTORY) this.history.shift()
-    this.pattern.grid = this.redoStack.pop()
+    const snap = this.redoStack.pop()
+    this.pattern.grid = snap.grid
+    this.editedMask = snap.edited
     this.highlight = null
     this.updateHistoryButtons()
     this.redrawCanvas()

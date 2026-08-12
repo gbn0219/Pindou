@@ -205,6 +205,14 @@ function findBackgroundMask(grid, whiteCodes) {
 }
 
 /**
+ * 合并背景掩码与用户编辑掩码：用户编辑过的格子一律视为前景（即使涂回白色 H1），
+ * 让"往背景涂白色"也能正常显示色号；未编辑的格子沿用原背景判定。
+ */
+function applyEditedMask(baseMask, editedMask) {
+  return baseMask.map((row, r) => row.map((v, c) => v && !(editedMask && editedMask[r] && editedMask[r][c])))
+}
+
+/**
  * 展示画布格边长：优先保持 CELL；画布总边长（size×(cell+GAP)−GAP）超过 DISPLAY_MAX_DIM
  * 时逐级缩小格边，保证 15~208 的大盘面也能正常渲染。触摸换算必须使用返回值。
  */
@@ -610,6 +618,7 @@ module.exports = {
   displayCell,
   findWhiteishCodes,
   findBackgroundMask,
+  applyEditedMask,
   renderGrid,
   renderLegend,
   renderExport,

@@ -5,7 +5,11 @@
  */
 const assert = require('assert')
 const ai = require('../miniprogram/utils/ai.js')
+const appConfig = require('../miniprogram/config')
+appConfig.aiGenerate.backend = 'cloud' // 本测试只覆盖云函数异步任务链路，固定 cloud 模式
 const color = require('../miniprogram/utils/color.js')
+const background = require('../miniprogram/utils/background.js')
+const pattern = require('../miniprogram/utils/pattern.js')
 
 const setCodes = color.buildPalette('48').map((i) => i.code)
 assert.ok(setCodes.indexOf('A4') >= 0 && setCodes.indexOf('A6') >= 0, '48 套装应含 A4/A6')
@@ -92,6 +96,83 @@ assert.deepStrictEqual(ai.skinNormalize(70, 70, 72), [70, 70, 72], '深灰不应
 assert.deepStrictEqual(ai.skinNormalize(245, 240, 235), [245, 240, 235], '暖灰白背景不应归一为肤色')
 
 
+// ---- AI 返回图：白色主体全部标注色号，洋红背景映射为白色背景（不标注） ----
+// 模拟抠图模式输出：洋红背景 + 白色主体（严格对齐格子，避免边界格歧义）
+function fakeCtx() {
+  const calls = []
+  return {
+    calls,
+    fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: '', textBaseline: '',
+    shadowColor: '', shadowBlur: 0, shadowOffsetY: 0,
+    fillRect() { calls.push(['fillRect', ...arguments]) },
+    strokeRect() { calls.push(['strokeRect', ...arguments]) },
+    fillText() { calls.push(['fillText', ...arguments]) },
+    beginPath() {},
+    moveTo() { calls.push(['moveTo', ...arguments]) },
+    lineTo() { calls.push(['lineTo', ...arguments]) },
+    arcTo() { calls.push(['arcTo', ...arguments]) },
+    closePath() {},
+    arc() { calls.push(['arc', ...arguments]) },
+    stroke() { calls.push(['stroke']) },
+    fill() { calls.push(['fill']) },
+    save() {},
+    restore() {},
+    translate() {},
+    measureText(text) { return { width: String(text).length * 10 } }
+  }
+}
+{
+  const W = 64
+  const H = 64
+  const SIZE = 8
+  const data = new Uint8ClampedArray(W * H * 4)
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4
+      const inRect = x >= 16 && x < 48 && y >= 16 && y < 48
+      data[i] = 255
+      data[i + 1] = inRect ? 255 : 0
+      data[i + 2] = 255
+      data[i + 3] = 255
+    }
+  }
+  const imageData = { data, width: W, height: H }
+  const cellArea = Math.round((W / SIZE) * (H / SIZE))
+  const pxMask = background.cleanMarkerBackground(imageData, { noiseMax: Math.max(128, cellArea * 4) })
+  assert.ok(pxMask, '抠图模式应识别到洋红标记背景')
+  const gridBgMask = []
+  for (let r = 0; r < SIZE; r++) gridBgMask.push(new Array(SIZE).fill(false))
+  const rgbArr = ai.dominantBlockRgb(imageData, W, H, SIZE, pxMask, gridBgMask)
+  const pal = color.buildPalette('48')
+  const grid = pattern.mapRgb(rgbArr, SIZE, pal)
+  const counts = pattern.countColors(grid, pal.map((i) => i.code), gridBgMask)
+  const byCode = {}
+  counts.forEach((i) => { byCode[i.code] = i.count })
+
+  // 白色主体（第 2~5 行/列）：前景、色号为白色系 H1、计入色块数（会被标注）
+  for (let r = 2; r <= 5; r++) {
+    for (let c = 2; c <= 5; c++) {
+      assert.strictEqual(gridBgMask[r][c], false, '白色主体格(' + r + ',' + c + ')应为前景')
+      assert.strictEqual(grid[r][c], 'H1', '白色主体格(' + r + ',' + c + ')应映射为白色色号')
+    }
+  }
+  assert.strictEqual(byCode['H1'], 16, '白色主体 16 格全部计入色块数')
+
+  // 洋红背景（矩形外）：映射为白色 H1、标记为背景、不计入色块数（不标注）
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (r >= 2 && r <= 5 && c >= 2 && c <= 5) continue
+      assert.strictEqual(gridBgMask[r][c], true, '洋红背景格(' + r + ',' + c + ')应为背景')
+      assert.strictEqual(grid[r][c], 'H1', '洋红背景格(' + r + ',' + c + ')应映射为白色')
+    }
+  }
+
+  // 渲染层面：只有前景白色格标注色号，背景格不标注
+  const ctx = fakeCtx()
+  pattern.renderGrid(ctx, grid, pal, { cellSize: 16, gap: 1, code: true, noCodeMask: gridBgMask })
+  const texts = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])
+  assert.strictEqual(texts.filter((t) => t === 'H1').length, 16, '只有白色主体 16 格标注 H1，背景格不标注')
+}
 // ---- 提示词构造（tools/prompt.js）----
 const prompt = require('../tools/prompt.js')
 

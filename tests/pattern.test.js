@@ -165,6 +165,98 @@ assert.strictEqual(pattern.countColor(g2, 'A9'), 0, '不存在的色号应为 0'
   assert.deepStrictEqual(counts, [{ code: 'A4', count: 13 }, { code: 'W', count: 3 }], '内部白色应计入色块数')
 }
 
+// ---- applyEditedMask（用户编辑过的格子一律视为前景，即使涂回白色） ----
+{
+  const base = [
+    [true, true, true],
+    [true, true, true],
+    [true, true, true]
+  ]
+  const edited = [
+    [false, false, false],
+    [false, true, false],
+    [false, false, false]
+  ]
+  const mask = pattern.applyEditedMask(base, edited)
+  assert.deepStrictEqual(mask[1][1], false, '用户涂过色的背景格应变为前景（可显示色号）')
+  assert.deepStrictEqual(mask[0][0], true, '未编辑的背景格仍是背景')
+}
+{
+  const base = [[true, false], [false, true]]
+  assert.deepStrictEqual(pattern.applyEditedMask(base, null), base, '无编辑掩码时返回原背景判定')
+}
+
+// ---- 用户修改：往任意位置（含背景）填充白色，写入图纸并显示色号 ----
+{
+  const pal = color.buildPalette('48')
+  const whiteCodes = pattern.findWhiteishCodes(pal)
+  // 背景为近白 H2（连通到四边），主体为 A4；用户把背景格 (1,1) 涂成纯白 H1
+  const g = [
+    ['H2', 'H2', 'H2', 'H2', 'H2'],
+    ['H2', 'H2', 'A4', 'A4', 'H2'],
+    ['H2', 'A4', 'A4', 'A4', 'H2'],
+    ['H2', 'A4', 'A4', 'A4', 'H2'],
+    ['H2', 'H2', 'H2', 'H2', 'H2']
+  ]
+  const base = pattern.findBackgroundMask(g, whiteCodes)
+  assert.strictEqual(base[1][1], true, '(1,1) 背景格应被判定为背景')
+  const edited = g.map((row) => row.map(() => false))
+  edited[1][1] = true // 用户涂白该背景格
+  g[1][1] = 'H1' // 白色写入网格
+  const mask = pattern.applyEditedMask(base, edited)
+  assert.strictEqual(mask[1][1], false, '涂白的背景格应变为前景（显示色号）')
+  assert.strictEqual(g[1][1], 'H1', '纯白已写入网格')
+  const counts = pattern.countColors(g, ['H1', 'H2', 'A4'], mask)
+  const by = {}
+  counts.forEach((i) => { by[i.code] = i.count })
+  assert.strictEqual(by['H1'], 1, '涂白的纯白格计入色块数')
+  assert.strictEqual(by['H2'], undefined, '未涂的背景近白不计入色块数')
+  assert.strictEqual(by['A4'], 8, '主体色正常计入')
+}
+{
+  const pal = color.buildPalette('48')
+  const whiteCodes = pattern.findWhiteishCodes(pal)
+  // 全白网格：整片被判定为背景；用户在任意位置（含角落与中心）涂白
+  const g = [
+    ['H1', 'H1', 'H1', 'H1', 'H1'],
+    ['H1', 'H1', 'H1', 'H1', 'H1'],
+    ['H1', 'H1', 'H1', 'H1', 'H1'],
+    ['H1', 'H1', 'H1', 'H1', 'H1'],
+    ['H1', 'H1', 'H1', 'H1', 'H1']
+  ]
+  const base = pattern.findBackgroundMask(g, whiteCodes)
+  assert.strictEqual(base[2][2], true, '全白网格整片是背景')
+  const edited = g.map((row) => row.map(() => false))
+  const painted = [[0, 0], [2, 2], [4, 4]]
+  for (const pos of painted) edited[pos[0]][pos[1]] = true
+  const mask = pattern.applyEditedMask(base, edited)
+  for (const pos of painted) {
+    assert.strictEqual(mask[pos[0]][pos[1]], false, '涂白的 (' + pos[0] + ',' + pos[1] + ') 应变为前景')
+    assert.strictEqual(g[pos[0]][pos[1]], 'H1', '涂白已写入网格 (' + pos[0] + ',' + pos[1] + ')')
+  }
+  assert.strictEqual(mask[1][1], true, '未涂的背景格仍是背景')
+  const counts = pattern.countColors(g, ['H1'], mask)
+  assert.strictEqual(counts[0].count, 3, '涂白的 3 格计入色块数（包括背景处的白色）')
+}
+{
+  // 前景白色（主体内白色衣服）保持前景并计入
+  const pal = color.buildPalette('48')
+  const whiteCodes = pattern.findWhiteishCodes(pal)
+  const g = [
+    ['A4', 'A4', 'A4'],
+    ['A4', 'H1', 'A4'],
+    ['A4', 'A4', 'A4']
+  ]
+  const base = pattern.findBackgroundMask(g, whiteCodes)
+  assert.strictEqual(base[1][1], false, '被主体包围的白色不是背景')
+  const edited = g.map((row) => row.map(() => false))
+  edited[1][1] = true
+  const mask = pattern.applyEditedMask(base, edited)
+  assert.strictEqual(mask[1][1], false, '前景白色格保持前景')
+  const counts = pattern.countColors(g, ['A4', 'H1'], mask)
+  const h1 = counts.find((i) => i.code === 'H1')
+  assert.strictEqual(h1.count, 1, '白色主体格计入色块数')
+}
 // renderGrid：白色背景格不显示编号
 {
   const ctx = fakeCtx()

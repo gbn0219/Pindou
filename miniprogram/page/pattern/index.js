@@ -39,9 +39,6 @@ Page({
     this.pattern = p
     this.palette = color.buildPalette(p.set)
     this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
-    // 抠图模式优先用生成时识别的洋红背景掩码（白色衣服不会被误判为背景），否则回退白色连通域
-    this.baseBgMask = p.bgMask || null
-    this.origGrid = p.bgMask ? p.grid.map((row) => row.slice()) : null
     this.refreshBgMask()
     this.codeShown = false
     const styleShort = (p.style || '').split(/[：:]/)[0].trim()
@@ -88,16 +85,11 @@ Page({
     })
   },
 
-  // 背景掩码：抠图模式用生成时的洋红掩码（格子被改动后视为前景）；
-  // 照片还原等无固定掩码时回退白色连通域判定
+  // 背景掩码：优先使用图纸携带的掩码（AI 抠图生成 / 修改页编辑后回写），
+  // 无掩码（照片还原）时回退白色连通域判定
   refreshBgMask() {
-    if (this.baseBgMask) {
-      this.bgMask = this.baseBgMask.map((row, r) =>
-        row.map((v, c) => v && this.pattern.grid[r][c] === this.origGrid[r][c])
-      )
-    } else {
-      this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
-    }
+    if (this.pattern.bgMask) this.bgMask = this.pattern.bgMask
+    else this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
   },
 
   drawPattern() {
@@ -284,8 +276,6 @@ Page({
     const cand = next.candidates[next.index]
     this.pattern.grid = cand.grid
     this.pattern.bgMask = cand.bgMask || null
-    this.baseBgMask = cand.bgMask || null
-    this.origGrid = cand.bgMask ? cand.grid.map((row) => row.slice()) : null
     this.refreshBgMask()
     this.setData({ candIndex: next.index + 1, candTotal: next.candidates.length })
     this.updateLegend()
@@ -351,8 +341,6 @@ Page({
       getApp().globalData.aiSession = this.aiSession
       this.pattern.grid = res.grid
       this.pattern.bgMask = res.bgMask || null
-      this.baseBgMask = res.bgMask || null
-      this.origGrid = res.bgMask ? res.grid.map((row) => row.slice()) : null
       this.refreshBgMask()
       this.setData({
         candIndex: this.aiSession.index + 1,
@@ -416,7 +404,7 @@ Page({
         originalPreviewFileID: originalPreviewUp.fileID,
         patternPreviewFileID: patternPreviewUp.fileID,
         grid: pattern.serializeGrid(this.pattern.grid),
-        bgMask: this.baseBgMask ? pattern.serializeBgMask(this.bgMask) : undefined,
+        bgMask: this.pattern.bgMask ? pattern.serializeBgMask(this.bgMask) : undefined,
         mode: this.pattern.mode,
         style: this.pattern.style || '',
         size: this.pattern.size,
