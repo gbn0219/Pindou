@@ -111,6 +111,30 @@ function replaceColor(grid, fromCode, toCode) {
  * 序列化网格：按行优先用逗号连接为字符串（如 "A1,B1,C1,..."），用于图库云端存储。
  * 方形网格维度由 size 字段决定，无需在字符串中携带行分隔。
  */
+/**
+ * 序列化背景网格掩码：按行优先用 '1'/'0' 拼接（104 盘约 10.8KB，52 盘约 2.7KB），
+ * 用于图库云存储，使展示/编辑/导出能还原生成时的洋红背景判定。
+ */
+function serializeBgMask(mask) {
+  if (!mask || !mask.length) return ''
+  return mask.map((row) => row.map((v) => (v ? '1' : '0')).join('')).join('')
+}
+
+/**
+ * 解析背景网格掩码；长度不符或缺失时返回 null（旧数据回退白色连通域判定）。
+ */
+function parseBgMask(str, size) {
+  const n = Number(size) || 0
+  if (!n || typeof str !== 'string' || str.length !== n * n) return null
+  const mask = []
+  for (let r = 0; r < n; r++) {
+    const row = []
+    for (let c = 0; c < n; c++) row.push(str.charAt(r * n + c) === '1')
+    mask.push(row)
+  }
+  return mask
+}
+
 function serializeGrid(grid) {
   if (!grid || !grid.length) return ''
   return grid.map((row) => row.join(',')).join(',')
@@ -581,6 +605,8 @@ module.exports = {
   replaceColor,
   serializeGrid,
   parseGrid,
+  serializeBgMask,
+  parseBgMask,
   displayCell,
   findWhiteishCodes,
   findBackgroundMask,

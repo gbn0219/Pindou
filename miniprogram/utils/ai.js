@@ -319,7 +319,8 @@ function canvasToTempFile(canvas, px) {
 
 /**
  * 生成并映射网格：base64 已在 params.imageBase64。
- * 返回 { grid, prevImage }：grid 为当前套装色号网格；prevImage 为"清洗后"的生成图
+ * 返回 { grid, prevImage, bgMask }：grid 为当前套装色号网格；bgMask 为抠图模式下的
+ * 网格级背景掩码（true=背景格，不标色号；未识别到标记色时为 null）；prevImage 为"清洗后"的生成图
  * （背景已处理为白色，缩至 MAX_SIZE），供重新生成时作为第二张参考图，可能为空字符串。
  */
 async function generateGrid(params) {
@@ -353,7 +354,7 @@ function skinNormalize(r, g, b) {
   return [r, g, b]
 }
 
-function dominantBlockRgb(imageData, srcW, srcH, size, bgMask) {
+function dominantBlockRgb(imageData, srcW, srcH, size, bgMask, outBgMask) {
   const data = imageData.data
   const bw = Math.floor(srcW / size)
   const bh = Math.floor(srcH / size)
@@ -386,13 +387,16 @@ function dominantBlockRgb(imageData, srcW, srcH, size, bgMask) {
       }
       if (total === 0) {
         rgbArr.push([255, 255, 255])
+        if (outBgMask) outBgMask[r][c] = false
         continue
       }
       // 背景格：块内标记色背景占比 >= 50% 时强制映射为白色（H1），确保后续白色连通域识别
       if (bgMask && bgTotal / total >= 0.5) {
         rgbArr.push([255, 255, 255])
+        if (outBgMask) outBgMask[r][c] = true
         continue
       }
+      if (outBgMask) outBgMask[r][c] = false
       let best = null
       for (const b of buckets.values()) {
         if (!best || b.n > best.n) best = b
@@ -450,6 +454,8 @@ function imageDataToGrid(imageData, srcW, srcH, size, setKey, opts) {
  * 把生成的图片 data URL 写入临时文件 → 加载 → 读整幅像素 → 主色分块映射为色号网格。
  * opts：{ cutout, savePrev }。cutout 时用洋红标记色识别背景（未检测到标记色则回退近白清洗）；
  * savePrev 时返回清洗后的压缩版生成图路径（供重新生成作第二张参考图）。
+ * 返回 { grid, prevImage, bgMask }：bgMask 为抠图模式下的网格级背景掩码
+ * （true=背景格，不标色号；未识别到标记色时为 null，调用方回退白色连通域判定）。
  */
 async function imageToGrid(dataUrl, size, setKey, opts) {
   const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,/.exec(dataUrl)
@@ -491,14 +497,23 @@ async function imageToGrid(dataUrl, size, setKey, opts) {
   } else {
     background.cleanImageData(imageData) // 背景近白噪声 → 纯白，不影响主体内容
   }
-  const grid = imageDataToGrid(imageData, img.width, img.height, size, setKey, { bgMask })
+  let gridBgMask = null
+  if (bgMask) {
+    gridBgMask = []
+    for (let r = 0; r < size; r++) gridBgMask.push(new Array(size).fill(false))
+  }
+  const grid = pattern.mapRgb(
+    dominantBlockRgb(imageData, img.width, img.height, size, bgMask, gridBgMask),
+    size,
+    color.buildPalette(setKey)
+  )
   let prevImage = ''
   if (opts && opts.savePrev) {
     // 保留"清洗后"的生成图（背景已为白色），供重新生成时作第二张参考图
     ctx.putImageData(imageData, 0, 0)
     prevImage = await canvasToTempFile(canvas, MAX_SIZE)
   }
-  return { grid, prevImage }
+  return { grid, prevImage, bgMask: gridBgMask }
 }
 
 module.exports = { compressToBase64, callAiGenerate, generateGrid, imageToGrid, imageDataToGrid, dominantBlockRgb, skinNormalize }

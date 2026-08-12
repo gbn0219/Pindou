@@ -87,12 +87,14 @@ Page({
       const item = r.item
       if (!item.grid) throw new Error('该图纸暂无像素数据，无法编辑')
       const grid = pattern.parseGrid(item.grid, item.size)
+      const bgMask = item.bgMask ? pattern.parseBgMask(item.bgMask, item.size) : undefined
       getApp().globalData.pattern = {
         grid,
         size: item.size,
         set: item.set,
         mode: item.mode || 'photo',
         style: item.style || '',
+        bgMask: bgMask || null,
         galleryId: id,
         imagePath: ''
       }
@@ -115,7 +117,7 @@ Page({
       if (!item.grid) throw new Error('该图纸暂无像素数据，无法导出')
       const grid = pattern.parseGrid(item.grid, item.size)
       const palette = color.buildPalette(item.set)
-      const bgMask = pattern.findBackgroundMask(grid, pattern.findWhiteishCodes(palette))
+      const bgMask = pattern.parseBgMask(item.bgMask, item.size) || pattern.findBackgroundMask(grid, pattern.findWhiteishCodes(palette))
       const filePath = await exportUtil.renderPatternExport(grid, palette, { bgMask, gridEvery: 5 })
       wx.hideLoading()
       this.saveToAlbum(filePath)

@@ -183,6 +183,25 @@ const prompt = require('../tools/prompt.js')
   assert.deepStrictEqual(grid4, [[white, 'A6'], ['A6', 'A4']], '其余块正常主色分块')
 }
 
+// 网格级背景掩码：outBgMask 应标记洋红占比 >= 50% 的格为背景（true），其余为 false
+{
+  const img5 = makeGridImage()
+  const mask5 = new Uint8Array(8 * 8)
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 4; x++) {
+      const i = (y * 8 + x) * 4
+      img5.data[i] = 255
+      img5.data[i + 1] = 0
+      img5.data[i + 2] = 255
+      mask5[y * 8 + x] = 1
+    }
+  }
+  const outBg = [[false, false], [false, false]]
+  ai.dominantBlockRgb(img5, 8, 8, 2, mask5, outBg)
+  assert.deepStrictEqual(outBg, [[true, false], [false, false]], '背景格应标记为 true，其余为 false')
+}
+
+
 // 额外要求：附加在所选风格之后，不覆盖风格
 {
   const p = prompt.buildPrompt({

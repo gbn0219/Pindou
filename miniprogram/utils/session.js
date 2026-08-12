@@ -10,8 +10,8 @@ function genId() {
 function createSession(imageHash) {
   return { sessionId: genId(), imageHash, candidates: [], index: 0, used: 0 }
 }
-function addCandidate(s, grid) {
-  const candidates = s.candidates.concat([grid])
+function addCandidate(s, grid, bgMask) {
+  const candidates = s.candidates.concat([{ grid, bgMask: bgMask || null }])
   if (candidates.length > MAX_CANDIDATES) candidates.shift()
   return Object.assign({}, s, { candidates, index: candidates.length - 1, used: candidates.length })
 }

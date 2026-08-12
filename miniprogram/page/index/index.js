@@ -246,11 +246,11 @@ Page({
         sessionId: s.sessionId
       })
       prog.bump(95) // 出图完成，解析映射
-      g.aiSession = session.addCandidate(g.aiSession, res.grid)
+      g.aiSession = session.addCandidate(g.aiSession, res.grid, res.bgMask)
       if (g.aiSession.params) g.aiSession.params.prevImage = res.prevImage
       prog.finish()
       progressUtil.stopOverlay(this)
-      this.finish(res.grid, 'ai', style)
+      this.finish(res.grid, 'ai', style, res.bgMask)
     } catch (err) {
       progressUtil.stopOverlay(this)
       wx.showModal({
@@ -266,14 +266,15 @@ Page({
     }
   },
 
-  finish(grid, mode, style) {
+  finish(grid, mode, style, bgMask) {
     getApp().globalData.pattern = {
       grid,
       size: this.data.size,
       set: this.data.set,
       imagePath: this.data.imagePath,
       mode,
-      style
+      style,
+      bgMask: bgMask || null
     }
     wx.hideLoading()
     wx.navigateTo({ url: '/page/pattern/index' })

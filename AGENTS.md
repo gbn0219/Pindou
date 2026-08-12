@@ -84,12 +84,12 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 - 默认色卡：MARD 221 色，RGB 以 docs 第 3 节主表为准；48/72/144 为 221 的套装子集（`data/colors.json` 的 `sets` 字段只表达成员关系）
 - 照片还原管线：选图 → 裁剪页（可选）→ 主页面 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 绘制（白底补齐、透明像素按白）→ **`averageBlocks`**（4×4 块平均 → N×N RGB，透明像素不计入、全透明块按白）→ **`mapRgb`**（CIELAB 最近色匹配，只输出当前套装内色号）。**不做**相似色合并、孤立点平滑、区域合并、抖动等任何后处理
-- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格（可选抠图）→ 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ 豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）图像生成，`size` 统一 `2k`（约 2048×2048）→ 返回图片 base64 → 前端 offscreen canvas 读整幅像素 → 背景处理（抠图模式：洋红 #FF00FF 标记色识别，模型输出偏粉/玫红背景时按边框主色（洋红色系）容差识别；背景内孤立彩色碎块（约 2 格面积内）并入背景；未检测到标记色回退近白清洗；非抠图模式：近白清洗）→ `dominantBlockRgb` 主色分块（标记色背景占比 ≥50% 的格强制映射白色）→ `mapRgb` CIELAB 最近色映射到当前套装 → 二维 grid。无文字色号输出，无 token 上限问题；重新生成时把上一版生成图作为第二张参考图一并发送
+- AI 生成管线：选图 → 裁剪页（可选）→ 主页面选 AI 生成 + 风格（可选抠图）→ 原图压缩为 ~768px JPEG base64 → 后端（local/cloud）→ 豆包 Seedream（doubao-seedream-5-0-260128，火山方舟 images/generations）图像生成，`size` 统一 `2k`（约 2048×2048）→ 返回图片 base64 → 前端 offscreen canvas 读整幅像素 → 背景处理（抠图模式：洋红 #FF00FF 标记色识别，模型输出偏粉/玫红背景时按边框主色（洋红色系）容差识别；背景内孤立彩色碎块（约 2 格面积内）并入背景；未检测到标记色回退近白清洗；非抠图模式：近白清洗）→ `dominantBlockRgb` 主色分块（标记色背景占比 ≥50% 的格强制映射白色，同时输出网格级背景掩码 `bgMask`）→ `mapRgb` CIELAB 最近色映射到当前套装 → 二维 grid。无文字色号输出，无 token 上限问题；重新生成时把上一版生成图作为第二张参考图一并发送；`bgMask` 随图纸数据传递，展示/编辑/导出用它判定背景格（不标色号、不计色块数），未识别到标记色时为 null 回退白色连通域判定，白色衣服等前景白色格不会被误判为背景
 - 风格：5 个内置示例（卡通、马卡龙、扁平插画、复古像素、水彩），支持用户输入自定义风格关键词；自定义输入优先于示例
 - **AI 优化图纸：已移除**，不再保留任何入口与后端
-- 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本），展示/修改页共享，不持久化
-- 创意生成会话：`getApp().globalData.aiSession = { sessionId, imageHash, candidates, index, params }`（免费模式不限制生成次数，候选保留最近 5 版供切换，仅内存；`params.prevImage` 保存上一版生成图路径）
-- 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`；`gallery` 记录含 `grid`（行优先逗号色号串，`serializeGrid`/`parseGrid` 序列化），列表接口用字段投影排除 `grid`、编辑时按需 `get`，编辑保存/缩略图回填走 `update`
+- 图纸数据流：主页面生成后存入 `getApp().globalData.pattern = { grid, size, set, imagePath, mode, style, bgMask }`（`mode: 'photo' | 'ai'`，`style` 为展示用风格名/自定义文本，`bgMask` 为抠图模式网格级背景掩码二维布尔数组、照片还原为 null），展示/修改页共享，不持久化
+- 创意生成会话：`getApp().globalData.aiSession = { sessionId, imageHash, candidates, index, params }`（免费模式不限制生成次数，候选保留最近 5 版供切换，仅内存；候选为 `{ grid, bgMask }` 对象；`params.prevImage` 保存上一版生成图路径）
+- 用户与图库：登录后 `globalData.user` 缓存（`wx.setStorageSync`）；云数据库集合 `users` / `ai_sessions` / `gallery` / `orders`，云存储路径 `gallery/<openid>/`、`avatars/<openid>/`；`gallery` 记录含 `grid`（行优先逗号色号串，`serializeGrid`/`parseGrid` 序列化）、抠图模式的 `bgMask`（行优先 '1'/'0' 串，`serializeBgMask`/`parseBgMask`，旧数据缺失时回退白色连通域判定），列表接口用字段投影排除 `grid`、编辑时按需 `get`，编辑保存/缩略图回填走 `update`
 - `grid` 为二维数组：`grid[row][col] = 色号`（如 "A1"）
 
 ## 内容安全

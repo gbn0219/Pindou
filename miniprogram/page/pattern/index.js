@@ -39,7 +39,10 @@ Page({
     this.pattern = p
     this.palette = color.buildPalette(p.set)
     this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
-    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes) // 白色背景连通域（不显示编号、不计色块数）
+    // 抠图模式优先用生成时识别的洋红背景掩码（白色衣服不会被误判为背景），否则回退白色连通域
+    this.baseBgMask = p.bgMask || null
+    this.origGrid = p.bgMask ? p.grid.map((row) => row.slice()) : null
+    this.refreshBgMask()
     this.codeShown = false
     const styleShort = (p.style || '').split(/[：:]/)[0].trim()
     this.aiSession = getApp().globalData.aiSession || null
@@ -72,7 +75,7 @@ Page({
 
   updateLegend() {
     const p = this.pattern
-    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+    this.refreshBgMask()
     const counts = pattern.countColors(p.grid, this.palette.map((i) => i.code), this.bgMask)
     const hexByCode = {}
     this.palette.forEach((i) => {
@@ -83,6 +86,18 @@ Page({
       legend: counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] })),
       total
     })
+  },
+
+  // 背景掩码：抠图模式用生成时的洋红掩码（格子被改动后视为前景）；
+  // 照片还原等无固定掩码时回退白色连通域判定
+  refreshBgMask() {
+    if (this.baseBgMask) {
+      this.bgMask = this.baseBgMask.map((row, r) =>
+        row.map((v, c) => v && this.pattern.grid[r][c] === this.origGrid[r][c])
+      )
+    } else {
+      this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
+    }
   },
 
   drawPattern() {
@@ -266,7 +281,12 @@ Page({
     const next = session.switchCandidate(s, i)
     this.aiSession = next
     getApp().globalData.aiSession = next
-    this.pattern.grid = next.candidates[next.index]
+    const cand = next.candidates[next.index]
+    this.pattern.grid = cand.grid
+    this.pattern.bgMask = cand.bgMask || null
+    this.baseBgMask = cand.bgMask || null
+    this.origGrid = cand.bgMask ? cand.grid.map((row) => row.slice()) : null
+    this.refreshBgMask()
     this.setData({ candIndex: next.index + 1, candTotal: next.candidates.length })
     this.updateLegend()
     this.drawPattern()
@@ -327,9 +347,13 @@ Page({
       prog.bump(95) // 出图完成，解析映射
       p.extra = extra
       p.prevImage = res.prevImage
-      this.aiSession = session.addCandidate(this.aiSession, res.grid)
+      this.aiSession = session.addCandidate(this.aiSession, res.grid, res.bgMask)
       getApp().globalData.aiSession = this.aiSession
       this.pattern.grid = res.grid
+      this.pattern.bgMask = res.bgMask || null
+      this.baseBgMask = res.bgMask || null
+      this.origGrid = res.bgMask ? res.grid.map((row) => row.slice()) : null
+      this.refreshBgMask()
       this.setData({
         candIndex: this.aiSession.index + 1,
         candTotal: this.aiSession.candidates.length,
@@ -392,6 +416,7 @@ Page({
         originalPreviewFileID: originalPreviewUp.fileID,
         patternPreviewFileID: patternPreviewUp.fileID,
         grid: pattern.serializeGrid(this.pattern.grid),
+        bgMask: this.baseBgMask ? pattern.serializeBgMask(this.bgMask) : undefined,
         mode: this.pattern.mode,
         style: this.pattern.style || '',
         size: this.pattern.size,

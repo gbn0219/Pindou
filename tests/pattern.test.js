@@ -386,4 +386,16 @@ assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
   assert.deepStrictEqual(pattern.parseGrid(pattern.serializeGrid(g), 104), g, '104 盘往返应一致')
 }
 
+// ---- serializeBgMask / parseBgMask（图库背景掩码存储）----
+{
+  const m = [[true, false], [false, true]]
+  const str = pattern.serializeBgMask(m)
+  assert.strictEqual(str, '1001', '序列化应按行优先 1/0 拼接')
+  assert.deepStrictEqual(pattern.parseBgMask(str, 2), m, '解析应还原二维掩码')
+  assert.strictEqual(pattern.parseBgMask('10', 2), null, '长度不符应返回 null')
+  assert.strictEqual(pattern.parseBgMask('', 2), null, '空串应返回 null')
+  assert.strictEqual(pattern.parseBgMask(undefined, 2), null, '缺省应返回 null')
+}
+
+
 console.log('pattern.test.js 全部通过 ✓')

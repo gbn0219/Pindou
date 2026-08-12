@@ -50,7 +50,10 @@ Page({
     this.pattern = p
     this.palette = color.buildPalette(p.set)
     this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
-    this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes) // 白色背景连通域（不显示编号、不计色块数）
+    // 抠图模式优先用生成时识别的洋红背景掩码；固定掩码下用户改动的格子视为前景
+    this.baseBgMask = p.bgMask || null
+    this.origGrid = p.bgMask ? p.grid.map((row) => row.slice()) : null
+    this.refreshBgMask()
     this.highlight = null
     this.history = [] // 撤销栈：每次修改前的网格快照，最多 MAX_HISTORY 步
     this.redoStack = [] // 重做栈
@@ -171,8 +174,20 @@ Page({
 
   redrawCanvas() {
     if (!this.canvas || !this.ctx) return
-    this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
+    this.refreshBgMask()
     this.drawGrid()
+  },
+
+  // 背景掩码：抠图模式用生成时的洋红掩码（格子被用户改动后视为前景）；
+  // 照片还原等无固定掩码时回退白色连通域判定
+  refreshBgMask() {
+    if (this.baseBgMask) {
+      this.bgMask = this.baseBgMask.map((row, r) =>
+        row.map((v, c) => v && this.pattern.grid[r][c] === this.origGrid[r][c])
+      )
+    } else {
+      this.bgMask = pattern.findBackgroundMask(this.pattern.grid, this.whiteCodes)
+    }
   },
 
   // 触摸坐标统一换算为画布/可视区域坐标（视口坐标 - 区域左上角），避免 canvas 触摸的已知问题
@@ -367,7 +382,7 @@ Page({
         this.pushHistory()
       }
       p.grid[row][col] = code
-      this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+      this.refreshBgMask()
     }
     const prev = this.highlight
     this.highlight = { row, col }
@@ -513,7 +528,7 @@ Page({
     this.setData({ saving: true })
     wx.showLoading({ title: '保存中…', mask: true })
     try {
-      this.bgMask = pattern.findBackgroundMask(p.grid, this.whiteCodes)
+      this.refreshBgMask()
       const patternFile = await exportUtil.renderPatternExport(p.grid, this.palette, { bgMask: this.bgMask, gridEvery: 5 })
       const thumb = await exportUtil.renderPatternJpeg(p.grid, this.palette, 360, { bgMask: this.bgMask, gridEvery: 5 })
       const preview = await exportUtil.renderPatternJpeg(p.grid, this.palette, 1080, { bgMask: this.bgMask, gridEvery: 5 })
@@ -530,7 +545,8 @@ Page({
         patternFileID: patternUp.fileID,
         patternThumbFileID: thumbUp.fileID,
         patternPreviewFileID: previewUp.fileID,
-        grid: pattern.serializeGrid(p.grid)
+        grid: pattern.serializeGrid(p.grid),
+        bgMask: p.bgMask ? pattern.serializeBgMask(this.bgMask) : undefined
       })
       wx.hideLoading()
       wx.showToast({ title: '已保存到图库', icon: 'success' })

@@ -32,6 +32,7 @@ exports.main = async (event) => {
     if (event.originalPreviewFileID) data.originalPreviewFileID = String(event.originalPreviewFileID)
     if (event.patternPreviewFileID) data.patternPreviewFileID = String(event.patternPreviewFileID)
     if (typeof event.grid === 'string' && event.grid) data.grid = event.grid.slice(0, 400000)
+    if (typeof event.bgMask === 'string' && event.bgMask) data.bgMask = event.bgMask.slice(0, 100000)
     await db.collection('gallery').add({ data })
     return ok({ saved: true })
   }
@@ -63,11 +64,12 @@ exports.main = async (event) => {
     const res = await db.collection('gallery').where({ _openid: OPENID, _id: event.id }).limit(1).get()
     if (!res.data.length) return fail('NOT_FOUND', '记录不存在')
     const data = { updatedAt: db.serverDate() }
-    const fields = ['patternFileID', 'patternThumbFileID', 'patternPreviewFileID', 'originalThumbFileID', 'originalPreviewFileID']
+    const fields = ['patternFileID', 'patternThumbFileID', 'patternPreviewFileID', 'originalThumbFileID', 'originalPreviewFileID', 'bgMask']
     for (const f of fields) {
       if (typeof event[f] === 'string' && event[f]) data[f] = event[f]
     }
     if (typeof event.grid === 'string' && event.grid) data.grid = event.grid.slice(0, 400000)
+    if (typeof event.bgMask === 'string' && event.bgMask) data.bgMask = event.bgMask.slice(0, 100000)
     await db.collection('gallery').doc(res.data[0]._id).update({ data })
     return ok({ updated: true })
   }
