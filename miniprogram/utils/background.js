@@ -15,6 +15,8 @@
  * 背景内孤立噪点并入背景（浅色低饱和的小连通分量）、背景像素置纯白 (255,255,255)。
  */
 
+const color = require('./color')
+
 function buildMask(imageData, opts, isSeed, isFill) {
   const data = imageData.data
   const w = imageData.width
@@ -297,4 +299,85 @@ function cleanMarkerBackground(imageData, opts) {
   return r.bg
 }
 
-module.exports = { cleanImageData, cleanMarkerBackground }
+/**
+ * 输出前保险：审查抠图模式图纸的背景是否为白色（纯函数，grid 原地修改）。
+ * 调用时机：主色分块映射出色号网格之后、交给用户展示之前，仅 cutout 模式调用。
+ *
+ * 场景：模型未按提示词把背景涂成洋红标记色（或标记色识别漏掉一部分）时，
+ * 背景格可能映射为洋红/粉色系色号，最终图纸仍带洋红背景。
+ * 本保险以"色号 RGB 属于洋红色系 + 与图纸四边连通"为判据，
+ * 把这类连通区域并入背景掩码并强制为白色；主体内部（不与边连通）的洋红/粉色
+ * 视为衣服等前景内容，不并入背景。
+ *
+ * @param {Array<Array<string>>} grid 色号网格（原地修改）
+ * @param {Array} palette 当前套装调色板（含 code/rgb）
+ * @param {Array<Array<boolean>>|null} bgMask 已有网格级背景掩码（可能为 null）
+ * @param {object} [opts] { minCoverage } 洋红背景面积下限（占整盘比例，默认 0.02）
+ * @returns {Array<Array<boolean>>|null} 更新后的背景掩码（无背景时为 null）
+ */
+function ensureWhiteBackground(grid, palette, bgMask, opts) {
+  const size = grid.length
+  if (!size) return bgMask || null
+  const minCoverage = (opts && opts.minCoverage) || 0.02
+  const whiteCode = color.nearestColor(255, 255, 255, palette).code
+  const rgbByCode = {}
+  for (const item of palette) rgbByCode[item.code] = item.rgb
+  const isMagenta = (r, c) => {
+    const rgb = rgbByCode[grid[r][c]]
+    return !!rgb && isMagentaFamily(rgb)
+  }
+  const out = bgMask ? bgMask.map((row) => row.slice()) : grid.map((row) => row.map(() => false))
+  // 1) 已有背景掩码的格子确保为白色（防御，正常已映射为 H1）
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (out[r][c]) grid[r][c] = whiteCode
+    }
+  }
+  // 2) 从四边 flood fill 洋红系连通域：整片背景若被画成洋红/玫红（标记色未识别或漏识别），
+  //    与边连通的洋红区域即背景，并入掩码并强制白色
+  const total = size * size
+  const visited = new Uint8Array(total)
+  const queue = []
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const onBorder = r === 0 || c === 0 || r === size - 1 || c === size - 1
+      if (onBorder && !out[r][c] && isMagenta(r, c)) {
+        const idx = r * size + c
+        visited[idx] = 1
+        queue.push(idx)
+      }
+    }
+  }
+  let count = 0
+  while (queue.length) {
+    const idx = queue.pop()
+    count++
+    const r = (idx / size) | 0
+    const c = idx % size
+    const tryPush = (nr, nc) => {
+      if (nr < 0 || nc < 0 || nr >= size || nc >= size) return
+      const nidx = nr * size + nc
+      if (visited[nidx] || out[nidx] || !isMagenta(nr, nc)) return
+      visited[nidx] = 1
+      queue.push(nidx)
+    }
+    tryPush(r - 1, c)
+    tryPush(r + 1, c)
+    tryPush(r, c - 1)
+    tryPush(r, c + 1)
+  }
+  if (count / total >= minCoverage) {
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (visited[r * size + c]) {
+          out[r][c] = true
+          grid[r][c] = whiteCode
+        }
+      }
+    }
+    return out
+  }
+  return bgMask || null
+}
+
+module.exports = { cleanImageData, cleanMarkerBackground, ensureWhiteBackground }

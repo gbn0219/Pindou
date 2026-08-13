@@ -9,7 +9,7 @@ const session = require('../../utils/session.js')
 const progressUtil = require('../../utils/progress.js')
 const sec = require('../../utils/sec.js')
 
-const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号（默认铺满视图隐藏编号，避免乱码感）
+const OFFSCREEN_MAX_SCALE = 0.4 // 低倍率（<=0.4）用离屏层贴图，超过后逐格直绘可见格子
 
 Page({
   data: {
@@ -56,6 +56,7 @@ Page({
   onShow() {
     if (!this.pattern) return
     this.updateLegend()
+    this.offscreenDirty = true // 修改页可能改过共享 grid，返回时重建离屏层
     if (this.canvas) this.drawPattern()
   },
 
@@ -130,6 +131,23 @@ Page({
       })
   },
 
+  ensureOffscreen() {
+    if (this.offscreen && !this.offscreenDirty) return this.offscreen
+    const cell = this.displayCell || pattern.CELL
+    const total = this.pattern.size * (cell + pattern.GAP) - pattern.GAP
+    const off = wx.createOffscreenCanvas({ type: '2d', width: total, height: total })
+    pattern.renderGrid(off.getContext('2d'), this.pattern.grid, this.palette, {
+      cellSize: cell,
+      gap: pattern.GAP,
+      code: false,
+      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+      noCodeMask: this.bgMask
+    })
+    this.offscreen = off
+    this.offscreenDirty = false
+    return off
+  },
+
   applyView() {
     const v = this.view
     if (!this.ctx || !v) return
@@ -149,13 +167,22 @@ Page({
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
     this.applyView()
-    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
-      cellSize: this.displayCell || pattern.CELL,
-      gap: pattern.GAP,
-      code: this.codeShown,
-      gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
-      noCodeMask: this.bgMask
-    })
+    if (this.view.scale <= OFFSCREEN_MAX_SCALE) {
+      // 低倍率：贴离屏静态层，避免每帧重绘全部格子
+      this.ctx.drawImage(this.ensureOffscreen(), 0, 0)
+    } else {
+      // 高倍率：只重绘屏幕上可见的格子，任意放大不糊
+      pattern.renderGridView(this.ctx, this.pattern.grid, this.palette, {
+        cellSize: this.displayCell || pattern.CELL,
+        gap: pattern.GAP,
+        code: this.codeShown,
+        gridEvery: this.data.gridOn ? this.data.gridEvery : 0,
+        noCodeMask: this.bgMask,
+        view: this.view,
+        areaW: this.canvas.width,
+        areaH: this.canvas.height
+      })
+    }
     // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
     pattern.renderRulers(this.ctx, this.view, this.pattern.grid.length, this.displayCell || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
   },
@@ -224,7 +251,8 @@ Page({
     if (!this.pinch || !this.view) return
     this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
     this.clampView()
-    const show = this.view.scale >= CODE_MIN_SCALE
+    const range = pattern.visibleRange(this.view, this.pattern.grid.length, this.displayCell || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
+    const show = range.c1 - range.c0 + 1 <= 30 && range.r1 - range.r0 + 1 <= 30
     if (show !== this.codeShown) {
       this.codeShown = show
     }
@@ -250,12 +278,14 @@ Page({
   },
 
   onGridToggle(e) {
+    this.offscreenDirty = true
     this.setData({ gridOn: e.detail.value }, () => this.redraw())
   },
 
   onGridEvery(e) {
     const v = Number(e.currentTarget.dataset.value)
     if (v === this.data.gridEvery) return
+    this.offscreenDirty = true
     this.setData({ gridEvery: v }, () => this.redraw())
   },
 
@@ -277,6 +307,7 @@ Page({
     this.pattern.grid = cand.grid
     this.pattern.bgMask = cand.bgMask || null
     this.refreshBgMask()
+    this.offscreenDirty = true
     this.setData({ candIndex: next.index + 1, candTotal: next.candidates.length })
     this.updateLegend()
     this.drawPattern()
@@ -342,6 +373,7 @@ Page({
       this.pattern.grid = res.grid
       this.pattern.bgMask = res.bgMask || null
       this.refreshBgMask()
+      this.offscreenDirty = true
       this.setData({
         candIndex: this.aiSession.index + 1,
         candTotal: this.aiSession.candidates.length,

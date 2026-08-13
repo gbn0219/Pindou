@@ -507,6 +507,10 @@ async function imageToGrid(dataUrl, size, setKey, opts) {
     size,
     color.buildPalette(setKey)
   )
+  // 输出前保险：抠图模式审查背景是否为白色（洋红系且连边的区域并入背景并强制白色）
+  if (opts && opts.cutout) {
+    gridBgMask = background.ensureWhiteBackground(grid, color.buildPalette(setKey), gridBgMask)
+  }
   let prevImage = ''
   if (opts && opts.savePrev) {
     // 保留"清洗后"的生成图（背景已为白色），供重新生成时作第二张参考图

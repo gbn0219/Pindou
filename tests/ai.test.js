@@ -173,6 +173,76 @@ function fakeCtx() {
   const texts = ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])
   assert.strictEqual(texts.filter((t) => t === 'H1').length, 16, '只有白色主体 16 格标注 H1，背景格不标注')
 }
+// ---- ensureWhiteBackground（输出前背景白化保险）----
+{
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 6; r++) {
+    const row = []
+    for (let c = 0; c < 6; c++) row.push(r >= 2 && r <= 3 && c >= 2 && c <= 3 ? 'A4' : 'E6')
+    g.push(row)
+  }
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.ok(mask, '洋红背景应生成背景掩码')
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 6; c++) {
+      const isBg = !(r >= 2 && r <= 3 && c >= 2 && c <= 3)
+      assert.strictEqual(mask[r][c], isBg, '洋红连通背景格(' + r + ',' + c + ')应为背景')
+      assert.strictEqual(g[r][c], isBg ? 'H1' : 'A4', '背景格应强制白色，主体保持原色')
+    }
+  }
+}
+{
+  // 已有掩码时：掩码格强制白色，洋红系且连边的背景并入
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 4; r++) {
+    const row = []
+    for (let c = 0; c < 4; c++) row.push(r === 0 || r === 3 || c === 0 || c === 3 ? 'E6' : 'A4')
+    g.push(row)
+  }
+  const mask = [
+    [true, true, true, true],
+    [true, false, false, true],
+    [true, false, false, true],
+    [true, true, true, true]
+  ]
+  const out = background.ensureWhiteBackground(g, pal, mask)
+  assert.deepStrictEqual(out, mask, '掩码内容应保持')
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      assert.strictEqual(g[r][c], mask[r][c] ? 'H1' : 'A4', '掩码格应强制白色')
+    }
+  }
+}
+{
+  // 主体内部的洋红/粉色不并入背景（不误伤衣服等）
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 8; r++) {
+    const row = []
+    for (let c = 0; c < 8; c++) {
+      const border = r === 0 || r === 7 || c === 0 || c === 7
+      const dress = r >= 3 && r <= 4 && c >= 3 && c <= 4
+      row.push(border ? 'E6' : dress ? 'E6' : 'A4')
+    }
+    g.push(row)
+  }
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.ok(mask, '边框洋红应识别为背景')
+  assert.strictEqual(mask[3][3], false, '主体内部洋红格不应并入背景')
+  assert.strictEqual(g[3][3], 'E6', '主体内部洋红格保持原色')
+  assert.strictEqual(mask[0][0], true, '边框洋红格应为背景')
+}
+{
+  // 无洋红背景时返回 null、不改网格
+  const pal = color.buildPalette('221')
+  const g = [['A4', 'A4'], ['A4', 'A4']]
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.strictEqual(mask, null, '无洋红背景应返回 null')
+  assert.deepStrictEqual(g, [['A4', 'A4'], ['A4', 'A4']], '网格不应被修改')
+}
+
 // ---- 提示词构造（tools/prompt.js）----
 const prompt = require('../tools/prompt.js')
 

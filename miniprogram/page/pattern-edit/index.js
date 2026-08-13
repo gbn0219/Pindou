@@ -5,7 +5,6 @@ const gesture = require('../../utils/gesture.js')
 const exportUtil = require('../../utils/export.js')
 const user = require('../../utils/user.js')
 
-const CODE_MIN_SCALE = 0.65 // 格子放大到该倍数以上才显示编号
 const MAX_HISTORY = 30 // 撤销/重做最大步数（单格修改、批量替换各算一步）
 
 const FAMILY_LABELS = {
@@ -25,6 +24,8 @@ const MODE_HINTS = {
   replace: '先在图纸上点选源色，再到调色盘点目标色',
   pick: '点图纸上的格子，吸取该格颜色'
 }
+
+const OFFSCREEN_MAX_SCALE = 0.4 // 低倍率（<=0.4）用离屏层贴图，超过后逐格直绘可见格子
 
 Page({
   data: {
@@ -143,6 +144,33 @@ Page({
       })
   },
 
+  ensureOffscreen() {
+    if (this.offscreen && !this.offscreenDirty) return this.offscreen
+    const cell = this.cellPx || pattern.CELL
+    const total = this.pattern.size * (cell + pattern.GAP) - pattern.GAP
+    const off = wx.createOffscreenCanvas({ type: '2d', width: total, height: total })
+    pattern.renderGrid(off.getContext('2d'), this.pattern.grid, this.palette, {
+      cellSize: cell,
+      gap: pattern.GAP,
+      code: false,
+      noCodeMask: this.bgMask
+    })
+    this.offscreen = off
+    this.offscreenDirty = false
+    return off
+  },
+
+  drawHighlightOverlay() {
+    const h = this.highlight
+    if (!h || !this.view) return
+    const cellPx = this.cellPx || pattern.CELL
+    const x = h.col * (cellPx + pattern.GAP) + 1
+    const y = h.row * (cellPx + pattern.GAP) + 1
+    this.ctx.strokeStyle = '#ff3a5d'
+    this.ctx.lineWidth = Math.max(2, Math.round(cellPx / 6))
+    this.ctx.strokeRect(x, y, cellPx - 2, cellPx - 2)
+  },
+
   applyView() {
     const v = this.view
     if (!this.ctx || !v) return
@@ -162,13 +190,23 @@ Page({
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
     this.applyView()
-    pattern.renderGrid(this.ctx, this.pattern.grid, this.palette, {
-      cellSize: this.cellPx || pattern.CELL,
-      gap: pattern.GAP,
-      code: this.codeShown,
-      highlight: this.highlight,
-      noCodeMask: this.bgMask
-    })
+    if (this.view.scale <= OFFSCREEN_MAX_SCALE) {
+      // 低倍率：贴离屏静态层，避免每帧重绘全部格子
+      this.ctx.drawImage(this.ensureOffscreen(), 0, 0)
+      this.drawHighlightOverlay()
+    } else {
+      // 高倍率：只重绘屏幕上可见的格子，任意放大不糊
+      pattern.renderGridView(this.ctx, this.pattern.grid, this.palette, {
+        cellSize: this.cellPx || pattern.CELL,
+        gap: pattern.GAP,
+        code: this.codeShown,
+        highlight: this.highlight,
+        noCodeMask: this.bgMask,
+        view: this.view,
+        areaW: this.canvas.width,
+        areaH: this.canvas.height
+      })
+    }
     // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
     pattern.renderRulers(this.ctx, this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
   },
@@ -176,6 +214,7 @@ Page({
   redrawCanvas() {
     if (!this.canvas || !this.ctx) return
     this.refreshBgMask()
+    this.offscreenDirty = true
     this.drawGrid()
   },
 
@@ -306,7 +345,8 @@ Page({
     if (!this.pinch || !this.view) return
     this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
     this.clampView()
-    const show = this.view.scale >= CODE_MIN_SCALE
+    const range = pattern.visibleRange(this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
+    const show = range.c1 - range.c0 + 1 <= 30 && range.r1 - range.r0 + 1 <= 30
     if (show !== this.codeShown) {
       this.codeShown = show
     }
@@ -388,6 +428,7 @@ Page({
       if (gridChanged) p.grid[row][col] = code
       this.editedMask[row][col] = true
       this.refreshBgMask()
+      this.offscreenDirty = true
     }
     const prev = this.highlight
     this.highlight = { row, col }

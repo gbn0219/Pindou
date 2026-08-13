@@ -381,6 +381,7 @@ function fakeCtx() {
     save() {},
     restore() {},
     translate() {},
+    setTransform() {},
     measureText(text) { return { width: String(text).length * 10 } }
   }
 }
@@ -398,6 +399,40 @@ for (let i = 0; i < 10; i++) grid10.push(new Array(10).fill('A1'))
   const ctx = fakeCtx()
   pattern.renderGrid(ctx, grid10, palette, { cellSize: 16, gap: 1, code: false })
   assert.strictEqual(ctx.calls.filter((c) => c[0] === 'lineTo').length, 0, '不传 gridEvery 时不画粗线')
+}
+
+// ---- visibleRange / renderGridView（可视区裁剪直绘）----
+{
+  const view = { scale: 1, ox: -100, oy: -100 }
+  const r = pattern.visibleRange(view, 10, 16, 1, 350, 310)
+  assert.deepStrictEqual(r, { c0: 5, c1: 9, r0: 5, r1: 9 }, '视口偏移时应只返回可见行列')
+}
+{
+  const view = { scale: 1, ox: 5000, oy: 0 }
+  const r = pattern.visibleRange(view, 10, 16, 1, 350, 310)
+  assert.ok(r.c1 < r.c0, '视口完全在图纸右侧外时无可见列')
+}
+{
+  const ctx = fakeCtx()
+  pattern.renderGridView(ctx, grid10, palette, {
+    cellSize: 16, gap: 1, code: false, gridEvery: 5,
+    view: { scale: 0.5, ox: 0, oy: 0 }, areaW: 350, areaH: 310
+  })
+  const fills = ctx.calls.filter((c) => c[0] === 'fillRect')
+  assert.strictEqual(fills.length, 101, '全网格可见时白底 1 次 + 10x10 格子 100 次')
+  const lineTos = ctx.calls.filter((c) => c[0] === 'lineTo')
+  assert.strictEqual(lineTos.length, 2, '每 5 格粗线仍只画可见的 1 横 1 纵')
+}
+{
+  const ctx = fakeCtx()
+  pattern.renderGridView(ctx, grid10, palette, {
+    cellSize: 16, gap: 1, code: true,
+    view: { scale: 1, ox: -17, oy: -17 }, areaW: 68, areaH: 68
+  })
+  const fills = ctx.calls.filter((c) => c[0] === 'fillRect')
+  assert.strictEqual(fills.length, 26, '放大后只画可见 5x5 格子 + 白底 1 次')
+  const texts = ctx.calls.filter((c) => c[0] === 'fillText')
+  assert.strictEqual(texts.length, 25, '放大后只对可见格子画编号')
 }
 
 // ---- renderExport / renderLegend / layoutExport ----

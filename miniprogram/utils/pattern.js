@@ -312,6 +312,87 @@ function renderGrid(ctx, grid, palette, opts) {
 }
 
 /**
+ * 可视格子范围：根据当前 view 变换与画布尺寸，返回屏幕上可见的格子行列区间（闭区间）。
+ * 视口完全在图纸外时 c1 < c0 或 r1 < r0，表示没有可见格子。
+ */
+function visibleRange(view, size, cellPx, gap, areaW, areaH) {
+  if (!view || !view.scale || !size || !cellPx) return { c0: 0, c1: -1, r0: 0, r1: -1 }
+  const cell = cellPx + gap
+  const c0 = Math.max(0, Math.floor((0 - view.ox) / view.scale / cell))
+  const c1 = Math.min(size - 1, Math.floor((areaW - view.ox) / view.scale / cell))
+  const r0 = Math.max(0, Math.floor((0 - view.oy) / view.scale / cell))
+  const r1 = Math.min(size - 1, Math.floor((areaH - view.oy) / view.scale / cell))
+  return { c0, c1, r0, r1 }
+}
+
+/**
+ * 交互页可视区直绘：只画屏幕上可见的格子（放大时可见格数远小于整盘），
+ * 仍是矢量逐格绘制，任意缩放不糊。白底与粗网格线同样只画可见部分。
+ * 与 renderGrid 共用 drawCell，视觉一致；需在调用方已设置好 view 变换后调用。
+ */
+function renderGridView(ctx, grid, palette, opts) {
+  const cellSize = (opts && opts.cellSize) || CELL
+  const gap = (opts && opts.gap) || GAP
+  const showCode = opts && opts.code !== false
+  const highlight = opts && opts.highlight
+  const gridEvery = opts && opts.gridEvery
+  const noCodeMask = opts && opts.noCodeMask
+  const v = opts && opts.view
+  const areaW = (opts && opts.areaW) || 0
+  const areaH = (opts && opts.areaH) || 0
+  const size = grid.length
+  if (!v || !v.scale || !size || !areaW || !areaH) return 0
+  const total = size * (cellSize + gap) - gap
+  const range = visibleRange(v, size, cellSize, gap, areaW, areaH)
+  // 屏幕空间白底：只覆盖可视区域与网格世界的交集，避免 canvas 透明底色透出
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  const sx0 = Math.max(0, v.ox)
+  const sy0 = Math.max(0, v.oy)
+  const sx1 = Math.min(areaW, v.ox + total * v.scale)
+  const sy1 = Math.min(areaH, v.oy + total * v.scale)
+  if (sx1 > sx0 && sy1 > sy0) {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(sx0, sy0, sx1 - sx0, sy1 - sy0)
+  }
+  ctx.restore()
+  // 逐格绘制（矢量，放大不糊）
+  for (let r = range.r0; r <= range.r1; r++) {
+    for (let c = range.c0; c <= range.c1; c++) {
+      drawCell(ctx, grid, r, c, palette, {
+        cellSize,
+        gap,
+        code: showCode,
+        noCode: !!(noCodeMask && noCodeMask[r] && noCodeMask[r][c]),
+        highlight: !!(highlight && highlight.row === r && highlight.col === c)
+      })
+    }
+  }
+  // 粗网格线：只画可见范围内的分段
+  if (gridEvery > 0 && range.r0 <= range.r1 && range.c0 <= range.c1) {
+    const y0w = Math.max(0, (sy0 - v.oy) / v.scale)
+    const y1w = Math.min(total, (sy1 - v.oy) / v.scale)
+    const x0w = Math.max(0, (sx0 - v.ox) / v.scale)
+    const x1w = Math.min(total, (sx1 - v.ox) / v.scale)
+    ctx.strokeStyle = (opts && opts.gridColor) || GRID_LINE_COLOR
+    ctx.lineWidth = (opts && opts.gridLineWidth) || GRID_LINE_WIDTH
+    ctx.beginPath()
+    for (let c = Math.max(gridEvery, Math.ceil(range.c0 / gridEvery) * gridEvery); c <= range.c1; c += gridEvery) {
+      const x = c * (cellSize + gap) - gap / 2
+      ctx.moveTo(x, y0w)
+      ctx.lineTo(x, y1w)
+    }
+    for (let r = Math.max(gridEvery, Math.ceil(range.r0 / gridEvery) * gridEvery); r <= range.r1; r += gridEvery) {
+      const y = r * (cellSize + gap) - gap / 2
+      ctx.moveTo(x0w, y)
+      ctx.lineTo(x1w, y)
+    }
+    ctx.stroke()
+  }
+  return total
+}
+
+/**
  * 照片还原采样：把 size4×size4 源图上每个 block×block 像素块压缩为一个
  * 平均色，返回 size×size 的 RGB 数组。不做任何平滑/合并/去噪。
  * 透明像素不计入平均；全透明块按白色处理。
@@ -620,6 +701,8 @@ module.exports = {
   findBackgroundMask,
   applyEditedMask,
   renderGrid,
+  renderGridView,
+  visibleRange,
   renderLegend,
   renderExport,
   renderCoordinates,
