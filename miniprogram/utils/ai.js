@@ -507,7 +507,7 @@ async function imageToGrid(dataUrl, size, setKey, opts) {
     size,
     color.buildPalette(setKey)
   )
-  // 输出前保险：抠图模式审查背景是否为白色（洋红系且连边的区域并入背景并强制白色）
+  // 输出前保险：抠图模式审查背景是否为白色（洋红/玫红且与背景相邻或连边的区域并入背景并强制白色）
   if (opts && opts.cutout) {
     gridBgMask = background.ensureWhiteBackground(grid, color.buildPalette(setKey), gridBgMask)
   }

@@ -241,6 +241,61 @@ function fakeCtx() {
   const mask = background.ensureWhiteBackground(g, pal, null)
   assert.strictEqual(mask, null, '无洋红背景应返回 null')
   assert.deepStrictEqual(g, [['A4', 'A4'], ['A4', 'A4']], '网格不应被修改')
+{
+  // 洋红背景被白色外圈包住（标记色识别成功但内部背景画成 E5/E6）时也能白化
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 10; r++) {
+    const row = []
+    for (let c = 0; c < 10; c++) {
+      const frame = r === 0 || r === 9 || c === 0 || c === 9
+      const subject = r >= 4 && r <= 5 && c >= 4 && c <= 5
+      row.push(frame || subject ? 'H1' : 'E5')
+    }
+    g.push(row)
+  }
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.ok(mask, '被白色外圈包住的洋红背景也应识别')
+  assert.strictEqual(mask[2][2], true, '内部洋红背景格应为背景')
+  assert.strictEqual(g[2][2], 'H1', '内部洋红背景格应强制白色')
+  assert.strictEqual(mask[4][4], false, '中心主体不应并入背景')
+  assert.strictEqual(g[4][4], 'H1', '中心白色主体保持白色前景')
+}
+{
+  // 红色衣服（F5）不误删：大面积红色与白色背景相邻仍保留
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 10; r++) {
+    const row = []
+    for (let c = 0; c < 10; c++) {
+      const frame = r === 0 || r === 9 || c === 0 || c === 9
+      const shirt = r >= 3 && r <= 6 && c >= 3 && c <= 6
+      row.push(frame ? 'H1' : shirt ? 'F5' : 'H1')
+    }
+    g.push(row)
+  }
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.strictEqual(mask[3][3], false, '红色衣服不应并入背景')
+  assert.strictEqual(g[3][3], 'F5', '红色衣服保持原色')
+}
+{
+  // 小块粉色细节（如 2x2 饰品）不误删：面积小于并入阈值
+  const pal = color.buildPalette('221')
+  const g = []
+  for (let r = 0; r < 8; r++) {
+    const row = []
+    for (let c = 0; c < 8; c++) {
+      const frame = r === 0 || r === 7 || c === 0 || c === 7
+      const detail = r >= 2 && r <= 3 && c >= 2 && c <= 3
+      row.push(frame ? 'H1' : detail ? 'E6' : 'H1')
+    }
+    g.push(row)
+  }
+  const mask = background.ensureWhiteBackground(g, pal, null)
+  assert.strictEqual(mask[2][2], false, '小块粉色细节不应并入背景')
+  assert.strictEqual(g[2][2], 'E6', '小块粉色细节保持原色')
+}
+
 }
 
 // ---- 提示词构造（tools/prompt.js）----

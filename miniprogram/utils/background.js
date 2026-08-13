@@ -303,81 +303,133 @@ function cleanMarkerBackground(imageData, opts) {
  * 输出前保险：审查抠图模式图纸的背景是否为白色（纯函数，grid 原地修改）。
  * 调用时机：主色分块映射出色号网格之后、交给用户展示之前，仅 cutout 模式调用。
  *
- * 场景：模型未按提示词把背景涂成洋红标记色（或标记色识别漏掉一部分）时，
- * 背景格可能映射为洋红/粉色系色号，最终图纸仍带洋红背景。
- * 本保险以"色号 RGB 属于洋红色系 + 与图纸四边连通"为判据，
- * 把这类连通区域并入背景掩码并强制为白色；主体内部（不与边连通）的洋红/粉色
- * 视为衣服等前景内容，不并入背景。
+ * 场景：模型未按提示词把背景涂成纯洋红标记色时，背景可能画成 E5/E6 玫红变体，
+ * 或标记色识别漏掉部分背景，背景格映射为洋红/粉色系色号，最终图纸带洋红背景。
+ * 本保险分三步：
+ * 1. 已有背景掩码的格子强制为白色；
+ * 2. 白色连通域（四边 flood fill，含刚强制为白的掩码格）并入背景掩码；
+ * 3. 偏洋红/玫红（R>=180、G<=130、B>=100、R-B<=125，避开正红、珊瑚红与淡粉腮红）
+ *    且与背景相邻或触及四边的连通区域，面积 >= minRegion 时并入背景并强制白色；
+ *    小块粉色细节（饰品、小配件）保留，不误删主体。
  *
  * @param {Array<Array<string>>} grid 色号网格（原地修改）
  * @param {Array} palette 当前套装调色板（含 code/rgb）
  * @param {Array<Array<boolean>>|null} bgMask 已有网格级背景掩码（可能为 null）
- * @param {object} [opts] { minCoverage } 洋红背景面积下限（占整盘比例，默认 0.02）
+ * @param {object} [opts] { minRegion } 洋红/玫红区域并入背景的面积下限（默认 12 格）
  * @returns {Array<Array<boolean>>|null} 更新后的背景掩码（无背景时为 null）
  */
 function ensureWhiteBackground(grid, palette, bgMask, opts) {
   const size = grid.length
   if (!size) return bgMask || null
-  const minCoverage = (opts && opts.minCoverage) || 0.02
+  const minRegion = (opts && opts.minRegion) || 12
   const whiteCode = color.nearestColor(255, 255, 255, palette).code
   const rgbByCode = {}
   for (const item of palette) rgbByCode[item.code] = item.rgb
-  const isMagenta = (r, c) => {
-    const rgb = rgbByCode[grid[r][c]]
-    return !!rgb && isMagentaFamily(rgb)
+  const rgbOf = (r, c) => rgbByCode[grid[r][c]]
+  const isWhiteish = (r, c) => {
+    const rgb = rgbOf(r, c)
+    return !!rgb && rgb[0] >= 230 && rgb[1] >= 230 && rgb[2] >= 230
+  }
+  const isBgPink = (r, c) => {
+    const rgb = rgbOf(r, c)
+    return !!rgb && rgb[0] >= 180 && rgb[1] <= 130 && rgb[2] >= 100 && rgb[0] - rgb[2] <= 125
   }
   const out = bgMask ? bgMask.map((row) => row.slice()) : grid.map((row) => row.map(() => false))
+  let added = false
   // 1) 已有背景掩码的格子确保为白色（防御，正常已映射为 H1）
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (out[r][c]) grid[r][c] = whiteCode
     }
   }
-  // 2) 从四边 flood fill 洋红系连通域：整片背景若被画成洋红/玫红（标记色未识别或漏识别），
-  //    与边连通的洋红区域即背景，并入掩码并强制白色
+  // 2) 白色连通域：抠图模式下背景最终应为白色，把白色背景并入掩码
   const total = size * size
-  const visited = new Uint8Array(total)
+  const white = new Uint8Array(total)
   const queue = []
+  const pushWhite = (r, c) => {
+    if (r < 0 || c < 0 || r >= size || c >= size) return
+    const idx = r * size + c
+    if (white[idx] || out[r][c] || !isWhiteish(r, c)) return
+    white[idx] = 1
+    queue.push(idx)
+  }
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       const onBorder = r === 0 || c === 0 || r === size - 1 || c === size - 1
-      if (onBorder && !out[r][c] && isMagenta(r, c)) {
+      if (onBorder && (out[r][c] || isWhiteish(r, c))) {
         const idx = r * size + c
-        visited[idx] = 1
-        queue.push(idx)
-      }
-    }
-  }
-  let count = 0
-  while (queue.length) {
-    const idx = queue.pop()
-    count++
-    const r = (idx / size) | 0
-    const c = idx % size
-    const tryPush = (nr, nc) => {
-      if (nr < 0 || nc < 0 || nr >= size || nc >= size) return
-      const nidx = nr * size + nc
-      if (visited[nidx] || out[nidx] || !isMagenta(nr, nc)) return
-      visited[nidx] = 1
-      queue.push(nidx)
-    }
-    tryPush(r - 1, c)
-    tryPush(r + 1, c)
-    tryPush(r, c - 1)
-    tryPush(r, c + 1)
-  }
-  if (count / total >= minCoverage) {
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        if (visited[r * size + c]) {
-          out[r][c] = true
-          grid[r][c] = whiteCode
+        if (!white[idx]) {
+          white[idx] = 1
+          queue.push(idx)
         }
       }
     }
-    return out
   }
-  return bgMask || null
+  while (queue.length) {
+    const idx = queue.pop()
+    const r = (idx / size) | 0
+    const c = idx % size
+    pushWhite(r - 1, c)
+    pushWhite(r + 1, c)
+    pushWhite(r, c - 1)
+    pushWhite(r, c + 1)
+  }
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const idx = r * size + c
+      if (white[idx] && !out[r][c]) {
+        out[r][c] = true
+        added = true
+      }
+    }
+  }
+  // 3) 洋红/玫红背景：与背景相邻或触及四边的连通区域 → 背景
+  const isBg = (r, c) => out[r][c]
+  const isSeed = new Uint8Array(total)
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const onBorder = r === 0 || c === 0 || r === size - 1 || c === size - 1
+      const nearBg = (r > 0 && isBg(r - 1, c)) || (r < size - 1 && isBg(r + 1, c)) || (c > 0 && isBg(r, c - 1)) || (c < size - 1 && isBg(r, c + 1))
+      if (onBorder || nearBg) isSeed[r * size + c] = 1
+    }
+  }
+  const seen = new Uint8Array(total)
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const idx = r * size + c
+      if (!isSeed[idx] || seen[idx] || isBg(r, c) || !isBgPink(r, c)) continue
+      const comp = []
+      const q = [idx]
+      seen[idx] = 1
+      while (q.length) {
+        const cur = q.pop()
+        comp.push(cur)
+        const cr = (cur / size) | 0
+        const cc = cur % size
+        const tryPush = (nr, nc) => {
+          if (nr < 0 || nc < 0 || nr >= size || nc >= size) return
+          const nidx = nr * size + nc
+          if (seen[nidx] || isBg(nr, nc) || !isBgPink(nr, nc)) return
+          seen[nidx] = 1
+          q.push(nidx)
+        }
+        tryPush(cr - 1, cc)
+        tryPush(cr + 1, cc)
+        tryPush(cr, cc - 1)
+        tryPush(cr, cc + 1)
+      }
+      if (comp.length >= minRegion) {
+        for (const ci of comp) {
+          const cr = (ci / size) | 0
+          const cc = ci % size
+          out[cr][cc] = true
+          grid[cr][cc] = whiteCode
+        }
+        added = true
+      }
+    }
+  }
+  return bgMask || added ? out : null
 }
 
 module.exports = { cleanImageData, cleanMarkerBackground, ensureWhiteBackground }
