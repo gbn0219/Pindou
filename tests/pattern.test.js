@@ -525,4 +525,113 @@ assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
 }
 
 
+// ---- despeckle（孤立杂点合并） ----
+{
+  const g = [
+    ['A1', 'A1', 'A1'],
+    ['A1', 'A4', 'A1'],
+    ['A1', 'A1', 'A1']
+  ]
+  assert.deepStrictEqual(pattern.despeckle(g), [
+    ['A1', 'A1', 'A1'],
+    ['A1', 'A1', 'A1'],
+    ['A1', 'A1', 'A1']
+  ], '被 8 邻域同色包围的孤立单格应并入周围色')
+}
+{
+  const g = [
+    ['A1', 'A2'],
+    ['A1', 'A2']
+  ]
+  assert.deepStrictEqual(pattern.despeckle(g), g, '非孤立的相邻色块不应被改')
+}
+{
+  const g = [['A1']]
+  assert.deepStrictEqual(pattern.despeckle(g), g, '1x1 边界格不应被改（邻域越界）')
+}
+
+// ---- mergeRareColors（颜色精简：把只出现一两次的杂色并入附近主体色） ----
+{
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4']
+  ]
+  const r = pattern.mergeRareColors(g, pal)
+  assert.strictEqual(r.removed, 1, '只出现一次的杂色应被并入')
+  assert.strictEqual(r.mapping['A10'], 'A4', '唯一锚点应为最近的主体色')
+  assert.deepStrictEqual(g, [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4']
+  ], '杂色格应改为主体色')
+}
+{
+  // 背景格（bgMask=true）不参与计数、不被改动
+  const pal = color.buildPalette('48')
+  const g = [
+    ['H1', 'H1', 'H1'],
+    ['H1', 'A4', 'A10'],
+    ['H1', 'A4', 'A4']
+  ]
+  const mask = [
+    [true, true, true],
+    [true, false, false],
+    [true, false, false]
+  ]
+  const r = pattern.mergeRareColors(g, pal, { bgMask: mask })
+  assert.strictEqual(r.removed, 1, '前景杂色 A10 应被并入')
+  assert.strictEqual(g[1][2], 'A4', '前景杂色格应改为主体色')
+  assert.strictEqual(g[0][0], 'H1', '背景格不应被改动')
+}
+
+// ---- mergeNearColors（邻近色合并：穿插的近色并入数量更多的一方） ----
+{
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A4'],
+    ['A4', 'A4', 'A4']
+  ]
+  const r = pattern.mergeNearColors(g, pal, { nearDeltaE: 1e9 })
+  assert.strictEqual(r.changed, true, '邻近色应发生合并')
+  assert.deepStrictEqual(g, [
+    ['A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4']
+  ], '数量少的邻近色应并入数量多的')
+}
+{
+  // maxColors 强制：3 色压到不超过 2 色
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A6', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4', 'A4']
+  ]
+  pattern.mergeNearColors(g, pal, { maxColors: 2 })
+  const distinct = new Set(g.reduce((a, row) => a.concat(row), []))
+  assert.ok(distinct.size <= 2, 'maxColors 后应不超过 2 种颜色')
+}
+
+// ---- postProcessGrid（生成后处理：杂色 + 邻近色合并 + 去噪） ----
+{
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A10', 'A4', 'A4'],
+    ['A4', 'A6', 'A6', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4', 'A4']
+  ]
+  const out = pattern.postProcessGrid(g, pal)
+  assert.deepStrictEqual(out, g, '后处理应原地返回网格')
+  const flat = out.reduce((a, row) => a.concat(row), [])
+  assert.ok(flat.indexOf('A10') < 0, '只出现一次的杂色应被并掉')
+  assert.ok(flat.indexOf('A6') < 0, '低频且被包围的色应被并掉')
+}
+
 console.log('pattern.test.js 全部通过 ✓')

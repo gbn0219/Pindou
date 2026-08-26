@@ -292,9 +292,9 @@ Page({
     ctx.fillRect(0, 0, size4, size4)
     ctx.drawImage(img, (size4 - dw) / 2, (size4 - dh) / 2, dw, dh)
     const imageData = ctx.getImageData(0, 0, size4, size4)
-    // 照片还原：4N 画布 → 4×4 块平均 → CIELAB 最近色，不做任何平滑/合并/去噪
+    // 照片还原：4N 画布 → 4×4 块平均 → CIELAB 最近色 → 后处理（杂色/邻近色合并、去噪）
     const palette = color.buildPalette(setKey)
     const rgbArr = pattern.averageBlocks(imageData.data, size4, size, 4)
-    return pattern.mapRgb(rgbArr, size, palette)
+    return pattern.postProcessGrid(pattern.mapRgb(rgbArr, size, palette), palette)
   }
 })

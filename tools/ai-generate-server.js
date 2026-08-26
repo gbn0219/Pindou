@@ -27,9 +27,10 @@ const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
 // 风格参考拼图不再发送（tools/style-refs/ref-pack.jpg、realistic-ref.jpg 文件保留未删）：
 // Seedream 多图输入偶尔会直接返回参考图本身，画面引导改为提示词描述（tools/prompt.js）。
-// 五官画法示例仍作为第三张参考图随请求发送：5 张拼豆像素画人脸合成（tools/face-refs/build-face-ref.ps1 生成），
+// 男孩/女孩脸部参考图（tools/face-refs/boy-face-ref.jpg、girl-face-ref.jpg）随请求固定发送，
 // 仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
-const FACE_REF_PATH = path.join(__dirname, 'face-refs', 'face-ref.jpg')
+const BOY_REF_PATH = path.join(__dirname, 'face-refs', 'boy-face-ref.jpg')
+const GIRL_REF_PATH = path.join(__dirname, 'face-refs', 'girl-face-ref.jpg')
 const TASK_TTL_MS = 10 * 60 * 1000
 const tasks = new Map()
 let taskSeq = 0
@@ -164,7 +165,8 @@ async function generate(apiKey, model, data) {
   }
   const images = [data.imageBase64]
   if (data.refImageBase64) images.push(data.refImageBase64) // 重新生成：上一版结果（清洗后压缩图）作为第二张参考图
-  if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
+  if (fs.existsSync(BOY_REF_PATH)) images.push(imageDataUrl(BOY_REF_PATH)) // 男孩脸部参考
+  if (fs.existsSync(GIRL_REF_PATH)) images.push(imageDataUrl(GIRL_REF_PATH)) // 女孩脸部参考
   const payload = {
     model,
     prompt: buildPrompt({

@@ -436,6 +436,27 @@ const prompt = require('../tools/prompt.js')
   assert.ok(p.indexOf('赛博朋克霓虹') >= 0, '自定义风格应出现在提示词中')
 }
 
+// 五官参考：人物提示词应引用男孩/女孩参考图，且不放大留白输入
+{
+  const p = prompt.buildPrompt({
+    size: 52,
+    style: '卡通：简化造型、粗黑描边、平涂色块、五官夸张',
+    styleKey: 'cartoon',
+    subject: 'person'
+  })
+  assert.ok(p.indexOf('男孩') >= 0 && p.indexOf('女孩') >= 0, '人物提示词应引用男孩/女孩参考图')
+  assert.ok(p.indexOf('表情') >= 0 && p.indexOf('微笑') >= 0 && p.indexOf('不开心') >= 0, '应保留表情识别与表情随原图')
+  assert.ok(p.indexOf('闭眼') >= 0, '应支持睁眼/闭眼')
+  assert.ok(p.indexOf('留白说明') >= 0 && p.indexOf('不放大') >= 0, '应包含留白说明并禁止放大重构图')
+}
+
+// 写实风仍按原图如实绘制，仅把参考图作为像素颗粒表达参考
+{
+  const p = prompt.buildPrompt({ size: 52, style: '写实风', styleKey: 'realistic', subject: 'person' })
+  assert.ok(p.indexOf('男孩') >= 0 && p.indexOf('女孩') >= 0, '写实风仍保留参考图引导')
+  assert.ok(p.indexOf('五官（写实）') >= 0, '写实风仍保留如实还原要求')
+}
+
 // 主体类型：动物不含人物肤色 G1，物体不含五官参考
 {
   const p = prompt.buildPrompt({ size: 52, style: '卡通', styleKey: 'cartoon', subject: 'animal' })

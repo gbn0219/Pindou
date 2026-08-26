@@ -685,9 +685,196 @@ function renderExport(ctx, grid, palette, opts) {
   return { width, height: baseH + legendH }
 }
 
+
+// 去噪：把被 8 邻域完全相同的颜色包围的孤立单色格并入该颜色（消除 AI 分块/网格线/抖动产生的零星杂点）。
+// 只处理完全孤立的单格，不破坏大块结构与五官主体；边缘格（邻域越界）不处理。
+function despeckle(grid) {
+  const n = grid.length
+  if (!n) return grid
+  const out = grid.map((row) => row.slice())
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const cur = out[r][c]
+      let same = null
+      let ok = true
+      for (let dr = -1; dr <= 1 && ok; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue
+          const rr = r + dr
+          const cc = c + dc
+          if (rr < 0 || cc < 0 || rr >= n || cc >= n) {
+            ok = false
+            break
+          }
+          const v = out[rr][cc]
+          if (same === null) same = v
+          else if (v !== same) {
+            ok = false
+            break
+          }
+        }
+      }
+      if (ok && same !== null && same !== cur) out[r][c] = same
+    }
+  }
+  return out
+}
+
+/**
+ * 统计前景格各色使用次数（跳过背景格）。
+ * bgMask：true=背景格（不计、不改）。缺省为 null（全部视为前景）。
+ */
+function countForeground(grid, bgMask) {
+  const map = {}
+  const h = grid.length
+  const w = h ? grid[0].length : 0
+  let total = 0
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      if (bgMask && bgMask[r] && bgMask[r][c]) continue
+      const code = grid[r][c]
+      map[code] = (map[code] || 0) + 1
+      total++
+    }
+  }
+  return { map, total }
+}
+
+/**
+ * 颜色精简（杂色合并）：把使用次数极少的颜色并入"已使用且达标"的最近色（CIELAB）。
+ * 解决"大图某色只用了一两颗"导致颜色过多、穿插杂乱的问题，同时让杂点归入邻近主体色，
+ * 形成更大的同色块，便于观察配色、滑豆快速完工。
+ * opts：{ bgMask, minCount, minRatio }
+ *  - minCount：绝对下限（默认 4），使用次数 <= 该值视为杂色
+ *  - minRatio：相对下限（默认 0.0006），total * minRatio 向上取整后与 minCount 取大者
+ * 原地修改 grid，返回 { removed, mapping }（removed=被并入格数，mapping=from→to 色号映射）。
+ * 背景格不参与计数、不改动。
+ */
+function mergeRareColors(grid, palette, opts) {
+  const h = grid.length
+  const w = h ? grid[0].length : 0
+  if (!h || !w || !palette || !palette.length) return { removed: 0, mapping: {} }
+  const bgMask = (opts && opts.bgMask) || null
+  const { map, total } = countForeground(grid, bgMask)
+  const minCount = (opts && opts.minCount) || 4
+  const minRatio = opts && opts.minRatio ? opts.minRatio : 0.0006
+  const threshold = Math.max(minCount, Math.round(total * minRatio))
+  const labByCode = {}
+  for (const item of palette) labByCode[item.code] = item.lab
+  const ordered = Object.keys(map)
+    .map((code) => ({ code, count: map[code] }))
+    .sort((a, b) => b.count - a.count)
+  let anchors = ordered.filter((i) => i.count >= threshold).map((i) => i.code)
+  if (!anchors.length) anchors = ordered.length ? [ordered[0].code] : []
+  const mapping = {}
+  for (const item of ordered) {
+    if (anchors.indexOf(item.code) >= 0) continue
+    const lab = labByCode[item.code]
+    if (!lab) continue
+    let bestCode = null
+    let bestDist = Infinity
+    for (const a of anchors) {
+      const alab = labByCode[a]
+      if (!alab) continue
+      const d = color.labDistance(lab, alab)
+      if (d < bestDist) {
+        bestDist = d
+        bestCode = a
+      }
+    }
+    if (bestCode) mapping[item.code] = bestCode
+  }
+  let removed = 0
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      if (bgMask && bgMask[r] && bgMask[r][c]) continue
+      const to = mapping[grid[r][c]]
+      if (to) {
+        grid[r][c] = to
+        removed++
+      }
+    }
+  }
+  return { removed, mapping }
+}
+
+/**
+ * 邻近色合并：把感知上非常接近（CIELAB 距离 < nearDeltaE）的颜色并入数量更多的一个，
+ * 减少"同一区域被几种相近颜色反复穿插"、造成大面积铺色难以辨认的问题。
+ * 仅合并可视为同一种豆的近色，不跨越明显色相/明度差异，避免破坏主体轮廓与五官关键细节。
+ * opts：{ bgMask, nearDeltaE, maxColors }
+ *  - nearDeltaE：CIELAB 距离阈值（默认 8）
+ *  - maxColors：可选，最多保留色数；超出时逐步放宽阈值强制合并至达标
+ * 原地修改 grid，返回 { changed }。
+ */
+function mergeNearColors(grid, palette, opts) {
+  const h = grid.length
+  const w = h ? grid[0].length : 0
+  if (!h || !w || !palette || !palette.length) return { changed: false }
+  const bgMask = (opts && opts.bgMask) || null
+  const maxColors = (opts && opts.maxColors) || 0
+  const baseDelta = (opts && opts.nearDeltaE) || 8
+  const labByCode = {}
+  for (const item of palette) labByCode[item.code] = item.lab
+  let delta = baseDelta
+  let changed = false
+  // 单次最多合并 colorCount 种，避免极端情况下死循环
+  for (let pass = 0; pass < 64; pass++) {
+    const { map } = countForeground(grid, bgMask)
+    const codes = Object.keys(map)
+    if (codes.length <= 1) break
+    if (maxColors && codes.length <= maxColors) break
+    // 在当前距离上限内找最接近的一对（较少 → 较多）
+    let best = null
+    for (let i = 0; i < codes.length; i++) {
+      for (let j = i + 1; j < codes.length; j++) {
+        const a = codes[i]
+        const b = codes[j]
+        const la = labByCode[a]
+        const lb = labByCode[b]
+        if (!la || !lb) continue
+        const d = color.labDistance(la, lb)
+        if (d > delta) continue
+        if (!best || d < best.d) best = { a, b }
+      }
+    }
+    if (!best) {
+      // 设置了 maxColors 且仍未达标：逐步放宽距离上限，强制合并近色
+      if (maxColors && codes.length > maxColors && delta < 90) {
+        delta += 8
+        continue
+      }
+      break
+    }
+    const a = best.a
+    const b = best.b
+    const keeper = map[a] >= map[b] ? a : b
+    const loser = keeper === a ? b : a
+    if (replaceColor(grid, loser, keeper) > 0) changed = true
+  }
+  return { changed }
+}
+
+/**
+ * 图纸后处理（生成后调用）：先把杂色并入邻近主体色，再把感知上接近的相邻颜色合并，
+ * 最后做一次孤立杂点去噪。目标是"颜色总数更少、同色块更大"，同时保留主体轮廓与五官等关键细节。
+ * 原地修改并返回 grid。opts 同 mergeRareColors / mergeNearColors（含 bgMask）。
+ */
+function postProcessGrid(grid, palette, opts) {
+  const o = opts || {}
+  mergeRareColors(grid, palette, o)
+  mergeNearColors(grid, palette, o)
+  return despeckle(grid)
+}
+
 module.exports = {
   mapRgbGrid,
   mapRgb,
+  despeckle,
+  countForeground,
+  mergeRareColors,
+  mergeNearColors,
+  postProcessGrid,
   averageBlocks,
   countColors,
   countColor,

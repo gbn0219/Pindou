@@ -13,7 +13,7 @@
 - **任意比例裁剪**：方框拖动移动、四边/四角调整大小，最终图纸保持方形网格
 - **图纸展示**：canvas 绘制（逐格色号、双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册
 - **逐格修改**：点格换色，底部"小盒子陈列"取色面板（按色系分区，只显示当前套装颜色）
-- **创意生成风格**：卡通 / 马卡龙 / 写实风 + 自定义关键词；可开启"抠出主体（背景纯白）"；每张原图最多 3 个候选
+- **创意生成风格**：卡通 / 写实风 + 自定义关键词；可开启"抠出主体（背景纯白）"；每张原图保留最近 5 个候选
 - **个人中心与图库**：微信登录（云开发 openid）、头像昵称、菜单区（去生成/我的图库/常见问题/关于拼豆）、图纸自动入库（分页、缩略图/预览图、cloud:// 直接预览、编辑后回填）
 
 ## 生成流程
@@ -79,15 +79,15 @@ miniprogram/
   utils/image.js             图片加载（iOS 缓存绕过 + 超时重试）
   utils/gesture.js           双指缩放/拖动视图模型（纯函数）
   utils/hash.js              FNV-1a 图片哈希（配额计数用）
-  utils/session.js           创意生成会话（每图最多 3 个候选）
+  utils/session.js           创意生成会话（每图保留最近 5 个候选）
   utils/user.js              云函数封装（account / access / gallery）
   data/colors.json|js        色卡数据源（48/72/144/221 套装）
   styles/tokens.wxss         设计令牌
 scripts/build-colors.js      解析色卡文档 → 生成 data/colors.json 与 colors.js
 tools/ai-generate-server.js  本地 AI 生成代理服务（提交任务 + 轮询，默认端口 8787）
 tools/prompt.js              AI 生成提示词构造（纯函数）
-tools/style-refs/            参考拼图源图（ref-pack.jpg / realistic-ref.jpg）
-tools/face-refs/             五官画法示例拼图（face-ref.jpg）
+tools/style-refs/            参考拼图源图（ref-pack.jpg / realistic-ref.jpg，已不再发送）
+tools/face-refs/             人物表情参考图（boy-face-ref.jpg / girl-face-ref.jpg）
 cloudfunctions/
   account/                   用户中心（login / getProfile / saveProfile）
   access/                    访问控制（consumeQuota / checkAccess / createOrder / unlock）
@@ -144,7 +144,7 @@ node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js 
 - `miniprogram/config.js` 的 `aiGenerate.backend` 设为 `'cloud'`
 - 云函数 `ai-generate-worker` 需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；`ai-generate-pattern` 无需密钥，仅负责调度
 - 客户端先把原图（重新生成时含上一版图）上传云存储 `ai-inputs/`，`start` 只带 fileID，避免 callFunction 携带大 base64 触发客户端超时
-- `ai-generate-worker` 超时在云开发控制台配置为 **900s**，生成在 worker 独立调用中执行，每次调用拥有完整 900s 预算；前端不自动重提（一张图一次模型调用），失败提示后由用户手动重试；`ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；部署目录含 `face-ref.jpg`
+- `ai-generate-worker` 超时在云开发控制台配置为 **900s**，生成在 worker 独立调用中执行，每次调用拥有完整 900s 预算；前端不自动重提（一张图一次模型调用），失败提示后由用户手动重试；`ai-generate-pattern` 目录的 `config.json` 声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；部署目录含 `boy-face-ref.jpg` / `girl-face-ref.jpg` 表情参考图
 
 ### 生成与费用
 

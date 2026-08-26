@@ -23,9 +23,10 @@ const DEFAULT_MODEL = 'doubao-seedream-5.0-lite'
 const GEN_SIZE = '2k' // Seedream 2K（约 2048×2048 方形）；Ark 尺寸参数只接受 WIDTHxHEIGHT 或 2k/3k/4k（1K 以下不满足最小像素要求）
 const BOARD_MIN = 15 // 拼豆盘最小边长
 const BOARD_MAX = 208 // 拼豆盘最大边长
-// 五官画法示例拼图（tools/face-refs/face-ref.jpg 合成，部署目录内为其副本），作为第三张参考图随请求发送，
+// 男孩/女孩脸部参考图（部署目录内为 tools/face-refs 的副本）随请求固定发送，
 // 仅用于学习五官表达，提示词禁止复制示例中的角色/内容。
-const FACE_REF_PATH = path.join(__dirname, 'face-ref.jpg')
+const BOY_REF_PATH = path.join(__dirname, 'boy-face-ref.jpg')
+const GIRL_REF_PATH = path.join(__dirname, 'girl-face-ref.jpg')
 const TASK_COLLECTION = 'ai_tasks' // 异步任务记录集合（start 写 pending，worker 更新 done/error）
 const WORKER_BUDGET_MS = 880000 // 云函数超时配置 900s，预留状态更新、上传与返回时间
 
@@ -122,7 +123,8 @@ async function generate(apiKey, model, data) {
   }
   const images = [data.imageBase64]
   if (data.refImageBase64) images.push(data.refImageBase64) // 重新生成：上一版结果（清洗后压缩图）作为第二张参考图
-  if (fs.existsSync(FACE_REF_PATH)) images.push(imageDataUrl(FACE_REF_PATH))
+  if (fs.existsSync(BOY_REF_PATH)) images.push(imageDataUrl(BOY_REF_PATH)) // 男孩脸部参考
+  if (fs.existsSync(GIRL_REF_PATH)) images.push(imageDataUrl(GIRL_REF_PATH)) // 女孩脸部参考
   const payload = {
     model,
     prompt: buildPrompt({
