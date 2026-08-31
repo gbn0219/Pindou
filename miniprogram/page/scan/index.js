@@ -10,7 +10,8 @@ const image = require('../../utils/image.js')
 const gesture = require('../../utils/gesture.js')
 
 const MAX_DIM = 2048 // 工作图最大边长（内存与采样速度折中）
-const HANDLE = 24 // 角点拖拽命中半径（视口 px）
+const HANDLE = 20 // 角点拖拽命中半径（视口 px）
+const FIT_PAD = 16 // 图纸与画布四边留白（视口 px），避免画到/滑出屏幕边缘
 const NUDGE_FRAC = 0.2 // 原点微调步长 = 格宽/格高 × 该比例
 const SIZE_STEP = 0.01 // 格宽/格高微调比例
 const MIN_BOX = 8 // 选框最小边长（图片 px）
@@ -129,11 +130,14 @@ Page({
 
   fitView(iw, ih) {
     const area = this.area || { width: 300, height: 300 }
-    const scale = Math.min(area.width / iw, area.height / ih)
+    const pad = FIT_PAD
+    const innerW = area.width - pad * 2
+    const innerH = area.height - pad * 2
+    const scale = Math.min(innerW / iw, innerH / ih)
     return {
       scale,
-      ox: (area.width - iw * scale) / 2,
-      oy: (area.height - ih * scale) / 2
+      ox: pad + (innerW - iw * scale) / 2,
+      oy: pad + (innerH - ih * scale) / 2
     }
   },
 
@@ -141,14 +145,17 @@ Page({
     const iw = this.wImg.width
     const ih = this.wImg.height
     const area = this.area
+    const pad = FIT_PAD
+    const innerW = area.width - pad * 2
+    const innerH = area.height - pad * 2
     const w = iw * view.scale
     const h = ih * view.scale
     let ox = view.ox
     let oy = view.oy
-    if (w <= area.width) ox = (area.width - w) / 2
-    else ox = Math.max(area.width - w, Math.min(0, ox))
-    if (h <= area.height) oy = (area.height - h) / 2
-    else oy = Math.max(area.height - h, Math.min(0, oy))
+    if (w <= innerW) ox = pad + (innerW - w) / 2
+    else ox = Math.max(pad + innerW - w, Math.min(pad, ox))
+    if (h <= innerH) oy = pad + (innerH - h) / 2
+    else oy = Math.max(pad + innerH - h, Math.min(pad, oy))
     return { scale: view.scale, ox, oy }
   },
 
@@ -229,12 +236,14 @@ Page({
       ['x0y1', b.x0, b.y1],
       ['x1y1', b.x1, b.y1]
     ]
+    let best = null
     for (const c of corners) {
       const sx = v.ox + c[1] * v.scale
       const sy = v.oy + c[2] * v.scale
-      if (Math.abs(sx - p.x) <= HANDLE && Math.abs(sy - p.y) <= HANDLE) return c[0]
+      const d = Math.max(Math.abs(sx - p.x), Math.abs(sy - p.y))
+      if (d <= HANDLE && (!best || d < best.d)) best = { key: c[0], d }
     }
-    return ''
+    return best ? best.key : ''
   },
 
   _inBox(p) {
@@ -334,9 +343,12 @@ Page({
       const ip = this._toImg(p)
       const bs = this._boxStart
       const b = Object.assign({}, bs)
-      if (this._resizeCorner.indexOf('x0') === 0) b.x0 = Math.min(ip.x, bs.x1 - MIN_BOX)
+      // 角名如 x1y0（右上）：控制右 x1 与上 y0 两边；y 判断必须看第 3 位，不能 indexOf
+      const xIsLeft = this._resizeCorner.charAt(1) === '0'
+      const yIsTop = this._resizeCorner.charAt(3) === '0'
+      if (xIsLeft) b.x0 = Math.min(ip.x, bs.x1 - MIN_BOX)
       else b.x1 = Math.max(ip.x, bs.x0 + MIN_BOX)
-      if (this._resizeCorner.indexOf('y0') === 0) b.y0 = Math.min(ip.y, bs.y1 - MIN_BOX)
+      if (yIsTop) b.y0 = Math.min(ip.y, bs.y1 - MIN_BOX)
       else b.y1 = Math.max(ip.y, bs.y0 + MIN_BOX)
       this._applyBox(b)
       this.draw()

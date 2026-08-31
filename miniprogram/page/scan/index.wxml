@@ -12,7 +12,7 @@
     </view>
     <view class="card hint-card">
       <view class="section-title">怎么用</view>
-      <view class="hint-line">1. 导入图纸截图或照片，尽量拍正、避免旋转</view>
+      <view class="hint-line">1. 导入图纸截图</view>
       <view class="hint-line">2. 输入图纸长宽格数（宽=高）</view>
       <view class="hint-line">3. 在图上框出整个图纸范围，微调到网格对齐后识别</view>
     </view>
@@ -27,7 +27,7 @@
           id="scanCanvas"
           class="scan-canvas"
           bindtouchstart="onTouchStart"
-          bindtouchmove="onTouchMove"
+          catchtouchmove="onTouchMove"
           bindtouchend="onTouchEnd"
           bindtouchcancel="onTouchCancel"
         ></canvas>

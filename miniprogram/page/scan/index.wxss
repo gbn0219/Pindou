@@ -94,6 +94,9 @@
   flex: 1;
   position: relative;
   min-height: 0;
+  margin: 24rpx;
+  border-radius: var(--radius-input);
+  overflow: hidden;
   background: var(--color-paper-3);
 }
 .scan-canvas {
