@@ -1,6 +1,6 @@
 // miniprogram/page/scan/index.js
 /**
- * 图纸识别（扫描）：导入已有拼豆图纸（截图/拍照），本地识别为色号网格。
+ * 图纸识别（扫描）：导入已有拼豆图纸（截图），本地识别为色号网格。
  * 交互：屏幕固定一张正方形网格（格数可调，仅作对齐参考，默认 10），
  * 用户缩放/拖动【图片】让色块对齐网格；可“自动对齐”（投影法网格线检测预对齐）。
  * 对齐后按校准出的“一格大小”扫遍整图识别所有色块，再按“有颜色区域长宽最大值”生成最终正方形图纸。
@@ -36,6 +36,17 @@ Page({
     this.view = null
     this.grid = null
     this._autoAligned = false
+    this.originalPath = '' // 上传的原图（重新裁剪用）
+    this.originalDims = { width: 0, height: 0 }
+  },
+
+  onShow() {
+    // 从裁剪页返回：消费裁剪结果作为工作图
+    const result = getApp().globalData.cropResult
+    if (result && result.path) {
+      delete getApp().globalData.cropResult
+      this.setupImage(result.path)
+    }
   },
 
   onReady() {
@@ -60,26 +71,47 @@ Page({
         if (!file) return
         wx.getImageInfo({
           src: file.tempFilePath,
-          success: (info) => this.setupImage(file.tempFilePath, info.width, info.height),
-          fail: () => this.setupImage(file.tempFilePath, 0, 0)
+          success: (info) => {
+            this.originalPath = file.tempFilePath
+            this.originalDims = { width: info.width, height: info.height }
+            // 上传后先走裁剪页（复用主流程裁剪页）
+            getApp().globalData.cropSource = { path: file.tempFilePath, width: info.width, height: info.height }
+            wx.navigateTo({ url: '/page/crop/index' })
+          },
+          fail: () => this.setupImage(file.tempFilePath)
         })
       }
     })
   },
 
-  async setupImage(path, w, h) {
+  // 重新裁剪当前上传的原图（复用主流程裁剪页）
+  cropImage() {
+    if (!this.originalPath) {
+      wx.showToast({ title: '还没有待裁剪的图片', icon: 'none' })
+      return
+    }
+    getApp().globalData.cropSource = {
+      path: this.originalPath,
+      width: this.originalDims.width,
+      height: this.originalDims.height
+    }
+    wx.navigateTo({ url: '/page/crop/index' })
+  },
+
+  async setupImage(path) {
     this.fullCanvas = null
     this.view = null
     this.grid = null
     this._autoAligned = false
     try {
-      // 工作图：等比缩放到 ≤MAX_DIM，控制内存与采样开销（识别精度不受影响）
-      const scale = w && h ? Math.min(1, MAX_DIM / Math.max(w, h)) : 1
-      const iw = Math.max(1, Math.round(w * scale))
-      const ih = Math.max(1, Math.round(h * scale))
+      // 先加载取真实尺寸，再建工作图（等比缩放到 ≤MAX_DIM，控制内存与采样开销）
+      const loader = wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 })
+      const img = await image.loadImageOnce(loader, path)
+      const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height))
+      const iw = Math.max(1, Math.round(img.width * scale))
+      const ih = Math.max(1, Math.round(img.height * scale))
       const canvas = wx.createOffscreenCanvas({ type: '2d', width: iw, height: ih })
       const ctx = canvas.getContext('2d')
-      const img = await image.loadImageOnce(canvas, path)
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, iw, ih)
       ctx.drawImage(img, 0, 0, iw, ih)

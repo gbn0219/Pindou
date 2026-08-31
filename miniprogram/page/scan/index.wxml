@@ -3,7 +3,7 @@
   <block wx:if="{{stage === 'import'}}">
     <view class="hero">
       <view class="hero-title">识别已有图纸</view>
-      <view class="hero-sub">截图/拍照导入，自动对齐网格后识别成色号网格</view>
+      <view class="hero-sub">截图导入，自动对齐网格后识别成色号网格</view>
     </view>
     <view class="card import-card" hover-class="import-card--pressed" bindtap="chooseImage">
       <view class="bead" aria-hidden="true"></view>
@@ -11,10 +11,10 @@
       <view class="import-sub">从相册选择，或拍一张</view>
     </view>
     <view class="card hint-card">
-      <view class="section-title">怎么用</view>
-      <view class="hint-line">1. 导入图纸截图或照片，尽量拍正、避免旋转</view>
-      <view class="hint-line">2. 调整网格格数（默认 10，只作对齐参考）</view>
-      <view class="hint-line">3. 缩放/拖动图片让色块对齐网格（可点自动对齐），确认后识别</view>
+      <view class="section-title">使用方法</view>
+      <view class="hint-line">1. 导入图纸截图</view>
+      <view class="hint-line">2. 调整网格格数，仅对齐参考</view>
+      <view class="hint-line">3. 缩放/拖动图片让色块对齐网格，确认后识别</view>
     </view>
   </block>
 
@@ -89,6 +89,7 @@
         </view>
 
         <view class="footer-actions">
+          <button class="btn btn--soft footer-btn" hover-class="btn--pressed" bindtap="cropImage">裁剪</button>
           <button class="btn btn--soft footer-btn" hover-class="btn--pressed" bindtap="chooseImage">重新选图</button>
           <button class="btn btn--primary footer-btn footer-btn--main" hover-class="btn--pressed" disabled="{{recognizing}}" bindtap="recognize">{{recognizing ? '识别中…' : '识别图纸'}}</button>
         </view>
