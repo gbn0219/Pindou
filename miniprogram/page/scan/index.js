@@ -95,13 +95,16 @@ Page({
     }
   },
 
-  initCanvas() {
+  initCanvas(retry) {
     if (this.data.stage !== 'calibrate') return
     this.createSelectorQuery()
       .select('#scanCanvas')
       .fields({ node: true, size: true })
       .exec((res) => {
-        if (!res || !res[0]) return
+        if (!res || !res[0]) {
+          if ((retry || 0) < 8) setTimeout(() => this.initCanvas((retry || 0) + 1), 120)
+          return
+        }
         const node = res[0].node
         const areaW = res[0].width || 300
         const areaH = res[0].height || 300
@@ -125,7 +128,7 @@ Page({
   },
 
   fitView(iw, ih) {
-    const area = this.area
+    const area = this.area || { width: 300, height: 300 }
     const scale = Math.min(area.width / iw, area.height / ih)
     return {
       scale,
@@ -364,7 +367,7 @@ Page({
     }
     this._mode = ''
     this._gesture = null
-    if (this.box) this.draw()
+    this.draw()
   },
 
   onTouchCancel() {
