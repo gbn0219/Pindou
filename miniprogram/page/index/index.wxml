@@ -141,4 +141,5 @@
       <view class="progress-pct">{{progressPct}}%</view>
     </view>
   </view>
+  <guide-modal show="{{guideShow}}" bind:close="onGuideClose" bind:start="onGuideStart" />
 </view>

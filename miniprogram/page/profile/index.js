@@ -18,6 +18,7 @@ Page({
     avatarPreview: '',
     faqShow: false,
     aboutShow: false,
+    guideShow: false,
     version: '1.0.0',
     faqList: [
       { q: '怎么生成一张图纸？', a: '首页导入图片 → 选生成方式（照片还原 / 创意生成）→ 选色系与盘面大小 → 生成。' },
@@ -152,6 +153,16 @@ Page({
   },
   hideAbout() {
     this.setData({ aboutShow: false })
+  },
+  showGuide() {
+    this.setData({ guideShow: true })
+  },
+  hideGuide() {
+    this.setData({ guideShow: false })
+  },
+  onGuideStart() {
+    this.setData({ guideShow: false })
+    wx.switchTab({ url: '/page/index/index' })
   },
   noop() {}
 })

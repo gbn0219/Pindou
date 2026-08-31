@@ -29,6 +29,7 @@ Page({
     progressPct: 0,
     progressTip: '',
     fullscreen: false,
+    fsLeaving: false,
     guideMode: 'spot',
     fuseLegend: [],
     fuseSort: 'count',
@@ -38,7 +39,7 @@ Page({
     doneMap: {}
   },
 
-  onLoad() {
+  onLoad(options) {
     const p = getApp().globalData.pattern
     if (!p || !p.grid) {
       wx.showToast({ title: '没有可预览的图纸', icon: 'none' })
@@ -50,6 +51,7 @@ Page({
     this.whiteCodes = pattern.findWhiteishCodes(this.palette) // 套装中的白色系（纯白/近白/奶油白）
     this.refreshBgMask()
     this.codeShown = false
+    this.autoBeading = !!(options && options.beading === '1')
     const styleShort = (p.style || '').split(/[：:]/)[0].trim()
     this.aiSession = getApp().globalData.aiSession || null
     this.setData({
@@ -71,6 +73,7 @@ Page({
 
   onReady() {
     this.drawPattern()
+    if (this.autoBeading) this.enterFullscreen()
   },
 
   onUnload() {
@@ -356,7 +359,7 @@ Page({
     this.buildDone.forEach((code) => { doneMap[code] = true })
     this.setData({
       fullscreen: true,
-      guideMode: 'spot',
+      guideMode: 'build',
       fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, this.data.fuseSort),
       fuseSelected: '',
       buildCurrent: '',
@@ -374,20 +377,25 @@ Page({
   },
 
   exitFullscreen() {
-    this.setData({
-      fullscreen: false,
-      guideMode: 'spot',
-      fuseSelected: '',
-      buildCurrent: ''
-    }, () => {
-      this.pinchActive = false
-      this.pinch = null
-      this.pan = null
-      this.codeShown = false
-      this.view = null
-      this.offscreenDirty = true
-      this.drawPattern()
-    })
+    if (this.data.fsLeaving) return
+    this.setData({ fsLeaving: true })
+    setTimeout(() => {
+      this.setData({
+        fullscreen: false,
+        fsLeaving: false,
+        guideMode: 'build',
+        fuseSelected: '',
+        buildCurrent: ''
+      }, () => {
+        this.pinchActive = false
+        this.pinch = null
+        this.pan = null
+        this.codeShown = false
+        this.view = null
+        this.offscreenDirty = true
+        this.drawPattern()
+      })
+    }, 140)
   },
 
   pickGuideMode(e) {
@@ -447,6 +455,7 @@ Page({
     this.offscreenDirty = true
     const all = this.buildDone.length >= this.data.fuseLegend.length
     this.updateDoneState({ buildCurrent: '' }, () => this.drawGrid())
+    if (wx.vibrateShort) wx.vibrateShort({ type: all ? 'heavy' : 'light' })
     wx.showToast({ title: all ? '全部拼完！' : '已点亮 ' + code, icon: all ? 'success' : 'none' })
   },
 

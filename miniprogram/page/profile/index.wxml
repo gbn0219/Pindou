@@ -31,6 +31,10 @@
       <view class="menu-title">我的图库</view>
       <view class="menu-arrow">›</view>
     </view>
+    <view class="menu-row" hover-class="menu-row--pressed" bindtap="showGuide">
+      <view class="menu-title">使用指南</view>
+      <view class="menu-arrow">›</view>
+    </view>
     <view class="menu-row" hover-class="menu-row--pressed" bindtap="showFaq">
       <view class="menu-title">常见问题</view>
       <view class="menu-arrow">›</view>
@@ -57,5 +61,6 @@
         <button class="btn btn--primary modal-btn" hover-class="btn--pressed" bindtap="hideFaq">我知道了</button>
       </view>
     </view>
+    <guide-modal show="{{guideShow}}" bind:close="hideGuide" bind:start="onGuideStart" />
   </block>
 </view>

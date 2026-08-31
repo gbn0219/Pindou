@@ -122,6 +122,13 @@ Page({
     await this.openGalleryPattern(id, '/page/pattern-edit/index')
   },
 
+  // 去拼豆：取回 grid 后直达展示页并自动进入全屏拼豆（?beading=1）
+  async onBeading(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    await this.openGalleryPattern(id, '/page/pattern/index?beading=1')
+  },
+
   // 导出图纸：与生成后的导出同一逻辑（取回 grid → 生成带编号与数目的图纸 → 保存相册）
   async onExport(e) {
     const id = e.currentTarget.dataset.id

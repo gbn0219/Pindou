@@ -28,6 +28,7 @@ Page({
     extraReq: '', // 额外要求（不覆盖风格，如删掉画面中的某些元素）
     aiCutout: true, // 抠出主体（背景变白），默认开启
     generating: false,
+    guideShow: false,
     progressShow: false,
     progressPct: 0,
     progressTip: ''
@@ -42,6 +43,23 @@ Page({
       this.setData({ imagePath: result.path })
       delete getApp().globalData.cropResult
     }
+    this.maybeShowGuide()
+  },
+
+  maybeShowGuide() {
+    if (this.data.guideShow) return
+    if (wx.getStorageSync('guideShown')) return
+    this.setData({ guideShow: true })
+  },
+
+  onGuideClose() {
+    this.setData({ guideShow: false })
+    wx.setStorageSync('guideShown', true)
+  },
+
+  onGuideStart() {
+    this.setData({ guideShow: false })
+    wx.setStorageSync('guideShown', true)
   },
 
   onUnload() {

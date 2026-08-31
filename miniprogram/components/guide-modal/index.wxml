@@ -1,0 +1,44 @@
+<view wx:if="{{show || leaving}}" class="gm-mask {{leaving ? 'gm-leave' : ''}}" bindtap="onMask">
+  <view class="gm-card" catchtap="noop">
+    <view class="gm-head">
+      <view class="gm-title">一张图纸的诞生</view>
+      <view class="gm-sub">六个方法，一条流水线</view>
+    </view>
+    <scroll-view scroll-y class="gm-scroll">
+      <view class="gm-item" wx:for="{{features}}" wx:key="key">
+        <view class="gm-item-index">{{index + 1}}</view>
+        <view class="gm-item-body">
+          <view class="gm-item-title">{{item.title}}</view>
+          <view class="gm-item-desc">{{item.desc}}</view>
+        </view>
+      </view>
+      <view class="gm-flow">
+        <view class="gm-flow-title">流程图</view>
+        <scroll-view scroll-x class="gm-flow-scroll">
+          <view class="gm-flow-line">
+            <view class="gm-chip">照片</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">照片还原 / 创意生成</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">图纸</view>
+          </view>
+          <view class="gm-flow-line">
+            <view class="gm-chip">已有图纸</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">识别已有图纸</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">图纸</view>
+          </view>
+          <view class="gm-flow-line">
+            <view class="gm-chip">图纸</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">修改 / 智能拼豆·一键跟拼</view>
+            <view class="gm-arrow">→</view>
+            <view class="gm-chip">图库 / 导出</view>
+          </view>
+        </scroll-view>
+      </view>
+    </scroll-view>
+    <button class="btn btn--primary gm-start" hover-class="btn--pressed" bindtap="onStart">开始制作</button>
+  </view>
+</view>

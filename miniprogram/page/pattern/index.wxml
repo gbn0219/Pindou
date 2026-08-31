@@ -14,7 +14,7 @@
     </view>
   </view>
 
-  <view class="canvas-shell card {{fullscreen ? 'canvas-shell--fs' : ''}}">
+  <view class="canvas-shell card {{fullscreen ? 'canvas-shell--fs' : ''}} {{fsLeaving ? 'canvas-shell--fs--leaving' : ''}}">
     <view class="canvas-area" id="canvasArea" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel">
       <canvas type="2d" id="patternCanvas" class="pattern-canvas" style="width: 100%; height: 100%;" />
       <view wx:if="{{!fullscreen}}" class="fs-btn" hover-class="fs-btn--pressed" catchtap="enterFullscreen">
@@ -23,7 +23,7 @@
       <view wx:if="{{fullscreen}}" class="fs-close" catchtap="exitFullscreen">×</view>
       <view wx:if="{{fullscreen && guideMode === 'build'}}" class="fs-progress-pill">已点亮 {{buildDoneCount}}/{{fuseLegend.length}} 色</view>
     </view>
-    <view wx:if="{{!fullscreen}}" class="canvas-hint">双指缩放和拖动</view>
+    <view wx:if="{{!fullscreen}}" class="canvas-hint">双指缩放 - 点击右下角放大进入智能拼豆板</view>
     <view wx:if="{{fullscreen}}" class="beading-bar">
             <view class="beading-top">
         <view class="beading-heading">

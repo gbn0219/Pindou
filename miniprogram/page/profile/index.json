@@ -1,4 +1,6 @@
 {
-  "usingComponents": {},
+  "usingComponents": {
+    "guide-modal": "/components/guide-modal/index"
+  },
   "navigationBarTitleText": "我的"
 }

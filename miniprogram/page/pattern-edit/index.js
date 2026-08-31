@@ -41,6 +41,7 @@ Page({
     saving: false,
     cellInfo: MODE_HINTS.paint,
     fullscreen: false,
+    fsLeaving: false,
     guideMode: 'spot',
     fuseLegend: [],
     fuseSort: 'count',
@@ -585,7 +586,7 @@ Page({
     this.buildDone.forEach((code) => { doneMap[code] = true })
     this.setData({
       fullscreen: true,
-      guideMode: 'spot',
+      guideMode: 'build',
       fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, this.data.fuseSort),
       fuseSelected: '',
       buildCurrent: '',
@@ -602,19 +603,24 @@ Page({
   },
 
   exitFullscreen() {
-    this.setData({
-      fullscreen: false,
-      guideMode: 'spot',
-      fuseSelected: '',
-      buildCurrent: ''
-    }, () => {
-      this.pinchActive = false
-      this.pinch = null
-      this.pan = null
-      this.view = null
-      this.offscreenDirty = true
-      this.draw()
-    })
+    if (this.data.fsLeaving) return
+    this.setData({ fsLeaving: true })
+    setTimeout(() => {
+      this.setData({
+        fullscreen: false,
+        fsLeaving: false,
+        guideMode: 'build',
+        fuseSelected: '',
+        buildCurrent: ''
+      }, () => {
+        this.pinchActive = false
+        this.pinch = null
+        this.pan = null
+        this.view = null
+        this.offscreenDirty = true
+        this.draw()
+      })
+    }, 140)
   },
 
   pickGuideMode(e) {
@@ -674,6 +680,7 @@ Page({
     this.offscreenDirty = true
     const all = this.buildDone.length >= this.data.fuseLegend.length
     this.updateDoneState({ buildCurrent: '' }, () => this.drawGrid())
+    if (wx.vibrateShort) wx.vibrateShort({ type: all ? 'heavy' : 'light' })
     wx.showToast({ title: all ? '全部拼完！' : '已点亮 ' + code, icon: all ? 'success' : 'none' })
   },
 
