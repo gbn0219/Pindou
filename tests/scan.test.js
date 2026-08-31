@@ -51,7 +51,7 @@ function paintLabel(img, rows, cols, cell, thin, outer, r, c, size) {
   return img
 }
 
-// sampleCell：主色 + 黑标占比
+// sampleCell：主色 + 黑标占比（暗且低饱和才算标号）
 {
   const img = makeImageData(20, 20, (x, y) => (x < 10 ? [255, 255, 255, 255] : [0, 0, 0, 255]))
   const s = scan.sampleCell(img, 0, 0, 20, 20)
@@ -59,33 +59,52 @@ function paintLabel(img, rows, cols, cell, thin, outer, r, c, size) {
   assert.ok(s.darkRatio >= 0.3, 'darkRatio ' + s.darkRatio)
 }
 
-// 固定网格扫描 + 黑标背景判定（一张带标号/不带标号的白格 + 彩色格）
+// sampleCell：红色填充（暗但高饱和）不算标号
+{
+  const img = makeImageData(20, 20, () => [220, 40, 40, 255])
+  const s = scan.sampleCell(img, 0, 0, 20, 20)
+  assert.deepStrictEqual(s.rgb, [220, 40, 40])
+  assert.ok(s.darkRatio < 0.01, 'darkRatio ' + s.darkRatio)
+}
+
+// scanAtPitch：按校准格宽从原点扫全图，取到各格主色
 {
   const cell = 18
   const thin = 2
-  const outer = 2
+  const outer = 0
   const colors = [
-    [255, 255, 255, 255], // (0,0) 白豆：中心有黑标
-    [255, 255, 255, 255], // (0,1) 空白背景：无标号
-    [220, 40, 40, 255], //   (1,0) 彩色
-    [245, 245, 245, 255] //  (1,1) 近白背景：无标号
+    [220, 40, 40, 255],
+    [40, 200, 40, 255],
+    [40, 40, 220, 255],
+    [240, 220, 40, 255]
+  ]
+  const img = buildGridImage(2, 2, colors, cell, thin, outer)
+  const { rgbGrid, rowStart, colStart } = scan.scanAtPitch(img, cell + thin, outer, outer)
+  assert.strictEqual(rowStart, 0)
+  assert.strictEqual(colStart, 0)
+  assert.deepStrictEqual(rgbGrid[0][0], [220, 40, 40])
+  assert.deepStrictEqual(rgbGrid[0][1], [40, 200, 40])
+  assert.deepStrictEqual(rgbGrid[1][0], [40, 40, 220])
+  assert.deepStrictEqual(rgbGrid[1][1], [240, 220, 40])
+}
+
+// scanAtPitch + 黑标背景：白格带黑标=白豆，无标=背景
+{
+  const cell = 18
+  const thin = 2
+  const outer = 0
+  const colors = [
+    [255, 255, 255, 255],
+    [255, 255, 255, 255],
+    [220, 40, 40, 255],
+    [245, 245, 245, 255]
   ]
   const img = buildGridImage(2, 2, colors, cell, thin, outer)
   paintLabel(img, 2, 2, cell, thin, outer, 0, 0, 6)
-  const grid = { cell: cell + thin, gx: outer, gy: outer }
-  const view = { scale: 1, ox: 0, oy: 0 }
-  const { rgbGrid, darkGrid } = scan.scanScreenGrid(img, 2, 2, grid, view)
-  // 主色：白/白/红/近白
-  assert.deepStrictEqual(rgbGrid[0][0], [255, 255, 255])
-  assert.deepStrictEqual(rgbGrid[0][1], [255, 255, 255])
-  assert.deepStrictEqual(rgbGrid[1][0], [220, 40, 40])
-  assert.deepStrictEqual(rgbGrid[1][1], [245, 245, 245])
-  // 黑标：只有 (0,0) 有标号
-  assert.ok(darkGrid[0][0] >= 0.05, 'label cell darkRatio ' + darkGrid[0][0])
+  const { rgbGrid, darkGrid } = scan.scanAtPitch(img, cell + thin, outer, outer)
+  assert.ok(darkGrid[0][0] >= 0.05, 'label darkRatio ' + darkGrid[0][0])
   assert.ok(darkGrid[0][1] < 0.01)
   assert.ok(darkGrid[1][0] < 0.01)
-  assert.ok(darkGrid[1][1] < 0.01)
-  // 背景：白且无标号 → 置空；(0,0) 白但有标号 → 白豆
   const mask = scan.buildBgMask(rgbGrid, darkGrid, { autoBg: true })
   assert.deepStrictEqual(mask[0][0], false)
   assert.deepStrictEqual(mask[0][1], true)
@@ -93,24 +112,70 @@ function paintLabel(img, rows, cols, cell, thin, outer, r, c, size) {
   assert.deepStrictEqual(mask[1][1], true)
 }
 
-// buildBgMask：autoBg=false → 全当白豆
+// buildBgMask：autoBg=false → 全当白豆；无任何黑标 → 全当白豆（兜底）
 {
-  const rgbGrid = [
-    [[255, 255, 255], [255, 255, 255]]
-  ]
+  const rgbGrid = [[[255, 255, 255], [255, 255, 255]]]
   const darkGrid = [[0, 0]]
-  const mask = scan.buildBgMask(rgbGrid, darkGrid, { autoBg: false })
-  assert.deepStrictEqual(mask[0], [false, false])
+  assert.deepStrictEqual(scan.buildBgMask(rgbGrid, darkGrid, { autoBg: false })[0], [false, false])
+  assert.deepStrictEqual(scan.buildBgMask(rgbGrid, darkGrid, { autoBg: true })[0], [false, false])
 }
 
-// buildBgMask：整张图一个黑标都没有（图不印色号）→ 全当白豆
+// finalizePattern：取彩色区域长宽最大值生成正方形；包围盒内背景洞保留；四周补背景
+{
+  const white = [255, 255, 255]
+  const red = [200, 40, 40]
+  const green = [40, 200, 40]
+  const blue = [40, 40, 200]
+  // 5 行 × 5 列：前景占 rows1..3 / cols0..2，其中 (2,1) 是背景洞
+  const rgbGrid = [
+    [white, white, white, white, white],
+    [red, red, red, white, white],
+    [green, white, green, white, white],
+    [blue, blue, blue, white, white],
+    [white, white, white, white, white]
+  ]
+  const bgMask = rgbGrid.map((row) => row.map((rgb) => rgb[0] >= 225))
+  const res = scan.finalizePattern(rgbGrid, bgMask, '221')
+  assert.ok(res)
+  assert.strictEqual(res.size, 3) // 彩色区域 3 高 × 3 宽 → max = 3
+  assert.strictEqual(res.grid.length, 3)
+  assert.strictEqual(res.grid[0].length, 3)
+  // 背景洞 (1,1) 保留为空
+  assert.strictEqual(res.bgMask[1][1], true)
+  // 彩色内容映射成套装内合法色号
+  assert.ok(colorsData.sets['221'].indexOf(res.grid[0][0]) >= 0)
+  assert.ok(colorsData.sets['221'].indexOf(res.grid[2][2]) >= 0)
+  assert.strictEqual(res.bgMask[0][0], false)
+  assert.strictEqual(res.bgMask[2][2], false)
+}
+
+// finalizePattern：宽 > 高时按宽度补成正方形
+{
+  const white = [255, 255, 255]
+  const red = [200, 40, 40]
+  // 2 行 × 4 列前景
+  const rgbGrid = [
+    [white, white, white, white],
+    [red, red, red, red],
+    [red, red, red, red],
+    [white, white, white, white]
+  ]
+  const bgMask = rgbGrid.map((row) => row.map((rgb) => rgb[0] >= 225))
+  const res = scan.finalizePattern(rgbGrid, bgMask, '221')
+  assert.ok(res)
+  assert.strictEqual(res.size, 4) // 2 高 × 4 宽 → max = 4
+  // 前两行是彩色，后两行为背景补白
+  assert.strictEqual(res.bgMask[0][0], false)
+  assert.strictEqual(res.bgMask[2][0], true)
+}
+
+// finalizePattern：全背景 → null
 {
   const rgbGrid = [
     [[255, 255, 255], [255, 255, 255]]
   ]
-  const darkGrid = [[0, 0]]
-  const mask = scan.buildBgMask(rgbGrid, darkGrid, { autoBg: true })
-  assert.deepStrictEqual(mask[0], [false, false])
+  const bgMask = [[true, true]]
+  assert.strictEqual(scan.finalizePattern(rgbGrid, bgMask, '221'), null)
 }
 
 // rgbGridToCodes：套装真实色号映射回同一色号
@@ -119,7 +184,7 @@ function paintLabel(img, rows, cols, cell, thin, outer, r, c, size) {
   const firstCode = colorsData.sets[set][0]
   const rgb = colorsData.colors[firstCode].rgb
   const img = makeImageData(10, 10, () => [rgb[0], rgb[1], rgb[2], 255])
-  const { rgbGrid } = scan.scanScreenGrid(img, 1, 1, { cell: 10, gx: 0, gy: 0 }, { scale: 1, ox: 0, oy: 0 })
+  const { rgbGrid } = scan.scanAtPitch(img, 10, 0, 0)
   const codes = scan.rgbGridToCodes(rgbGrid, set)
   assert.strictEqual(codes[0][0], firstCode)
 }

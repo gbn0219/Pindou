@@ -13,7 +13,7 @@
     <view class="card hint-card">
       <view class="section-title">怎么用</view>
       <view class="hint-line">1. 导入图纸截图或照片，尽量拍正、避免旋转</view>
-      <view class="hint-line">2. 输入图纸长宽格数（宽=高）</view>
+      <view class="hint-line">2. 调整网格格数（默认 10，只作对齐参考）</view>
       <view class="hint-line">3. 缩放/拖动图片让色块对齐网格（可点自动对齐），确认后识别</view>
     </view>
   </block>
@@ -35,17 +35,25 @@
       </view>
 
       <view class="panel">
-        <view class="size-row">
-          <view class="size-field">
-            <text class="size-label">宽（列）</text>
-            <input class="size-input" type="number" value="{{cols}}" bindblur="onColsInput" bindconfirm="onColsInput" />
+        <view class="cells-row">
+          <text class="cells-label">网格格数（对齐参考）</text>
+          <view class="cells-control">
+            <view class="cells-btn" data-delta="-1" bindtap="onCellsStep">−</view>
+            <slider
+              class="cells-slider"
+              min="5"
+              max="50"
+              step="1"
+              value="{{cells}}"
+              activeColor="#f6ce00"
+              block-size="20"
+              bindchanging="onCellsChange"
+              bindchange="onCellsChange"
+            />
+            <view class="cells-btn" data-delta="1" bindtap="onCellsStep">＋</view>
+            <text class="cells-value">{{cells}} 格</text>
           </view>
-          <text class="size-x">×</text>
-          <view class="size-field">
-            <text class="size-label">高（行）</text>
-            <input class="size-input" type="number" value="{{rows}}" bindblur="onRowsInput" bindconfirm="onRowsInput" />
-          </view>
-          <view class="size-note">正方形</view>
+          <view class="cells-hint">最终图纸尺寸按识别到的彩色区域自动确定，不需填</view>
         </view>
 
         <view class="chip-row">

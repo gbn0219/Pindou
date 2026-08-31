@@ -120,41 +120,46 @@
   border-top: 2rpx solid var(--color-rule);
 }
 
-.size-row {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-xs);
+.cells-row {
   margin-bottom: var(--space-sm);
 }
-.size-field {
-  flex: 1;
-}
-.size-label {
+.cells-label {
   display: block;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--color-ink-2);
-  margin-bottom: 6rpx;
+  margin-bottom: var(--space-2xs);
 }
-.size-input {
-  height: 72rpx;
-  border: 2rpx solid var(--color-rule);
+.cells-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.cells-btn {
+  min-width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-input);
   background: var(--color-paper);
-  padding: 0 var(--space-sm);
+  border: 2rpx solid var(--color-rule);
   font-size: var(--text-md);
-  text-align: center;
   color: var(--color-ink);
 }
-.size-x {
-  font-size: var(--text-md);
-  color: var(--color-ink-2);
-  padding-bottom: 12rpx;
+.cells-slider {
+  flex: 1;
 }
-.size-note {
-  align-self: center;
+.cells-value {
+  min-width: 96rpx;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+.cells-hint {
+  margin-top: var(--space-2xs);
   font-size: var(--text-xs);
   color: var(--color-neutral);
-  padding-bottom: 12rpx;
 }
 
 .chip-row {

@@ -1,8 +1,10 @@
 // miniprogram/utils/scan.js
 /**
  * 图纸识别（扫描）纯逻辑：
- * - 固定网格采样：按屏幕网格 × 图片变换把每个格子映射回图片区域，取主色 + 中心黑标占比。
- * - 背景判定：白格中心有黑色标（打印的色号）→ 真实白豆；白格中心无黑标 → 背景（置空）。
+ * - 网格只是屏幕上的对齐参考：用户缩放/拖动图片让色块对齐网格。
+ * - 对齐后按“校准格宽”（一格 = 网格格边长 / 当前缩放）从网格原点扫遍整张图，识别所有色块。
+ * - 背景判定：白格中心有黑色标（打印的色号）→ 真实白豆；无黑标 → 背景。
+ * - 最终图纸：取“有颜色区域”长宽的最大值，生成正方形图纸（最终尺寸不靠用户指定）。
  * - 网格线检测：投影峰值法找图纸网格线的格宽/格高/原点，供“自动对齐”。
  * 纯函数，可在 Node 中测试；不调用任何 AI。
  */
@@ -11,8 +13,8 @@ const color = require('./color')
 const TOP_BUCKET_RATIO = 0.35 // 主色桶占比下限，低于则退化为区域平均（渐变/纹理兜底）
 const DEFAULT_CENTER_FRAC = 0.6 // 黑标检测只看格子中心区域（避开四边网格线）
 const DEFAULT_DARK_LUM = 128 // “黑”的亮度阈值（纯黑标号 < 128）
-const DEFAULT_LABEL_MIN_RATIO = 0.01 // 中心黑像素占比 ≥ 1% 视为“有标号”
 const DEFAULT_SAT_MAX = 64 // 标号像素须低饱和（灰黑，R≈G≈B），彩色填充不算
+const DEFAULT_LABEL_MIN_RATIO = 0.01 // 中心黑像素占比 ≥ 1% 视为“有标号”
 const DEFAULT_WHITE_MIN = 225 // 白色系判定下限（RGB 三通道）
 const DEFAULT_MAX_DIM = 512 // 网格线检测降采样最大边长
 const DEFAULT_BAND_FRAC = 0.5 // 网格线检测只取图像中间区域（避开边缘/边距干扰）
@@ -91,30 +93,35 @@ function sampleCell(imageData, x0, y0, w, h, opts) {
 }
 
 /**
- * 固定网格扫描：grid = 屏幕网格 { cell, gx, gy }（css px），view = 图片变换 { scale, ox, oy }。
- * 每个屏幕格映射回图片区域采样。返回 { rgbGrid, darkGrid }（rows×cols）。
+ * 按校准格宽从原点扫遍整张图：
+ * 一格大小 = grid.cell / view.scale（图片像素），原点 = 网格 (0,0) 映射回图片的坐标。
+ * 返回 { rgbGrid, darkGrid, rowStart, colStart }（rgbGrid/darkGrid 为 rows×cols）。
  */
-function scanScreenGrid(imageData, rows, cols, grid, view, opts) {
+function scanAtPitch(imageData, cellPx, originX, originY, opts) {
+  const iw = imageData.width
+  const ih = imageData.height
+  const c0 = Math.floor(-originX / cellPx) || 0
+  const c1 = Math.floor((iw - 1 - originX) / cellPx) || 0
+  const r0 = Math.floor(-originY / cellPx) || 0
+  const r1 = Math.floor((ih - 1 - originY) / cellPx) || 0
+  const rows = r1 - r0 + 1
+  const cols = c1 - c0 + 1
   const rgbGrid = []
   const darkGrid = []
   for (let r = 0; r < rows; r++) {
     const rowRgb = []
     const rowDark = []
     for (let c = 0; c < cols; c++) {
-      const sx = grid.gx + c * grid.cell
-      const sy = grid.gy + r * grid.cell
-      const iw = grid.cell / view.scale
-      const ih = grid.cell / view.scale
-      const ix = (sx - view.ox) / view.scale
-      const iy = (sy - view.oy) / view.scale
-      const s = sampleCell(imageData, ix, iy, iw, ih, opts)
+      const ix = originX + (c0 + c) * cellPx
+      const iy = originY + (r0 + r) * cellPx
+      const s = sampleCell(imageData, ix, iy, cellPx, cellPx, opts)
       rowRgb.push(s.rgb)
       rowDark.push(s.darkRatio)
     }
     rgbGrid.push(rowRgb)
     darkGrid.push(rowDark)
   }
-  return { rgbGrid, darkGrid }
+  return { rgbGrid, darkGrid, rowStart: r0, colStart: c0 }
 }
 
 /**
@@ -163,6 +170,50 @@ function buildBgMask(rgbGrid, darkGrid, opts) {
     }
   }
   return mask
+}
+
+/**
+ * 最终图纸：取“有颜色区域”（非背景）包围盒长宽的最大值，生成正方形图纸。
+ * 彩色内容放在左上角，其余补背景（mask=true）；包围盒内的背景洞保留为空。
+ * 全部为背景时返回 null。返回 { grid, bgMask, size }。
+ */
+function finalizePattern(rgbGrid, bgMask, setKey) {
+  const rows = rgbGrid.length
+  const cols = rows ? rgbGrid[0].length : 0
+  if (!rows || !cols) return null
+  let minR = rows
+  let minC = cols
+  let maxR = -1
+  let maxC = -1
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (bgMask[r][c]) continue
+      if (r < minR) minR = r
+      if (r > maxR) maxR = r
+      if (c < minC) minC = c
+      if (c > maxC) maxC = c
+    }
+  }
+  if (maxR < 0) return null
+  const bh = maxR - minR + 1
+  const bw = maxC - minC + 1
+  const side = Math.max(bh, bw)
+  const palette = color.buildPalette(setKey)
+  const blank = color.nearestColor(255, 255, 255, palette).code
+  const grid = []
+  const mask = []
+  for (let r = 0; r < side; r++) {
+    grid.push(new Array(side).fill(blank))
+    mask.push(new Array(side).fill(true))
+  }
+  for (let r = 0; r < bh; r++) {
+    for (let c = 0; c < bw; c++) {
+      const rgb = rgbGrid[minR + r][minC + c]
+      grid[r][c] = color.nearestColor(rgb[0], rgb[1], rgb[2], palette).code
+      mask[r][c] = bgMask[minR + r][minC + c]
+    }
+  }
+  return { grid, bgMask: mask, size: side }
 }
 
 // ---- 网格线检测（投影峰值法，自动对齐用）----
@@ -259,10 +310,6 @@ function projectBands(dark, w, h, axis, bandFrac, lineMaxW, minLines) {
 }
 
 /**
- * 网格线检测：返回 { ok:true, cellW, cellH, originX, originY }（图片像素）或 null。
- * 只分析图像中间区域（bandFrac），避免边缘/边距干扰；要求足够多的网格线。
- */
-/**
  * 第一条网格线左侧/上方区域是否“有内容”（非近白）：有 → 前面还藏着一列/一行，原点要再往前退一个格宽。
  * 解决“图纸最左列没有外框线时，检测到的第一条线其实是第 1/2 列的分隔线”导致的整体偏移一格。
  */
@@ -287,6 +334,10 @@ function contentRatioBefore(imageData, linePos, pitch, isX, bandFrac, whiteMin) 
   return total ? content / total : 0
 }
 
+/**
+ * 网格线检测：返回 { ok:true, cellW, cellH, originX, originY }（图片像素）或 null。
+ * 只分析图像中间区域（bandFrac），避免边缘/边距干扰；要求足够多的网格线。
+ */
 function detectGridLines(imageData, opts) {
   const maxDim = (opts && opts.maxDim) || DEFAULT_MAX_DIM
   const darkLum = (opts && opts.darkLum) || DEFAULT_DARK_LUM
@@ -315,10 +366,9 @@ function detectGridLines(imageData, opts) {
 
 module.exports = {
   sampleCell,
-  scanScreenGrid,
+  scanAtPitch,
   rgbGridToCodes,
   buildBgMask,
-  detectGridLines,
-  DEFAULT_LABEL_MIN_RATIO,
-  DEFAULT_WHITE_MIN
+  finalizePattern,
+  detectGridLines
 }
