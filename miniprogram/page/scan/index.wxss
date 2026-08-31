@@ -1,4 +1,4 @@
-/* 图纸识别（扫描） */
+/* 图纸识别（扫描）：固定网格 + 移图 */
 @import "../../styles/tokens.wxss";
 
 .page {
@@ -183,19 +183,34 @@
   transform: translateY(2rpx) scale(0.96);
 }
 
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+.switch-label {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
 .nudge-row {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
-  flex-wrap: wrap;
+}
+.nudge-label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  flex: 1;
 }
 .nudge-group {
   display: flex;
   gap: var(--space-2xs);
 }
 .nudge-btn {
-  min-width: 72rpx;
+  min-width: 68rpx;
   height: 60rpx;
   display: flex;
   align-items: center;
@@ -207,14 +222,11 @@
   font-size: var(--text-sm);
   color: var(--color-ink);
 }
-.nudge-btn--reset {
-  margin-left: auto;
-  color: var(--color-accent-3);
-}
 
 .action-row {
   display: flex;
   gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 .action-btn {
   flex: 1;

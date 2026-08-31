@@ -3,7 +3,7 @@
   <block wx:if="{{stage === 'import'}}">
     <view class="hero">
       <view class="hero-title">识别已有图纸</view>
-      <view class="hero-sub">截图/拍照导入，识别成可编辑的色号网格</view>
+      <view class="hero-sub">截图/拍照导入，自动对齐网格后识别成色号网格</view>
     </view>
     <view class="card import-card" hover-class="import-card--pressed" bindtap="chooseImage">
       <view class="bead" aria-hidden="true"></view>
@@ -12,13 +12,13 @@
     </view>
     <view class="card hint-card">
       <view class="section-title">怎么用</view>
-      <view class="hint-line">1. 导入图纸截图</view>
+      <view class="hint-line">1. 导入图纸截图或照片，尽量拍正、避免旋转</view>
       <view class="hint-line">2. 输入图纸长宽格数（宽=高）</view>
-      <view class="hint-line">3. 在图上框出整个图纸范围，微调到网格对齐后识别</view>
+      <view class="hint-line">3. 缩放/拖动图片让色块对齐网格（可点自动对齐），确认后识别</view>
     </view>
   </block>
 
-  <!-- 校准阶段 -->
+  <!-- 校准阶段：固定网格 + 移图 -->
   <block wx:else>
     <view class="calibrate">
       <view class="canvas-wrap">
@@ -59,30 +59,29 @@
           >{{item}} 色</view>
         </view>
 
-        <view class="nudge-row" wx:if="{{hasBox}}">
+        <view class="switch-row">
+          <text class="switch-label">背景自动识别（无标号白格置空）</text>
+          <switch checked="{{autoBg}}" color="#ff3a5d" bindchange="onAutoBgChange" />
+        </view>
+
+        <view class="nudge-row">
+          <text class="nudge-label">对齐微调（1/10 格）</text>
           <view class="nudge-group">
             <view class="nudge-btn" data-dir="left" bindtap="onNudge">◀</view>
             <view class="nudge-btn" data-dir="up" bindtap="onNudge">▲</view>
             <view class="nudge-btn" data-dir="down" bindtap="onNudge">▼</view>
             <view class="nudge-btn" data-dir="right" bindtap="onNudge">▶</view>
           </view>
-          <view class="nudge-group">
-            <view class="nudge-btn" data-axis="w" data-dir="-1" bindtap="onGrow">窄</view>
-            <view class="nudge-btn" data-axis="w" data-dir="1" bindtap="onGrow">宽</view>
-            <view class="nudge-btn" data-axis="h" data-dir="-1" bindtap="onGrow">矮</view>
-            <view class="nudge-btn" data-axis="h" data-dir="1" bindtap="onGrow">高</view>
-          </view>
-          <view class="nudge-btn nudge-btn--reset" bindtap="onReset">重置</view>
+        </view>
+
+        <view class="action-row">
+          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="onAutoAlign" disabled="{{autoAligning}}">{{autoAligning ? '对齐中…' : '自动对齐'}}</button>
+          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="resetAlign">重置对齐</button>
         </view>
 
         <view class="action-row">
           <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="chooseImage">重新选图</button>
-          <button
-            class="btn btn--primary action-btn"
-            hover-class="btn--pressed"
-            disabled="{{recognizing || !hasBox}}"
-            bindtap="recognize"
-          >{{recognizing ? '识别中…' : '识别图纸'}}</button>
+          <button class="btn btn--primary action-btn" hover-class="btn--pressed" disabled="{{recognizing}}" bindtap="recognize">{{recognizing ? '识别中…' : '识别图纸'}}</button>
         </view>
       </view>
     </view>
