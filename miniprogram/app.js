@@ -55,6 +55,11 @@ App({
   onHide() {
     console.log('App Hide')
   },
+  onPageNotFound(res) {
+    // 路由兜底：页面不存在时记录并把用户带回首页，避免硬报错
+    console.error('[page-not-found]', res && res.path, res && res.query)
+    wx.reLaunch({ url: '/page/index/index' })
+  },
   onThemeChange({ theme }) {
     this.globalData.theme = theme
     themeListeners.forEach((listener) => {

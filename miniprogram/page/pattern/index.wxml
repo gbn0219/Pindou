@@ -14,18 +14,99 @@
     </view>
   </view>
 
-  <view class="canvas-shell card">
+  <view class="canvas-shell card {{fullscreen ? 'canvas-shell--fs' : ''}}">
     <view class="canvas-area" id="canvasArea" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchCancel">
       <canvas type="2d" id="patternCanvas" class="pattern-canvas" style="width: 100%; height: 100%;" />
+      <view wx:if="{{!fullscreen}}" class="fs-btn" hover-class="fs-btn--pressed" catchtap="enterFullscreen">
+        <view class="fs-ico"><view class="fs-ico-inner"></view></view>
+      </view>
+      <view wx:if="{{fullscreen}}" class="fs-close" catchtap="exitFullscreen">×</view>
+      <view wx:if="{{fullscreen && guideMode === 'build'}}" class="fs-progress-pill">已点亮 {{buildDoneCount}}/{{fuseLegend.length}} 色</view>
     </view>
-    <view class="canvas-hint">双指缩放和拖动</view>
-
+    <view wx:if="{{!fullscreen}}" class="canvas-hint">双指缩放和拖动</view>
+    <view wx:if="{{fullscreen}}" class="beading-bar">
+            <view class="beading-top">
+        <view class="beading-heading">
+          <view class="beading-title">全屏拼豆</view>
+          <view class="beading-subtitle">选择一个模式开始</view>
+        </view>
+        <view class="beading-sort">
+          <view class="beading-sort-label">排序方式</view>
+          <view class="beading-sort-options">
+            <view class="beading-sort-option {{fuseSort === 'count' ? 'beading-sort-option--on' : ''}}" data-sort="count" bindtap="pickFuseSort">数量</view>
+            <view class="beading-sort-option {{fuseSort === 'color' ? 'beading-sort-option--on' : ''}}" data-sort="color" bindtap="pickFuseSort">颜色</view>
+          </view>
+        </view>
+      </view>
+      <view class="beading-modes">
+        <view class="beading-mode {{guideMode === 'spot' ? 'beading-mode--on' : ''}}" data-mode="spot" bindtap="pickGuideMode">智能拼豆</view>
+        <view class="beading-mode {{guideMode === 'build' ? 'beading-mode--on' : ''}}" data-mode="build" bindtap="pickGuideMode">一键跟拼</view>
+      </view>
+      <view class="beading-grid">
+        <view class="beading-grid-label">网格线</view>
+        <switch checked="{{gridOn}}" color="#ff3a5d" bindchange="onGridToggle" />
+        <view class="beading-grid-seg {{gridOn ? '' : 'beading-grid-seg--disabled'}}">
+          <view wx:for="{{[5, 10, 20]}}" wx:key="*this" class="beading-grid-opt {{gridEvery === item ? 'beading-grid-opt--on' : ''}}" data-value="{{item}}" bindtap="onGridEvery">每{{item}}格</view>
+        </view>
+      </view>
+            <view wx:if="{{guideMode === 'spot'}}" class="beading-context">
+        <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === fuseSelected}}">
+          <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
+          <view>
+            <view class="beading-color-code">{{item.code}}</view>
+            <view class="beading-color-sub">{{item.count}} 格</view>
+          </view>
+        </view>
+        <view class="beading-color" wx:if="{{!fuseSelected}}">
+          <view class="beading-color-swatch beading-color-swatch--empty"></view>
+          <view>
+            <view class="beading-color-code">未选择</view>
+            <view class="beading-color-sub">点下方颜色</view>
+          </view>
+        </view>
+        <view class="beading-context-text">满色描边 · 其他减淡</view>
+      </view>
+      <view wx:if="{{guideMode === 'build'}}" class="beading-context">
+        <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
+          <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
+          <view>
+            <view class="beading-color-code">{{item.code}}</view>
+            <view class="beading-color-sub">{{item.count}} 格</view>
+          </view>
+        </view>
+        <view class="beading-color" wx:if="{{!buildCurrent}}">
+          <view class="beading-color-swatch beading-color-swatch--empty"></view>
+          <view>
+            <view class="beading-color-code">未选择</view>
+            <view class="beading-color-sub">点下方颜色</view>
+          </view>
+        </view>
+        <button class="btn btn--primary beading-done-btn" hover-class="btn--pressed" disabled="{{!buildCurrent}}" bindtap="finishColor">{{buildCurrent && doneMap[buildCurrent] ? '撤回' : '拼完了'}}</button>
+      </view>
+      <scroll-view class="fuse-strip" scroll-y>
+        <view class="fuse-row">
+          <view
+            wx:for="{{fuseLegend}}"
+            wx:key="code"
+            class="fuse-chip {{guideMode === 'spot' && fuseSelected === item.code ? 'fuse-chip--on' : ''}} {{guideMode === 'build' && buildCurrent === item.code ? 'fuse-chip--on' : ''}} {{guideMode === 'build' && doneMap[item.code] && buildCurrent !== item.code ? 'fuse-chip--done' : ''}}"
+            hover-class="fuse-chip--pressed"
+            data-code="{{item.code}}"
+            bindtap="onFuseChip"
+          >
+            <view class="fuse-swatch" style="background: {{item.hex}}"></view>
+            <text class="fuse-code">{{item.code}}</text>
+            <text class="fuse-count">× {{item.count}}</text>
+            <view wx:if="{{guideMode === 'build' && doneMap[item.code]}}" class="fuse-done-badge">✓</view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
   </view>
 
   <view class="grid-opt card">
     <view class="opt-row">
       <text class="opt-label">网格线</text>
-      <switch checked="{{gridOn}}" color="#009fef" bindchange="onGridToggle" />
+      <switch checked="{{gridOn}}" color="#ff3a5d" bindchange="onGridToggle" />
     </view>
     <view class="opt-row">
       <text class="opt-label">网格密度</text>

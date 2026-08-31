@@ -12,14 +12,15 @@ page {
   --color-rule: #d1cec3;
   --color-accent: #f6ce00;
   --color-accent-deep: #e6b900;
-  --color-accent-2: #009fef;
-  --color-accent-2-deep: #0086d4;
   --color-accent-3: #ff3a5d;
   --color-mint: #66da85;
   --color-lavender: #c28efb;
   --color-focus: #007cca;
   --color-accent-ink: #12171b;
-  --color-bead-bg: #ffffff;
+  --color-card: #fffdf7;
+  --color-bead-hi: #fff3b8;
+  --color-cast-strong: rgba(120, 90, 0, 0.28);
+  --color-shadow-inset: rgba(18, 23, 27, 0.1);
   --color-shadow: rgba(18, 23, 27, 0.12);
   --color-cast: rgba(230, 185, 0, 0.45);
   --font-display: "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -77,11 +78,12 @@ page {
   background: var(--color-accent);
   color: var(--color-accent-ink);
   box-shadow: 0 8rpx 0 0 var(--color-accent-deep), 0 12rpx 24rpx -6rpx var(--color-cast);
-  transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
+  transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow var(--dur-micro) var(--ease-out);
 }
 .btn--primary.btn--pressed {
-  transform: translateY(6rpx);
-  box-shadow: 0 2rpx 0 0 var(--color-accent-deep), 0 4rpx 8rpx -4rpx var(--color-cast);
+  transform: translateY(3rpx) scale(0.95);
+  transition: transform 70ms var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
+  box-shadow: 0 2rpx 0 0 var(--color-accent-deep), 0 10rpx 22rpx -10rpx var(--color-cast);
 }
 .btn--primary[disabled] {
   opacity: 0.5;
@@ -95,7 +97,7 @@ page {
 }
 .btn--soft.btn--pressed {
   background: var(--color-paper-3);
-  transform: translateY(2rpx);
+  transform: translateY(2rpx) scale(0.95);
 }
 .btn--sm {
   height: 72rpx;

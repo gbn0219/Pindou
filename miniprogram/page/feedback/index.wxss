@@ -6,7 +6,8 @@
 }
 
 .card {
-  background: var(--color-bead-bg);
+  background: var(--color-card);
+  border: 2rpx solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-lg);
   box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);

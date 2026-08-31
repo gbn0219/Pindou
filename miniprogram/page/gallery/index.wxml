@@ -7,7 +7,7 @@
           <image class="thumb" src="{{item.originalThumbFileID || item.originalFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
         </view>
         <view class="thumb-box">
-          <image class="thumb" src="{{item.patternThumbFileID || item.patternFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.patternFileID}}" bindtap="onPreview" />
+          <image class="thumb" src="{{item.patternThumbFileID || item.patternFileID}}" mode="aspectFit" lazy-load data-id="{{item._id}}" bindtap="onPatternPreview" />
         </view>
       </view>
       <view class="pair-meta">

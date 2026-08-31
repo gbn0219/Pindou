@@ -7,7 +7,8 @@
 }
 
 .card {
-  background: var(--color-bead-bg);
+  background: var(--color-card);
+  border: 2rpx solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-lg);
   box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
@@ -77,19 +78,30 @@
 }
 
 .menu-card {
+  padding: var(--space-2xs);
+}
+.menu-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: var(--space-md) var(--space-sm);
+  border-radius: var(--radius-input);
+  transition: background-color var(--dur-short) var(--ease-out);
+}
+.menu-row + .menu-row {
+  border-top: 2rpx solid var(--color-rule);
 }
 .menu-title {
-  font-size: var(--text-md);
-  font-weight: 700;
+  font-size: var(--text-base);
+  font-weight: 600;
 }
+
+
 .menu-arrow {
   font-size: var(--text-lg);
   color: var(--color-neutral);
 }
-.menu-card--pressed {
+.menu-row--pressed {
   background: var(--color-paper-2);
 }
 
@@ -109,7 +121,8 @@
 .modal {
   width: 100%;
   max-width: 640rpx;
-  background: var(--color-bead-bg);
+  background: var(--color-card);
+  border: 2rpx solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-lg);
   box-shadow: 0 24rpx 48rpx -16rpx var(--color-shadow);

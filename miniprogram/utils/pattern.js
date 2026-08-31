@@ -15,14 +15,14 @@ const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单�
 const EXPORT_COORD = 16 // 导出图四周坐标边距 px（与导出格同宽，坐标格像网格的延伸）
 const COORD_COLOR = '#8a919c' // 排号/列号颜色（细字，避免挤压）
 const BG_GRID_COLOR = '#e2e4e8' // 背景格浅灰格线（无色号格仍显示格子）
-const RULER_SIZE = 26 // 坐标轴条宽高 px（屏幕空间，固定画布四周，缩放/拖动不跳动）
+const RULER_SIZE = 34 // 坐标轴条宽高 px（屏幕空间，固定画布四周，缩放/拖动不跳动）
 const RULER_MAX_LABELS = 12 // 坐标轴每轴最多标签数（显示密度基准）
 const RULER_STEPS = [1, 2, 5, 10, 20, 50, 100, 200] // 显示密度档位（每 N 格一个标签）
 const RULER_BG = '#e8e9ec' // 坐标条灰色背景
 const RULER_LINE = '#aab0b8' // 坐标条分隔线/边框色（清晰可见）
-const RULER_TEXT = '#5f6672' // 坐标条文字色
-const RULER_BG_VIEW = '#f2efe9' // 交互页坐标条背景（暖米色，与纸张观感一致）
-const RULER_LINE_VIEW = '#d6d1c5' // 交互页坐标条边框（暖灰细线）
+const RULER_TEXT = '#3f4750' // 坐标条文字色
+const RULER_BG_VIEW = '#f3f0e8' // 交互页坐标条背景（暖米色，与纸张观感一致）
+const RULER_LINE_VIEW = '#cfc9bc' // 交互页坐标条边框（暖灰细线）
 const WHITE_RGB_MIN = 230 // 判定为"白色系"的 RGB 下限（H1 纯白、H2 近白、奶油白等）
 
 // 底部色号清单布局（导出图）
@@ -59,7 +59,7 @@ function mapRgbGrid(imageData, size, palette) {
   return mapRgb(rgbArr, size, palette)
 }
 
-function countColors(grid, setCodes, excludeMask) {
+function countColors(grid, setCodes, excludeMask, sortBy) {
   const countMap = {}
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r]
@@ -74,9 +74,12 @@ function countColors(grid, setCodes, excludeMask) {
   setCodes.forEach((code, i) => {
     order[code] = i
   })
-  return Object.keys(countMap)
-    .map((code) => ({ code, count: countMap[code] }))
-    .sort((a, b) => (order[a.code] || 0) - (order[b.code] || 0))
+  const list = Object.keys(countMap).map((code) => ({ code, count: countMap[code] }))
+  if (sortBy === 'count') {
+    // 数量降序；同数量保持套装顺序（用色栏"按数量"排序）
+    return list.sort((a, b) => b.count - a.count || (order[a.code] || 0) - (order[b.code] || 0))
+  }
+  return list.sort((a, b) => (order[a.code] || 0) - (order[b.code] || 0))
 }
 
 function countColor(grid, code) {
@@ -236,22 +239,86 @@ function luminance(hex) {
   return 0.299 * r + 0.587 * g + 0.114 * b
 }
 
+/**
+ * 颜色减淡：把 hex 向白色按 ratio（0~1）混合，用于"智能拼豆"模式弱化非选中色。
+ */
+function mixWhite(hex, ratio) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const f = (c) => Math.round(c + (255 - c) * ratio)
+  const to = (c) => ('0' + Math.max(0, Math.min(255, c)).toString(16)).slice(-2).toUpperCase()
+  return '#' + to(f(r)) + to(f(g)) + to(f(b))
+}
+
+/**
+ * 单格强调决策（纯函数，可在 Node 中测试）：
+ * - spot（智能拼豆）：选中色描边+强制色号，其余色减淡隐号；背景格随减淡（白色不变）
+ * - build（一键跟拼）：已点亮色按普通规则，当前色描边+强制色号，未点亮格画成白色空格
+ * 返回 null 表示按普通规则绘制。
+ */
+function cellEmphasis(code, em, isBg) {
+  if (!em) return null
+  if (em.mode === 'spot') {
+    if (!em.code) return null
+    if (isBg) return { dim: true }
+    return code === em.code ? { outline: true } : { dim: true }
+  }
+  if (em.mode === 'build') {
+    if (isBg) return null
+    if (em.doneSet && em.doneSet.has(code)) return null
+    if (code === em.code) return { outline: true }
+    return { empty: true }
+  }
+  return null
+}
+
+/**
+ * 渲染入口统一规范化 emphasis：build 模式把 doneCodes 数组转成 Set（避免每格重建）。
+ */
+function normalizeEmphasis(emphasis) {
+  if (!emphasis || emphasis.mode !== 'build' || emphasis.doneSet) return emphasis || null
+  return Object.assign({}, emphasis, { doneSet: new Set(emphasis.doneCodes || []) })
+}
+
 function drawCell(ctx, grid, r, c, palette, opts) {
   const cellSize = (opts && opts.cellSize) || CELL
   const gap = (opts && opts.gap) || GAP
-  const showCode = opts && opts.code !== false
+  const showCodeOpt = opts && opts.code !== false
   const noCode = opts && opts.noCode // 白色背景格不显示编号
   const highlight = opts && opts.highlight
   const code = grid[r][c]
+  const em = cellEmphasis(code, opts && opts.emphasis, noCode)
   // 背景格（noCode）统一填纯白：近白灰格若用自身色号会既无编号又非白色；
   // 非背景格仍用色号对应的颜色
-  const hex = noCode ? '#ffffff' : cellItem(palette, code).hex
+  let hex = noCode ? '#ffffff' : cellItem(palette, code).hex
+  let showCode = showCodeOpt && !noCode
+  let outline = false
+  let emptySlot = false
+  if (em) {
+    if (em.outline) {
+      showCode = true
+      outline = true
+    } else if (em.dim) {
+      hex = mixWhite(hex, 0.8)
+      showCode = false
+    } else if (em.empty) {
+      hex = '#ffffff'
+      showCode = false
+      emptySlot = true
+    }
+  }
   const x = c * (cellSize + gap)
   const y = r * (cellSize + gap)
   ctx.fillStyle = hex
   ctx.fillRect(x, y, cellSize, cellSize)
   if (noCode) {
     // 背景格：不显示编号，但画浅灰格子线，保证白色区域能看到格子
+    ctx.strokeStyle = BG_GRID_COLOR
+    ctx.lineWidth = 1
+    ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1)
+  } else if (emptySlot) {
+    // 一键跟拼：未点亮格画浅灰空格线，呈现"空板待拼"观感
     ctx.strokeStyle = BG_GRID_COLOR
     ctx.lineWidth = 1
     ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1)
@@ -262,7 +329,7 @@ function drawCell(ctx, grid, r, c, palette, opts) {
     ctx.textBaseline = 'middle'
     ctx.fillText(code, x + cellSize / 2, y + cellSize / 2 + 0.5)
   }
-  if (highlight) {
+  if (highlight || outline) {
     ctx.strokeStyle = '#ff3a5d'
     ctx.lineWidth = Math.max(2, Math.round(cellSize / 6))
     ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
@@ -276,6 +343,7 @@ function renderGrid(ctx, grid, palette, opts) {
   const highlight = opts && opts.highlight
   const gridEvery = opts && opts.gridEvery
   const noCodeMask = opts && opts.noCodeMask // 白色背景格不显示编号
+  const emphasis = normalizeEmphasis(opts && opts.emphasis)
   const size = grid.length
   const total = size * (cellSize + gap) - gap
   ctx.fillStyle = '#ffffff'
@@ -287,7 +355,8 @@ function renderGrid(ctx, grid, palette, opts) {
         gap,
         code: showCode,
         noCode: !!(noCodeMask && noCodeMask[r] && noCodeMask[r][c]),
-        highlight: !!(highlight && highlight.row === r && highlight.col === c)
+        highlight: !!(highlight && highlight.row === r && highlight.col === c),
+        emphasis
       })
     }
   }
@@ -337,16 +406,18 @@ function renderGridView(ctx, grid, palette, opts) {
   const highlight = opts && opts.highlight
   const gridEvery = opts && opts.gridEvery
   const noCodeMask = opts && opts.noCodeMask
+  const emphasis = normalizeEmphasis(opts && opts.emphasis)
   const v = opts && opts.view
   const areaW = (opts && opts.areaW) || 0
   const areaH = (opts && opts.areaH) || 0
+  const dpr = (opts && opts.dpr) || 1
   const size = grid.length
   if (!v || !v.scale || !size || !areaW || !areaH) return 0
   const total = size * (cellSize + gap) - gap
   const range = visibleRange(v, size, cellSize, gap, areaW, areaH)
   // 屏幕空间白底：只覆盖可视区域与网格世界的交集，避免 canvas 透明底色透出
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   const sx0 = Math.max(0, v.ox)
   const sy0 = Math.max(0, v.oy)
   const sx1 = Math.min(areaW, v.ox + total * v.scale)
@@ -364,7 +435,8 @@ function renderGridView(ctx, grid, palette, opts) {
         gap,
         code: showCode,
         noCode: !!(noCodeMask && noCodeMask[r] && noCodeMask[r][c]),
-        highlight: !!(highlight && highlight.row === r && highlight.col === c)
+        highlight: !!(highlight && highlight.row === r && highlight.col === c),
+        emphasis
       })
     }
   }
@@ -499,8 +571,9 @@ function rulerStep(visibleCount) {
  * 在画布四周绘制固定坐标轴（屏幕空间，不随内容缩放/移动）。
  * 固定厚度的暖米色坐标条 + 1px 细边框，只标编号（密度自适应），无格框，缩放/拖动时视觉稳定。
  */
-function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
+function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH, dpr) {
   if (!view || !view.scale || !size || !cellPx) return
+  const q = dpr || 1
   const cell = cellPx + gap
   const band = RULER_SIZE
   const c0 = Math.max(0, Math.floor((0 - view.ox) / view.scale / cell))
@@ -511,7 +584,7 @@ function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
   const rStep = rulerStep(r1 - r0 + 1)
   const show = (i, step) => i === 0 || (i + 1) % step === 0
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.setTransform(q, 0, 0, q, 0, 0)
   // 四周暖米色坐标条（固定厚度）
   ctx.fillStyle = RULER_BG_VIEW
   ctx.fillRect(0, 0, areaW, band)
@@ -524,7 +597,7 @@ function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH) {
   ctx.strokeRect(band + 0.5, band + 0.5, areaW - band * 2 - 1, areaH - band * 2 - 1)
   // 编号（密度自适应，居中于对应格子；不做格框，缩放时更干净）
   ctx.fillStyle = RULER_TEXT
-  ctx.font = '400 12px sans-serif'
+  ctx.font = '600 13px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (let c = c0; c <= c1; c++) {
@@ -896,6 +969,8 @@ module.exports = {
   renderRulers,
   rulerStep,
   layoutExport,
+  mixWhite,
+  cellEmphasis,
   drawCell,
   EXPORT_COORD,
   CELL,

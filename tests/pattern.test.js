@@ -634,4 +634,54 @@ assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
   assert.ok(flat.indexOf('A6') < 0, '低频且被包围的色应被并掉')
 }
 
+// ---- mixWhite / cellEmphasis（智能拼豆 / 一键跟拼 渲染决策） ----
+{
+  assert.strictEqual(pattern.mixWhite('#B5836B', 0.8), '#F0E6E1', '减淡应向白混合 80%')
+  assert.strictEqual(pattern.mixWhite('#000000', 1), '#FFFFFF', 'ratio=1 应为纯白')
+  assert.strictEqual(pattern.mixWhite('#FFFFFF', 0.5), '#FFFFFF', '白色减淡仍为白')
+  assert.strictEqual(pattern.mixWhite('#FF0000', 0.5), '#FF8080', '红色减淡一半')
+}
+{
+  // 智能拼豆：选中色描边并强制显示色号，其余色减淡；未选色不强调
+  const em = { mode: 'spot', code: 'A1' }
+  assert.deepStrictEqual(pattern.cellEmphasis('A1', em, false), { outline: true }, '选中色应描边')
+  assert.deepStrictEqual(pattern.cellEmphasis('B2', em, false), { dim: true }, '非选中色应减淡')
+  assert.deepStrictEqual(pattern.cellEmphasis('B2', em, true), { dim: true }, '背景格减淡后仍为白')
+  assert.strictEqual(pattern.cellEmphasis('A1', { mode: 'spot', code: '' }, false), null, '未选色不应有强调')
+  assert.strictEqual(pattern.cellEmphasis('A1', null, false), null, '无强调配置应返回 null')
+}
+{
+  // 一键跟拼：当前色描边、已点亮色按普通规则、未点亮格为空格、背景格不受影响
+  const em = { mode: 'build', code: 'A1', doneSet: new Set(['B1']) }
+  assert.deepStrictEqual(pattern.cellEmphasis('A1', em, false), { outline: true }, '当前色应描边')
+  assert.strictEqual(pattern.cellEmphasis('B1', em, false), null, '已点亮色应按普通规则绘制')
+  assert.deepStrictEqual(pattern.cellEmphasis('C1', em, false), { empty: true }, '未点亮格应为空格')
+  assert.strictEqual(pattern.cellEmphasis('A1', em, true), null, '背景格不应受强调影响')
+  assert.deepStrictEqual(
+    pattern.cellEmphasis('C1', { mode: 'build', code: '', doneSet: new Set() }, false),
+    { empty: true },
+    '未选当前色时其余前景格应为空格'
+  )
+}
+{
+  // countColors sortBy='count'：数量降序、同数量保持套装顺序、默认行为不变
+  const g3 = [
+    ['A1', 'A1', 'A4'],
+    ['A4', 'A1', 'B1'],
+    ['B1', 'B1', 'B1']
+  ]
+  assert.deepStrictEqual(pattern.countColors(g3, ['A1', 'A4', 'B1'], null, 'count'), [
+    { code: 'B1', count: 4 },
+    { code: 'A1', count: 3 },
+    { code: 'A4', count: 2 }
+  ], 'sortBy=count 应按数量降序')
+  assert.deepStrictEqual(pattern.countColors(g3, ['A1', 'A4', 'B1']).map((i) => i.code), ['A1', 'A4', 'B1'], '默认仍按套装顺序')
+  const g4 = [['A1', 'A4'], ['B1', 'B1']]
+  assert.deepStrictEqual(
+    pattern.countColors(g4, ['B1', 'A4', 'A1'], null, 'count').map((i) => i.code),
+    ['B1', 'A4', 'A1'],
+    '同数量并列应保持套装顺序'
+  )
+}
+
 console.log('pattern.test.js 全部通过 ✓')

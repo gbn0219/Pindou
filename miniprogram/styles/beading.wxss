@@ -1,0 +1,537 @@
+/* 智能拼豆 / 一键跟拼：全屏引导浮层（pattern / pattern-edit 共用） */
+
+.canvas-area {
+  position: relative;
+}
+
+.fs-btn {
+  position: absolute;
+  right: 20rpx;
+  bottom: 20rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(23, 27, 32, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+.fs-ico {
+  position: relative;
+  width: 28rpx;
+  height: 28rpx;
+}
+.fs-ico::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12rpx;
+  height: 12rpx;
+  border-left: 4rpx solid #ffffff;
+  border-top: 4rpx solid #ffffff;
+}
+.fs-ico::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 12rpx;
+  height: 12rpx;
+  border-right: 4rpx solid #ffffff;
+  border-top: 4rpx solid #ffffff;
+}
+.fs-ico-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+.fs-ico-inner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 12rpx;
+  height: 12rpx;
+  border-left: 4rpx solid #ffffff;
+  border-bottom: 4rpx solid #ffffff;
+}
+.fs-ico-inner::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12rpx;
+  height: 12rpx;
+  border-right: 4rpx solid #ffffff;
+  border-bottom: 4rpx solid #ffffff;
+}
+
+.canvas-shell--fs {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.canvas-shell--fs .canvas-area {
+  width: 100%;
+  max-width: none;
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  min-height: 0;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.fs-close {
+  position: absolute;
+  left: 20rpx;
+  top: 20rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(23, 27, 32, 0.72);
+  color: #ffffff;
+  font-size: 44rpx;
+  line-height: 70rpx;
+  text-align: center;
+  z-index: 5;
+}
+
+.fs-progress-pill {
+  position: absolute;
+  right: 20rpx;
+  top: 20rpx;
+  padding: 10rpx 24rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  z-index: 5;
+}
+
+.beading-bar {
+  background: var(--color-paper);
+  box-shadow: 0 -8rpx 24rpx -16rpx var(--color-shadow);
+  padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
+}
+.beading-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.beading-modes {
+  flex: 1;
+  display: flex;
+  gap: var(--space-2xs);
+}
+.beading-mode {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-2);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+.beading-mode--on {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 600;
+}
+.beading-sort {
+  flex-shrink: 0;
+  padding: 14rpx 22rpx;
+  border-radius: var(--radius-pill);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+.beading-done-btn {
+  flex-shrink: 0;
+  min-width: 220rpx;
+  height: 72rpx;
+  margin: 0;
+  padding: 0 var(--space-md);
+  font-size: var(--text-sm);
+  line-height: 1;
+  white-space: nowrap;
+}
+.fuse-strip {
+  margin-top: var(--space-2xs);
+  height: 96rpx;
+}
+.fuse-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+}
+.fuse-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  height: 88rpx;
+  box-sizing: border-box;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-2);
+  border: 3rpx solid transparent;
+}
+.fuse-chip--pressed {
+  background: var(--color-rule);
+}
+.fuse-chip--on {
+  border-color: #ff3a5d;
+  background: var(--color-paper);
+}
+.fuse-chip--done {
+  opacity: 0.45;
+}
+.fuse-swatch {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid var(--color-rule);
+}
+.fuse-code {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.fuse-count {
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+}
+.fuse-done-badge {
+  position: absolute;
+  right: -6rpx;
+  top: -6rpx;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: #34c77b;
+  color: #ffffff;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+}
+
+
+/* 新版全屏拼豆面板：更清晰的分组、排序说明和两个模式 */
+.beading-bar {
+  border-radius: 36rpx 36rpx 0 0;
+  padding: 30rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+}
+.beading-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+}
+.beading-heading {
+  flex: 1;
+  min-width: 0;
+}
+.beading-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.beading-subtitle {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--color-ink-2);
+}
+.beading-sort {
+  display: block;
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+}
+.beading-sort-label {
+  margin-bottom: 8rpx;
+  font-size: 20rpx;
+  color: var(--color-ink-2);
+  text-align: right;
+}
+.beading-sort-options {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 4rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-2);
+}
+.beading-sort-option {
+  padding: 10rpx 20rpx;
+  border-radius: var(--radius-pill);
+  font-size: 22rpx;
+  color: var(--color-ink-2);
+}
+.beading-sort-option--on {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 600;
+}
+.beading-modes {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+.beading-mode {
+  flex: 1;
+  padding: 16rpx 0;
+  text-align: center;
+  background: var(--color-paper-2);
+  font-size: 24rpx;
+  color: var(--color-ink-2);
+}
+.beading-mode--on {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 600;
+}
+.fuse-strip {
+  margin-top: 16rpx;
+  height: 96rpx;
+}
+
+
+/* 按效果图强化：上下留白、卡片式上下文、更清楚的模式与颜色条 */
+.beading-bar {
+  background: linear-gradient(180deg, #fffdf7 0%, var(--color-paper) 100%);
+  border-top: 2rpx solid var(--color-rule);
+  box-shadow: 0 -20rpx 40rpx -28rpx rgba(18, 23, 27, 0.45);
+}
+.beading-top {
+  align-items: center;
+  margin-bottom: 22rpx;
+}
+.beading-title {
+  font-size: 32rpx;
+}
+.beading-subtitle {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+}
+.beading-modes {
+  gap: 10rpx;
+  margin-top: 0;
+  padding: 6rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-2);
+}
+.beading-mode {
+  padding: 18rpx 0;
+  border-radius: var(--radius-pill);
+}
+.beading-mode--on {
+  box-shadow: 0 10rpx 22rpx -14rpx rgba(18, 23, 27, 0.65);
+}
+.beading-context {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border: 2rpx solid var(--color-rule);
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 28rpx -22rpx rgba(18, 23, 27, 0.55);
+}
+.beading-color {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
+}
+.beading-color-swatch {
+  width: 46rpx;
+  height: 46rpx;
+  border: 2rpx solid var(--color-rule);
+  border-radius: 14rpx;
+  box-shadow: inset 0 0 0 3rpx rgba(255, 255, 255, 0.5);
+}
+.beading-color-swatch--empty {
+  background: var(--color-paper-2);
+  border-style: dashed;
+  box-shadow: none;
+}
+.beading-color-code {
+  font-family: var(--font-label);
+  font-size: 26rpx;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.beading-color-sub {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--color-ink-2);
+}
+.beading-context-text {
+  margin-left: auto;
+  font-size: 22rpx;
+  color: var(--color-ink-2);
+  text-align: right;
+}
+.beading-done-btn {
+  min-width: 180rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0 28rpx;
+  border-radius: var(--radius-pill);
+  font-size: 24rpx;
+  line-height: 1;
+}
+.fuse-strip {
+  margin-top: 20rpx;
+  height: 116rpx;
+}
+.fuse-chip {
+  height: 96rpx;
+  padding: 0 20rpx;
+  background: #ffffff;
+  border: 2rpx solid var(--color-rule);
+  border-radius: 28rpx;
+}
+.fuse-chip--on {
+  border-color: #ff3a5d;
+  box-shadow: 0 10rpx 22rpx -16rpx rgba(255, 58, 93, 0.85);
+}
+.fuse-swatch {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 12rpx;
+}
+.fuse-code {
+  font-size: 24rpx;
+}
+.fuse-count {
+  font-size: 20rpx;
+}
+
+
+/* 全屏模式必须真正铺满屏幕，避免下层旧界面露边 */
+.canvas-shell--fs {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  z-index: 2000;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-paper);
+  box-shadow: none;
+}
+.canvas-shell--fs .canvas-area {
+  width: 100%;
+  max-width: none;
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  min-height: 0;
+  border-radius: 0;
+  background: #ffffff;
+}
+.canvas-shell--fs .beading-bar {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.canvas-shell--fs .fuse-strip {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  margin-top: 12rpx;
+}
+.canvas-shell--fs .beading-modes {
+  flex: 0 0 auto;
+}
+
+
+/* 兼容性兜底：显式四边定位 */
+.canvas-shell--fs {
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* 全屏拼豆：色卡一行固定 3 个，等宽填满，内容居左 */
+.fuse-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+}
+.fuse-chip {
+  justify-content: flex-start;
+  gap: 10rpx;
+  padding: 0 16rpx;
+  min-width: 0;
+}
+.fuse-chip .fuse-count {
+  white-space: nowrap;
+}
+/* 全屏拼豆：网格选项（默认每 5 格一条，可切换） */
+.beading-grid {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  padding: 12rpx 16rpx;
+  background: var(--color-paper-2);
+  border-radius: 18rpx;
+}
+.beading-grid-label {
+  font-size: 22rpx;
+  color: var(--color-ink);
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.beading-grid-seg {
+  flex: 1;
+  display: flex;
+  gap: 6rpx;
+  padding: 4rpx;
+  background: var(--color-card);
+  border-radius: 999rpx;
+}
+.beading-grid-seg--disabled {
+  opacity: 0.45;
+}
+.beading-grid-opt {
+  flex: 1;
+  text-align: center;
+  padding: 8rpx 0;
+  font-size: 22rpx;
+  color: var(--color-ink-2);
+  border-radius: 999rpx;
+}
+.beading-grid-opt--on {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 600;
+}

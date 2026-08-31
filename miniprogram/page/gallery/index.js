@@ -66,7 +66,7 @@ Page({
     if (!n || isNaN(n) || n === this.data.page || n < 1 || n > this.data.totalPages) return
     this.load(n)
   },
-  onPreview(e) {
+  async onPreview(e) {
     const fileID = e.currentTarget.dataset.fileid
     const pair = this.data.items.find((it) => it.originalFileID === fileID || it.patternFileID === fileID)
     if (!fileID || !pair) return
@@ -75,17 +75,27 @@ Page({
     const pick = (it) => it.originalPreviewFileID || it.originalThumbFileID || it.originalFileID
     const ppick = (it) => it.patternPreviewFileID || it.patternThumbFileID || it.patternFileID
     const urls = isOriginal ? [pick(pair), ppick(pair)] : [ppick(pair), pick(pair)]
-    wx.previewImage({ urls, current: urls[0] })
+    try {
+      // 真机上 cloud:// 直接传给 previewImage 时手势可能不可用，先转本地临时路径
+      const paths = await Promise.all(urls.map((id) => downloadFile(id)))
+      wx.previewImage({ urls: paths, current: paths[0] })
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '图片加载失败', icon: 'none' })
+    }
   },
 
-  async onEdit(e) {
+  async onPatternPreview(e) {
     const id = e.currentTarget.dataset.id
     if (!id) return
+    await this.openGalleryPattern(id, '/page/pattern/index')
+  },
+
+  async openGalleryPattern(id, url) {
     wx.showLoading({ title: '加载图纸…', mask: true })
     try {
       const r = await user.getGalleryItem(id)
       const item = r.item
-      if (!item.grid) throw new Error('该图纸暂无像素数据，无法编辑')
+      if (!item.grid) throw new Error('该图纸暂无像素数据，无法预览')
       const grid = pattern.parseGrid(item.grid, item.size)
       const bgMask = item.bgMask ? pattern.parseBgMask(item.bgMask, item.size) : undefined
       getApp().globalData.pattern = {
@@ -99,11 +109,17 @@ Page({
         imagePath: ''
       }
       wx.hideLoading()
-      wx.navigateTo({ url: '/page/pattern-edit/index' })
+      wx.navigateTo({ url })
     } catch (err) {
       wx.hideLoading()
       wx.showToast({ title: (err && err.message) || '图纸加载失败', icon: 'none' })
     }
+  },
+
+  async onEdit(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    await this.openGalleryPattern(id, '/page/pattern-edit/index')
   },
 
   // 导出图纸：与生成后的导出同一逻辑（取回 grid → 生成带编号与数目的图纸 → 保存相册）

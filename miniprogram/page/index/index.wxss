@@ -23,7 +23,8 @@
 }
 
 .card {
-  background: var(--color-paper);
+  background: var(--color-card);
+  border: 2rpx solid var(--color-rule);
   border-radius: var(--radius-card);
   box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
   margin-bottom: var(--space-md);
@@ -44,11 +45,11 @@
   overflow: hidden;
 }
 .import-card--pressed {
-  transform: translateY(3rpx);
+  transform: translateY(2rpx) scale(0.985);
 }
 .import-card.has-image {
   border-style: solid;
-  background: var(--color-paper);
+  background: var(--color-card);
   box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
 }
 .bead {
@@ -111,13 +112,13 @@
   transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
 }
 .chip--on {
-  background: var(--color-accent);
-  border-color: var(--color-accent-deep);
-  color: var(--color-accent-ink);
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
   font-weight: 600;
 }
 .chip--pressed {
-  transform: translateY(2rpx);
+  transform: translateY(2rpx) scale(0.94);
 }
 
 .generate {

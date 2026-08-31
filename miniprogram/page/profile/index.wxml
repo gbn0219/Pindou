@@ -26,21 +26,23 @@
       </view>
     </view>
 
-    <view class="card menu-card" hover-class="menu-card--pressed" bindtap="goGallery">
+    <view class="card menu-card">
+    <view class="menu-row" hover-class="menu-row--pressed" bindtap="goGallery">
       <view class="menu-title">我的图库</view>
       <view class="menu-arrow">›</view>
     </view>
-    <view class="card menu-card" hover-class="menu-card--pressed" bindtap="showFaq">
+    <view class="menu-row" hover-class="menu-row--pressed" bindtap="showFaq">
       <view class="menu-title">常见问题</view>
       <view class="menu-arrow">›</view>
     </view>
-    <view class="card menu-card" hover-class="menu-card--pressed" bindtap="goFeedback">
+    <view class="menu-row" hover-class="menu-row--pressed" bindtap="goFeedback">
       <view class="menu-title">意见反馈</view>
       <view class="menu-arrow">›</view>
     </view>
-    <view class="card menu-card" hover-class="menu-card--pressed" bindtap="onLogout">
+    <view class="menu-row" hover-class="menu-row--pressed" bindtap="onLogout">
       <view class="menu-title">退出登录</view>
       <view class="menu-arrow">›</view>
+    </view>
     </view>
 
     <view class="modal-mask" wx:if="{{faqShow}}" bindtap="hideFaq">

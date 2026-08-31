@@ -21,9 +21,10 @@
 }
 
 .pair-card {
-  width: 60%;
-  max-width: 440rpx;
-  background: var(--color-bead-bg);
+  width: 100%;
+  max-width: 640rpx;
+  background: var(--color-card);
+  border: 2rpx solid var(--color-rule);
   border-radius: var(--radius-card);
   padding: var(--space-xs);
   box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
@@ -104,13 +105,14 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  background: var(--color-bead-bg);
+  background: var(--color-card);
   border: 2rpx solid var(--color-rule);
   font-size: var(--text-sm);
 }
 .pager-num--on {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
   font-weight: 700;
 }
 .pager-btn--disabled {

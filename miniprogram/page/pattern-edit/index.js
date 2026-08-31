@@ -1,5 +1,6 @@
 // miniprogram/page/pattern-edit/index.js
 const pattern = require('../../utils/pattern.js')
+const beading = require('../../utils/beading.js')
 const color = require('../../utils/color.js')
 const gesture = require('../../utils/gesture.js')
 const exportUtil = require('../../utils/export.js')
@@ -38,7 +39,15 @@ Page({
     canRedo: false,
     fromGallery: false,
     saving: false,
-    cellInfo: MODE_HINTS.paint
+    cellInfo: MODE_HINTS.paint,
+    fullscreen: false,
+    guideMode: 'spot',
+    fuseLegend: [],
+    fuseSort: 'count',
+    fuseSelected: '',
+    buildCurrent: '',
+    buildDoneCount: 0,
+    doneMap: {}
   },
 
   onLoad() {
@@ -113,17 +122,20 @@ Page({
         }
         this.retryDraw = 0
         try {
+          const info = wx.getSystemInfoSync()
+          this.dpr = Math.min(3, info.pixelRatio || 1)
           this.areaRect = { left: area.left || 0, top: area.top || 0 } // 触摸用视口坐标换算
           const cell = pattern.displayCell(p.size) // 大盘面自动降低格边长，避免画布超限
           this.cellPx = cell
           const total = p.size * (cell + pattern.GAP) - pattern.GAP
           const areaW = area.width
           const areaH = area.height
+          this.areaSize = { width: areaW, height: areaH }
           // 首次进入铺满视图并隐藏编号；切后台再回来保留缩放倍数/位置/编号显示状态
           if (!this.view) {
             this.codeShown = false
             // 内容区 = 画布减去四周坐标条；网格只在内区铺放，坐标条不遮挡格子
-            const ruler = pattern.RULER_SIZE
+            const ruler = 0
             const innerW = areaW - ruler * 2
             const innerH = areaH - ruler * 2
             const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
@@ -133,8 +145,9 @@ Page({
               oy: ruler + (innerH - total * scale) / 2
             }
           }
-          canvas.width = areaW
-          canvas.height = areaH
+          const dpr = this.dpr || 1
+          canvas.width = Math.round(areaW * dpr)
+          canvas.height = Math.round(areaH * dpr)
           this.canvas = canvas
           this.ctx = canvas.getContext('2d')
           this.drawGrid()
@@ -153,6 +166,7 @@ Page({
       cellSize: cell,
       gap: pattern.GAP,
       code: false,
+      emphasis: beading.emphasisOpts(this.data, this.buildDone),
       noCodeMask: this.bgMask
     })
     this.offscreen = off
@@ -174,18 +188,27 @@ Page({
   applyView() {
     const v = this.view
     if (!this.ctx || !v) return
-    this.ctx.setTransform(v.scale, 0, 0, v.scale, v.ox, v.oy)
+    const dpr = this.dpr || 1
+    this.ctx.setTransform(v.scale * dpr, 0, 0, v.scale * dpr, v.ox * dpr, v.oy * dpr)
+  },
+
+  cssAreaSize() {
+    const dpr = this.dpr || 1
+    if (this.areaSize) return this.areaSize
+    return { width: this.canvas.width / dpr, height: this.canvas.height / dpr }
   },
 
   clampView() {
     const p = this.pattern
     const cell = this.cellPx || pattern.CELL
     const total = p.size * (cell + pattern.GAP) - pattern.GAP
-    this.view = gesture.clampView(this.view, total, this.canvas.width, this.canvas.height, pattern.RULER_SIZE)
+    const area = this.cssAreaSize()
+    this.view = gesture.clampView(this.view, total, area.width, area.height, 0)
   },
 
   drawGrid() {
     if (!this.canvas || !this.ctx) return
+    const area = this.cssAreaSize()
     // 先以单位变换清空整块画布，否则缩放/拖动后旧图残留在原位（残影）
     this.ctx.setTransform(1, 0, 0, 1, 0, 0)
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
@@ -201,14 +224,16 @@ Page({
         gap: pattern.GAP,
         code: this.codeShown,
         highlight: this.highlight,
+        emphasis: beading.emphasisOpts(this.data, this.buildDone),
         noCodeMask: this.bgMask,
         view: this.view,
-        areaW: this.canvas.width,
-        areaH: this.canvas.height
+        areaW: area.width,
+        areaH: area.height,
+        dpr: this.dpr || 1
       })
     }
     // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
-    pattern.renderRulers(this.ctx, this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
+    // 坐标条已收起，让图纸铺满画布
   },
 
   redrawCanvas() {
@@ -239,9 +264,19 @@ Page({
 
   onTouchStart(e) {
     const touches = e.touches
-    if (touches.length >= 2) {
-      // 双指：开始缩放 + 拖动（连续手势）
-      this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+    if (this.data.fullscreen) {
+      if (touches.length >= 2) {
+        this.pan = null
+        this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+      } else if (touches.length === 1) {
+        this.pinchActive = false
+        this.pinch = null
+        this.tapStart = null
+        this.tapCell = null
+        this.paintStroke = false
+        this.strokePushed = false
+        this.startPan(this.normTouch(touches[0]))
+      }
       return
     }
     const t = touches && touches[0]
@@ -269,6 +304,10 @@ Page({
       }
       return
     }
+    if (this.data.fullscreen) {
+      if (touches.length === 1) this.handlePan(this.normTouch(touches[0]))
+      return
+    }
     const t = touches && touches[0]
     if (!t || !this.tapStart) return
     const p = this.normTouch(t)
@@ -290,6 +329,13 @@ Page({
   },
 
   onTouchEnd(e) {
+    if (this.data.fullscreen) {
+      if (e.touches && e.touches.length > 0) return
+      this.pan = null
+      this.pinchActive = false
+      this.pinch = null
+      return
+    }
     // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
     if (e.touches && e.touches.length > 0) return
     const wasStroke = this.paintStroke
@@ -316,6 +362,7 @@ Page({
   },
 
   onTouchCancel() {
+    this.pan = null
     this.tapStart = null
     this.pinch = null
     this.pinchActive = false
@@ -345,7 +392,8 @@ Page({
     if (!this.pinch || !this.view) return
     this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
     this.clampView()
-    const range = pattern.visibleRange(this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, this.canvas.width, this.canvas.height)
+    const area = this.cssAreaSize()
+    const range = pattern.visibleRange(this.view, this.pattern.grid.length, this.cellPx || pattern.CELL, pattern.GAP, area.width, area.height)
     const show = range.c1 - range.c0 + 1 <= 30 && range.r1 - range.r0 + 1 <= 30
     if (show !== this.codeShown) {
       this.codeShown = show
@@ -526,6 +574,120 @@ Page({
       replaceSource: '',
       cellInfo: MODE_HINTS[mode] || MODE_HINTS.paint
     })
+  },
+
+  enterFullscreen() {
+    const p = this.pattern
+    if (!p.beadingKey) p.beadingKey = beading.storageKey(p)
+    this.refreshBgMask()
+    this.buildDone = beading.loadDone(p)
+    const doneMap = {}
+    this.buildDone.forEach((code) => { doneMap[code] = true })
+    this.setData({
+      fullscreen: true,
+      guideMode: 'spot',
+      fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, this.data.fuseSort),
+      fuseSelected: '',
+      buildCurrent: '',
+      doneMap,
+      buildDoneCount: this.buildDone.length
+    }, () => {
+      this.pinchActive = false
+      this.pinch = null
+      this.pan = null
+      this.view = null
+      this.offscreenDirty = true
+      this.draw()
+    })
+  },
+
+  exitFullscreen() {
+    this.setData({
+      fullscreen: false,
+      guideMode: 'spot',
+      fuseSelected: '',
+      buildCurrent: ''
+    }, () => {
+      this.pinchActive = false
+      this.pinch = null
+      this.pan = null
+      this.view = null
+      this.offscreenDirty = true
+      this.draw()
+    })
+  },
+
+  pickGuideMode(e) {
+    const mode = e.currentTarget.dataset.mode
+    const patch = { guideMode: mode }
+    if (mode === 'spot') patch.buildCurrent = ''
+    if (mode === 'build') patch.fuseSelected = ''
+    this.offscreenDirty = true
+    this.setData(patch, () => this.drawGrid())
+  },
+
+  pickFuseSort(e) {
+    const sort = e.currentTarget.dataset.sort
+    if (!sort || sort === this.data.fuseSort) return
+    const p = this.pattern
+    this.setData({
+      fuseSort: sort,
+      fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, sort)
+    })
+  },
+
+  updateDoneState(extra, callback) {
+    const doneMap = {}
+    this.buildDone.forEach((code) => { doneMap[code] = true })
+    this.setData(Object.assign({ doneMap, buildDoneCount: this.buildDone.length }, extra || {}), callback)
+  },
+
+  onFuseChip(e) {
+    const code = e.currentTarget.dataset.code
+    if (!code) return
+    const mode = this.data.guideMode
+    if (mode === 'spot') {
+      this.offscreenDirty = true
+      this.setData({ fuseSelected: this.data.fuseSelected === code ? '' : code }, () => this.drawGrid())
+      return
+    }
+    this.offscreenDirty = true
+    // build 模式：已拼完的颜色不再直接撤回——点它只是设为“当前色”，按钮变为“撤回”；再点当前色则取消选中
+    const next = this.data.buildCurrent === code ? '' : code
+    this.setData({ guideMode: 'build', buildCurrent: next }, () => this.drawGrid())
+  },
+
+  finishColor() {
+    const code = this.data.buildCurrent
+    if (!code) return
+    if (this.data.doneMap[code]) {
+      // 撤回：只有点“撤回”按钮才真正取消一颗已拼完的颜色
+      this.buildDone = this.buildDone.filter((item) => item !== code)
+      beading.saveDone(this.pattern, this.buildDone)
+      this.offscreenDirty = true
+      this.updateDoneState({ buildCurrent: '' }, () => this.drawGrid())
+      wx.showToast({ title: '已撤回', icon: 'none' })
+      return
+    }
+    this.buildDone.push(code)
+    beading.saveDone(this.pattern, this.buildDone)
+    this.offscreenDirty = true
+    const all = this.buildDone.length >= this.data.fuseLegend.length
+    this.updateDoneState({ buildCurrent: '' }, () => this.drawGrid())
+    wx.showToast({ title: all ? '全部拼完！' : '已点亮 ' + code, icon: all ? 'success' : 'none' })
+  },
+
+  startPan(t) {
+    if (!this.view) return
+    this.pan = { x: t.x, y: t.y, ox: this.view.ox, oy: this.view.oy }
+  },
+
+  handlePan(t) {
+    if (!this.pan || !this.view) return
+    this.view.ox = this.pan.ox + (t.x - this.pan.x)
+    this.view.oy = this.pan.oy + (t.y - this.pan.y)
+    this.clampView()
+    this.scheduleRedraw()
   },
 
   hexOf(code) {
