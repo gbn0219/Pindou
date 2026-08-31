@@ -1,0 +1,90 @@
+<view class="page">
+  <!-- 导入阶段 -->
+  <block wx:if="{{stage === 'import'}}">
+    <view class="hero">
+      <view class="hero-title">识别已有图纸</view>
+      <view class="hero-sub">截图/拍照导入，识别成可编辑的色号网格</view>
+    </view>
+    <view class="card import-card" hover-class="import-card--pressed" bindtap="chooseImage">
+      <view class="bead" aria-hidden="true"></view>
+      <view class="import-title">点击导入图纸图片</view>
+      <view class="import-sub">从相册选择，或拍一张</view>
+    </view>
+    <view class="card hint-card">
+      <view class="section-title">怎么用</view>
+      <view class="hint-line">1. 导入图纸截图或照片，尽量拍正、避免旋转</view>
+      <view class="hint-line">2. 输入图纸长宽格数（宽=高）</view>
+      <view class="hint-line">3. 在图上框出整个图纸范围，微调到网格对齐后识别</view>
+    </view>
+  </block>
+
+  <!-- 校准阶段 -->
+  <block wx:else>
+    <view class="calibrate">
+      <view class="canvas-wrap">
+        <canvas
+          type="2d"
+          id="scanCanvas"
+          class="scan-canvas"
+          bindtouchstart="onTouchStart"
+          bindtouchmove="onTouchMove"
+          bindtouchend="onTouchEnd"
+          bindtouchcancel="onTouchCancel"
+        ></canvas>
+        <view class="canvas-tip">{{hint}}</view>
+      </view>
+
+      <view class="panel">
+        <view class="size-row">
+          <view class="size-field">
+            <text class="size-label">宽（列）</text>
+            <input class="size-input" type="number" value="{{cols}}" bindblur="onColsInput" bindconfirm="onColsInput" />
+          </view>
+          <text class="size-x">×</text>
+          <view class="size-field">
+            <text class="size-label">高（行）</text>
+            <input class="size-input" type="number" value="{{rows}}" bindblur="onRowsInput" bindconfirm="onRowsInput" />
+          </view>
+          <view class="size-note">正方形</view>
+        </view>
+
+        <view class="chip-row">
+          <view
+            wx:for="{{colorSets}}"
+            wx:key="*this"
+            class="chip {{set === item ? 'chip--on' : ''}}"
+            hover-class="chip--pressed"
+            data-value="{{item}}"
+            bindtap="pickSet"
+          >{{item}} 色</view>
+        </view>
+
+        <view class="nudge-row" wx:if="{{hasBox}}">
+          <view class="nudge-group">
+            <view class="nudge-btn" data-dir="left" bindtap="onNudge">◀</view>
+            <view class="nudge-btn" data-dir="up" bindtap="onNudge">▲</view>
+            <view class="nudge-btn" data-dir="down" bindtap="onNudge">▼</view>
+            <view class="nudge-btn" data-dir="right" bindtap="onNudge">▶</view>
+          </view>
+          <view class="nudge-group">
+            <view class="nudge-btn" data-axis="w" data-dir="-1" bindtap="onGrow">窄</view>
+            <view class="nudge-btn" data-axis="w" data-dir="1" bindtap="onGrow">宽</view>
+            <view class="nudge-btn" data-axis="h" data-dir="-1" bindtap="onGrow">矮</view>
+            <view class="nudge-btn" data-axis="h" data-dir="1" bindtap="onGrow">高</view>
+          </view>
+          <view class="nudge-btn nudge-btn--reset" bindtap="onReset">重置</view>
+        </view>
+
+        <view class="action-row">
+          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="chooseImage">重新选图</button>
+          <button
+            class="btn btn--primary action-btn"
+            hover-class="btn--pressed"
+            disabled="{{recognizing || !hasBox}}"
+            bindtap="recognize"
+          >{{recognizing ? '识别中…' : '识别图纸'}}</button>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

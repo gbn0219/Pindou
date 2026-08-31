@@ -6,6 +6,7 @@
     "page/crop/index",
     "page/pattern/index",
     "page/pattern-edit/index",
+    "page/scan/index",
     "page/feedback/index"
   ],
   "window": {

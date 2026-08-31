@@ -108,6 +108,10 @@ Page({
     this.setData({ mode: e.currentTarget.dataset.value })
   },
 
+  goScan() {
+    wx.navigateTo({ url: '/page/scan/index' })
+  },
+
   pickStyle(e) {
     if (this.data.customStyle.trim()) return
     this.setData({ selectedStyle: e.currentTarget.dataset.value })

@@ -10,7 +10,7 @@
     </view>
     <view class="meta-item">
       <text class="meta-label">生成方式</text>
-      <text class="meta-value">{{mode === 'ai' ? '创意生成·' + styleShort : '照片还原'}}</text>
+      <text class="meta-value">{{mode === 'ai' ? '创意生成·' + styleShort : (mode === 'scan' ? '图纸识别' : '照片还原')}}</text>
     </view>
   </view>
 

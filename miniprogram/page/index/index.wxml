@@ -4,6 +4,14 @@
     <view class="hero-sub">一张图，变成一盒豆。</view>
   </view>
 
+  <view class="card scan-entry" hover-class="scan-entry--pressed" bindtap="goScan">
+    <view class="scan-entry-body">
+      <view class="scan-entry-title">识别已有图纸</view>
+      <view class="scan-entry-sub">截图/拍照导入拼豆图纸，识别成可编辑的色号网格</view>
+    </view>
+    <view class="scan-entry-arrow">›</view>
+  </view>
+
   <view class="card import-card {{imagePath ? 'has-image' : ''}}" hover-class="import-card--pressed" bindtap="chooseImage">
     <block wx:if="{{!imagePath}}">
       <view class="bead" aria-hidden="true"></view>

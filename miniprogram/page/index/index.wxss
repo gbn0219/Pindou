@@ -22,6 +22,35 @@
   color: var(--color-ink-2);
 }
 
+.scan-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-accent);
+  border-color: var(--color-accent-deep);
+  box-shadow: 0 12rpx 32rpx -16rpx var(--color-cast);
+}
+.scan-entry--pressed {
+  transform: translateY(2rpx) scale(0.985);
+}
+.scan-entry-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-accent-ink);
+}
+.scan-entry-sub {
+  margin-top: 4rpx;
+  font-size: var(--text-sm);
+  color: var(--color-accent-ink);
+  opacity: 0.75;
+}
+.scan-entry-arrow {
+  font-size: 56rpx;
+  line-height: 1;
+  color: var(--color-accent-ink);
+  padding-left: var(--space-md);
+}
+
 .card {
   background: var(--color-card);
   border: 2rpx solid var(--color-rule);
