@@ -1,9 +1,16 @@
 <view class="page">
   <view class="top-bar">
-    <button class="btn btn--soft btn--sm" wx:if="{{fromGallery}}" hover-class="btn--pressed" disabled="{{saving}}" bindtap="save">保存</button>
-    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
-    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canUndo}}" bindtap="undo">撤销</button>
-    <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canRedo}}" bindtap="redo">重做</button>
+    <block wx:if="{{!cropActive}}">
+      <button class="btn btn--soft btn--sm" wx:if="{{fromGallery}}" hover-class="btn--pressed" disabled="{{saving}}" bindtap="save">保存</button>
+      <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
+      <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canUndo}}" bindtap="undo">撤销</button>
+      <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canRedo}}" bindtap="redo">重做</button>
+      <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="enterCrop">裁剪</button>
+    </block>
+    <block wx:else>
+      <button class="btn btn--primary btn--sm" hover-class="btn--pressed" bindtap="confirmCrop">确认裁剪</button>
+      <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="cancelCrop">取消</button>
+    </block>
   </view>
 
   <view class="status-bar">
@@ -20,12 +27,12 @@
       <view wx:if="{{fullscreen}}" class="fs-close" catchtap="exitFullscreen">×</view>
       <view wx:if="{{fullscreen && guideMode === 'build'}}" class="fs-progress-pill">已点亮 {{buildDoneCount}}/{{fuseLegend.length}} 色</view>
     </view>
-    <view wx:if="{{!fullscreen}}" class="tool-row">
+    <view wx:if="{{!fullscreen && !cropActive}}" class="tool-row">
       <view class="mode-chip {{mode === 'paint' ? 'mode-chip--on' : ''}}" data-mode="paint" bindtap="pickEditMode">涂色</view>
       <view class="mode-chip {{mode === 'replace' ? 'mode-chip--on' : ''}}" data-mode="replace" bindtap="pickEditMode">换色</view>
       <view class="mode-chip {{mode === 'pick' ? 'mode-chip--on' : ''}}" data-mode="pick" bindtap="pickEditMode">吸色</view>
     </view>
-    <view wx:if="{{!fullscreen}}" class="canvas-hint">双指缩放 - 点击右下角放大进入智能拼豆板</view>
+    <view wx:if="{{!fullscreen && !cropActive}}" class="canvas-hint">双指缩放 - 点击右下角放大进入智能拼豆板</view>
     <view wx:if="{{fullscreen}}" class="beading-bar">
             <view class="beading-top">
         <view class="beading-heading">
@@ -98,7 +105,7 @@
     </view>
   </view>
 
-  <view class="palette">
+  <view class="palette" wx:if="{{!cropActive}}">
     <scroll-view scroll-y class="palette-scroll">
       <view wx:for="{{groups}}" wx:for-item="group" wx:key="family" class="palette-group">
         <view class="palette-family">{{group.family}} · {{group.label}}</view>

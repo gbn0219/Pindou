@@ -40,6 +40,7 @@ Page({
     fromGallery: false,
     saving: false,
     cellInfo: MODE_HINTS.paint,
+    cropActive: false,
     fullscreen: false,
     fsLeaving: false,
     guideMode: 'spot',
@@ -69,6 +70,8 @@ Page({
     this.highlight = null
     this.history = [] // 撤销栈：每次修改前的网格快照，最多 MAX_HISTORY 步
     this.redoStack = [] // 重做栈
+    this.cropBox = null // 裁剪选框 { r0, c0, m }：保留左上角 (r0,c0) 起 m×m 的正方形区域
+    this.cropMode = '' // 裁剪态手势：'' | move | resize | pan
     const first = this.palette[0]
     this.setData({
       groups: this.buildGroups(),
@@ -235,6 +238,7 @@ Page({
     }
     // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
     // 坐标条已收起，让图纸铺满画布
+    if (this.data.cropActive) this.drawCropOverlay()
   },
 
   redrawCanvas() {
@@ -242,6 +246,112 @@ Page({
     this.refreshBgMask()
     this.offscreenDirty = true
     this.drawGrid()
+  },
+
+  // ---- 裁剪图纸（保持方形）----
+  cropBoxWorld() {
+    const cellStep = (this.cellPx || pattern.CELL) + pattern.GAP
+    const b = this.cropBox
+    return {
+      x0: b.c0 * cellStep,
+      y0: b.r0 * cellStep,
+      w: b.m * cellStep - pattern.GAP,
+      h: b.m * cellStep - pattern.GAP
+    }
+  },
+
+  cropHandleHit(x, y) {
+    const v = this.view
+    if (!v || !this.cropBox) return false
+    const r = this.cropBoxWorld()
+    const hx = v.ox + (r.x0 + r.w) * v.scale
+    const hy = v.oy + (r.y0 + r.h) * v.scale
+    return Math.abs(hx - x) <= 24 && Math.abs(hy - y) <= 24
+  },
+
+  cropBoxHit(x, y) {
+    const v = this.view
+    if (!v || !this.cropBox) return false
+    const r = this.cropBoxWorld()
+    const sx0 = v.ox + r.x0 * v.scale
+    const sy0 = v.oy + r.y0 * v.scale
+    const sx1 = v.ox + (r.x0 + r.w) * v.scale
+    const sy1 = v.oy + (r.y0 + r.h) * v.scale
+    return x >= sx0 && x <= sx1 && y >= sy0 && y <= sy1
+  },
+
+  drawCropOverlay() {
+    const b = this.cropBox
+    if (!b || !this.ctx || !this.view) return
+    const cellStep = (this.cellPx || pattern.CELL) + pattern.GAP
+    const total = this.pattern.size * cellStep - pattern.GAP
+    const r = this.cropBoxWorld()
+    const scale = this.view.scale || 1
+    // 框外遮罩：提示保留范围
+    this.ctx.fillStyle = 'rgba(18, 23, 27, 0.4)'
+    this.ctx.fillRect(0, 0, total, r.y0)
+    this.ctx.fillRect(0, r.y0 + r.h, total, total - r.y0 - r.h)
+    this.ctx.fillRect(0, r.y0, r.x0, r.h)
+    this.ctx.fillRect(r.x0 + r.w, r.y0, total - r.x0 - r.w, r.h)
+    // 边框 + 右下角手柄
+    this.ctx.strokeStyle = '#ff3a5d'
+    this.ctx.lineWidth = 2 / scale
+    this.ctx.strokeRect(r.x0, r.y0, r.w, r.h)
+    const hs = 6 / scale
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.fillRect(r.x0 + r.w - hs, r.y0 + r.h - hs, hs * 2, hs * 2)
+    this.ctx.strokeRect(r.x0 + r.w - hs, r.y0 + r.h - hs, hs * 2, hs * 2)
+  },
+
+  enterCrop() {
+    if (this.data.fullscreen) return
+    const size = this.pattern.size
+    this.cropBox = { r0: 0, c0: 0, m: size }
+    this.cropMode = ''
+    this.highlight = null
+    this.pan = null
+    this.pinch = null
+    this.pinchActive = false
+    this.setData({ cropActive: true, cellInfo: '拖动框内移动 · 拖右下角调整大小 · 双指缩放' })
+    this.offscreenDirty = true
+    this.drawGrid()
+  },
+
+  confirmCrop() {
+    const b = this.cropBox
+    if (!b) {
+      this.cancelCrop()
+      return
+    }
+    const p = this.pattern
+    const size = p.size
+    if (b.m === size && b.r0 === 0 && b.c0 === 0) {
+      this.cancelCrop()
+      return
+    }
+    this.pushHistory() // 裁剪可撤销
+    p.grid = p.grid.slice(b.r0, b.r0 + b.m).map((row) => row.slice(b.c0, b.c0 + b.m))
+    this.editedMask = this.editedMask.slice(b.r0, b.r0 + b.m).map((row) => row.slice(b.c0, b.c0 + b.m))
+    this.baseBgMask = this.baseBgMask
+      ? this.baseBgMask.slice(b.r0, b.r0 + b.m).map((row) => row.slice(b.c0, b.c0 + b.m))
+      : null
+    p.size = b.m
+    p.bgMask = this.baseBgMask
+    this.cropBox = null
+    this.cropMode = ''
+    this.view = null // 重新铺满新尺寸
+    this.offscreenDirty = true
+    this.setData({ cropActive: false, cellInfo: '已裁剪为 ' + b.m + '×' + b.m })
+    this.refreshBgMask()
+    this.draw()
+  },
+
+  cancelCrop() {
+    this.cropBox = null
+    this.cropMode = ''
+    this.setData({ cropActive: false, cellInfo: MODE_HINTS[this.data.mode] || MODE_HINTS.paint })
+    this.offscreenDirty = true
+    this.draw()
   },
 
   // 背景掩码：AI 抠图用生成时的洋红掩码，照片模式回退白色连通域；
@@ -280,6 +390,30 @@ Page({
       }
       return
     }
+    if (this.data.cropActive) {
+      if (touches.length >= 2) {
+        this.pan = null
+        this.startPinch(this.normTouch(touches[0]), this.normTouch(touches[1]))
+      } else if (touches.length === 1) {
+        const p = this.normTouch(touches[0])
+        this.pinchActive = false
+        this.pinch = null
+        this.pan = null
+        if (this.cropHandleHit(p.x, p.y)) {
+          this.cropMode = 'resize'
+          this.cropStartCell = this.cellAtClamped(p.x, p.y)
+          this.cropStartBox = Object.assign({}, this.cropBox)
+        } else if (this.cropBoxHit(p.x, p.y)) {
+          this.cropMode = 'move'
+          this.cropStartCell = this.cellAtClamped(p.x, p.y)
+          this.cropStartBox = Object.assign({}, this.cropBox)
+        } else {
+          this.cropMode = 'pan'
+          this.startPan(p)
+        }
+      }
+      return
+    }
     const t = touches && touches[0]
     if (!t) return
     this.pinchActive = false
@@ -307,6 +441,32 @@ Page({
     }
     if (this.data.fullscreen) {
       if (touches.length === 1) this.handlePan(this.normTouch(touches[0]))
+      return
+    }
+    if (this.data.cropActive) {
+      if (touches.length === 1 && this.cropMode) {
+        const p = this.normTouch(touches[0])
+        if (this.cropMode === 'move') {
+          const cell = this.cellAtClamped(p.x, p.y)
+          const size = this.pattern.size
+          const m = this.cropStartBox.m
+          this.cropBox = {
+            r0: Math.max(0, Math.min(size - m, this.cropStartBox.r0 + cell.row - this.cropStartCell.row)),
+            c0: Math.max(0, Math.min(size - m, this.cropStartBox.c0 + cell.col - this.cropStartCell.col)),
+            m
+          }
+          this.scheduleRedraw()
+        } else if (this.cropMode === 'resize') {
+          const cell = this.cellAtClamped(p.x, p.y)
+          const size = this.pattern.size
+          const maxM = size - Math.max(this.cropStartBox.r0, this.cropStartBox.c0)
+          const m = Math.max(1, Math.min(maxM, Math.max(cell.row - this.cropStartBox.r0 + 1, cell.col - this.cropStartBox.c0 + 1)))
+          this.cropBox = { r0: this.cropStartBox.r0, c0: this.cropStartBox.c0, m }
+          this.scheduleRedraw()
+        } else if (this.cropMode === 'pan') {
+          this.handlePan(p)
+        }
+      }
       return
     }
     const t = touches && touches[0]
@@ -339,6 +499,13 @@ Page({
     }
     // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
     if (e.touches && e.touches.length > 0) return
+    if (this.data.cropActive) {
+      this.cropMode = ''
+      this.pan = null
+      this.pinchActive = false
+      this.pinch = null
+      return
+    }
     const wasStroke = this.paintStroke
     this.paintStroke = false
     this.strokePushed = false
@@ -369,6 +536,7 @@ Page({
     this.pinchActive = false
     this.paintStroke = false
     this.strokePushed = false
+    this.cropMode = ''
   },
 
   startPinch(t1, t2) {
@@ -446,6 +614,18 @@ Page({
     const row = Math.floor(ly / cell)
     if (row < 0 || col < 0 || row >= p.size || col >= p.size) return null
     return { row, col }
+  },
+
+  cellAtClamped(x, y) {
+    const v = this.view
+    const cell = (this.cellPx || pattern.CELL) + pattern.GAP
+    const lx = (x - v.ox) / v.scale
+    const ly = (y - v.oy) / v.scale
+    const size = this.pattern.size
+    return {
+      row: Math.max(0, Math.min(size - 1, Math.floor(ly / cell))),
+      col: Math.max(0, Math.min(size - 1, Math.floor(lx / cell)))
+    }
   },
 
   onCellTap(row, col) {
@@ -705,8 +885,22 @@ Page({
   snapshot() {
     return {
       grid: this.pattern.grid.map((row) => row.slice()),
-      edited: this.editedMask.map((row) => row.slice())
+      edited: this.editedMask.map((row) => row.slice()),
+      size: this.pattern.size,
+      bgMask: this.pattern.bgMask ? this.pattern.bgMask.map((row) => row.slice()) : null
     }
+  },
+
+  applySnapshot(snap) {
+    const sizeChanged = snap.size !== this.pattern.size
+    this.pattern.grid = snap.grid
+    this.pattern.size = snap.size
+    this.pattern.bgMask = snap.bgMask
+    this.editedMask = snap.edited
+    this.baseBgMask = snap.bgMask
+    this.highlight = null
+    this.offscreenDirty = true
+    if (sizeChanged) this.view = null // 尺寸变化时重新铺满
   },
 
   pushHistory() {
@@ -720,12 +914,10 @@ Page({
     if (!this.history.length) return
     this.redoStack.push(this.snapshot())
     if (this.redoStack.length > MAX_HISTORY) this.redoStack.shift()
-    const snap = this.history.pop()
-    this.pattern.grid = snap.grid
-    this.editedMask = snap.edited
-    this.highlight = null
+    this.applySnapshot(this.history.pop())
     this.updateHistoryButtons()
-    this.redrawCanvas()
+    this.refreshBgMask()
+    this.draw()
     this.setData({ cellInfo: '已撤销（剩余 ' + this.history.length + ' 步可撤销）' })
   },
 
@@ -733,12 +925,10 @@ Page({
     if (!this.redoStack.length) return
     this.history.push(this.snapshot())
     if (this.history.length > MAX_HISTORY) this.history.shift()
-    const snap = this.redoStack.pop()
-    this.pattern.grid = snap.grid
-    this.editedMask = snap.edited
-    this.highlight = null
+    this.applySnapshot(this.redoStack.pop())
     this.updateHistoryButtons()
-    this.redrawCanvas()
+    this.refreshBgMask()
+    this.draw()
     this.setData({ cellInfo: '已重做' })
   },
 
