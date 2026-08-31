@@ -4,7 +4,7 @@
 
 拼豆图纸生成微信小程序：用户导入一张图片 →（可选裁剪）→ 选择生成方式 → 像素化并映射到拼豆标准色 → 生成、展示、修改、导出拼豆图纸。
 
-当前包含六个页面（均在主包，无分包；底部为原生 tabBar：首页 / 我的）：
+当前包含七个页面（均在主包，无分包；底部为原生 tabBar：首页 / 我的）：
 
 1. 主页面 `miniprogram/page/index/index`（tab）：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成方式（照片还原 / 创意生成）、创意生成风格选择
 2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动框内部移动位置，拖动四边/四角调整大小），完成后返回主页面，最终图纸仍为方形网格
@@ -12,6 +12,7 @@
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 5. 个人中心 `miniprogram/page/profile/index`（tab）：微信登录（云开发 openid）、头像昵称、菜单区（去生成/我的图库/常见问题/关于拼豆）
 6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、缩略图/预览图压缩、点击图片 cloud:// 直接预览、条目"编辑"进入修改页、"删除"移除条目及关联云存储文件；旧数据缺缩略图/预览图时后台回填）
+7. 意见反馈 `miniprogram/page/feedback/index`：反馈表单（textarea + 字数）+ 提交按钮，走 `feedback` 云函数
 
 ## 生成方式（核心）
 
@@ -49,7 +50,7 @@
 
 ```
 miniprogram/
-  app.json                    页面注册（4 页）
+  app.json                    页面注册（7 页：index/profile/gallery/crop/pattern/pattern-edit/feedback）
   page/index/                 主页面（生成方式/风格选择）
   page/crop/                  裁剪页
   page/pattern/               展示页
@@ -59,11 +60,14 @@ miniprogram/
   utils/export.js            图纸资产生成（整图导出 ×EXPORT_UPSCALE 放大 / 网格缩略图 / 原图方形压缩，小程序环境可用）
   utils/ai.js                 AI 生成前端：原图压缩、调用后端（local/cloud）、读 AI 图纸像素映射色号（imageToGrid / imageDataToGrid / dominantBlockRgb，node 可测）
   utils/progress.js           生成进度估算与浮层驱动（阶段跳变 + 2 分钟时间估算，node 可测）
+  utils/beading.js            智能拼豆/一键跟拼纯逻辑（图例构建、点亮进度、强调参数，node 可测）
+  utils/gesture.js             canvas 双指缩放/拖动纯函数（viewportPinchStep / clampView，node 可测）
   utils/image.js              图片加载工具（唯一临时路径绕过 iOS createImage 缓存，带超时+重试）
   data/colors.json            色卡数据源（由脚本生成，勿手改）
   data/colors.js              运行时数据模块（与 colors.json 同源；小程序 require JSON 不可靠，运行时统一加载 .js）
   styles/tokens.wxss          Hum 设计令牌（色彩/字号/间距/动效，各页面 @import）
   styles/progress.wxss        生成进度浮层样式（index/pattern 页共用）
+  styles/beading.wxss        全屏拼豆（智能拼豆/一键跟拼）面板样式（pattern/pattern-edit 共用）
 scripts/build-colors.js       解析 docs/拼豆标准色彩RGB与拼豆盘尺寸.md → 生成 data/colors.json 与 data/colors.js
 tools/ai-generate-server.js   本地 AI 生成代理服务（开发用，读取根目录 .env，默认端口 8787）
 tools/style-refs/             原图转像素图示例源图 + 合成参考拼图 ref-pack.jpg（已不再发送，文件保留）
@@ -116,6 +120,11 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 - AI 生成本地模式：项目根目录 `.env` 填写 `ARK_API_KEY`（火山方舟 API Key，已有 `.env.example`），运行 `node tools/ai-generate-server.js`，开发者工具勾选"不校验合法域名"
 - 云函数改动需在开发者工具中右键"上传并部署（云端安装依赖）"
 - 云函数 `ai-generate-worker`（cloud 模式）需配置环境变量：`ARK_API_KEY`（必填）、`ARK_MODEL`（可选，默认 `doubao-seedream-5-0-260128`）；在开发者工具云函数面板或云开发控制台"云函数 → 配置 → 环境变量"中设置（worker 与本地服务同为 Seedream 图像方案；部署目录含 boy-face-ref.jpg / girl-face-ref.jpg 表情参考图与 prompt.js）；`ai-generate-pattern` 负责调度、无需密钥，其目录 `config.json` 需声明云调用权限 `cloudbase.addDelayedFunctionTask`（重新部署后权限缓存约 10 分钟）；需在控制台创建集合 `ai_tasks`（代码会尝试自动创建），并把 `ai-generate-worker` 的超时时间设为 **900s**；前端不自动重提，一张图一次模型调用
+
+## 最近更新（开发进度）
+
+- **2026-08-31 · 界面统一与全屏拼豆优化**（commit `20b2a7f`，分支 `codex/pindou-pattern`）：统一暖纸配色/卡片表面/选中态（黄主按钮、墨底选中、红强调），补齐未定义 CSS 变量；图纸展示/修改画布改 1:1 方寸、去掉四周坐标条、居中画板；全屏拼豆底部面板占满剩余高度、色卡一行 3 个等宽居左、新增网格选项（默认每 5 格）、一键跟拼改为两步撤回；修复编辑页放大键无响应、预览页非全屏双指缩放失效；新增 `beading` 逻辑/样式与单测。
+- 详细进度见 [`docs/开发进度.md`](docs/开发进度.md)。
 
 ## 工作准则
 
