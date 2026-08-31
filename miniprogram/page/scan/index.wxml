@@ -73,23 +73,24 @@
         </view>
 
         <view class="nudge-row">
-          <text class="nudge-label">对齐微调（1/10 格）</text>
-          <view class="nudge-group">
-            <view class="nudge-btn" data-dir="left" bindtap="onNudge">◀</view>
-            <view class="nudge-btn" data-dir="up" bindtap="onNudge">▲</view>
-            <view class="nudge-btn" data-dir="down" bindtap="onNudge">▼</view>
-            <view class="nudge-btn" data-dir="right" bindtap="onNudge">▶</view>
+          <view class="nudge-left">
+            <text class="nudge-label">对齐微调</text>
+            <view class="nudge-tools">
+              <view class="mini-btn" hover-class="mini-btn--pressed" bindtap="onAutoAlign">{{autoAligning ? '对齐中…' : '自动对齐'}}</view>
+              <view class="mini-btn" hover-class="mini-btn--pressed" bindtap="resetAlign">重置对齐</view>
+            </view>
+          </view>
+          <view class="dpad">
+            <view class="dpad-btn dpad-btn--up" hover-class="dpad-btn--pressed" data-dir="up" bindtap="onNudge"><view class="chev chev--up"></view></view>
+            <view class="dpad-btn dpad-btn--left" hover-class="dpad-btn--pressed" data-dir="left" bindtap="onNudge"><view class="chev chev--left"></view></view>
+            <view class="dpad-btn dpad-btn--down" hover-class="dpad-btn--pressed" data-dir="down" bindtap="onNudge"><view class="chev chev--down"></view></view>
+            <view class="dpad-btn dpad-btn--right" hover-class="dpad-btn--pressed" data-dir="right" bindtap="onNudge"><view class="chev chev--right"></view></view>
           </view>
         </view>
 
-        <view class="action-row">
-          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="onAutoAlign" disabled="{{autoAligning}}">{{autoAligning ? '对齐中…' : '自动对齐'}}</button>
-          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="resetAlign">重置对齐</button>
-        </view>
-
-        <view class="action-row">
-          <button class="btn btn--soft action-btn" hover-class="btn--pressed" bindtap="chooseImage">重新选图</button>
-          <button class="btn btn--primary action-btn" hover-class="btn--pressed" disabled="{{recognizing}}" bindtap="recognize">{{recognizing ? '识别中…' : '识别图纸'}}</button>
+        <view class="footer-actions">
+          <button class="btn btn--soft footer-btn" hover-class="btn--pressed" bindtap="chooseImage">重新选图</button>
+          <button class="btn btn--primary footer-btn footer-btn--main" hover-class="btn--pressed" disabled="{{recognizing}}" bindtap="recognize">{{recognizing ? '识别中…' : '识别图纸'}}</button>
         </view>
       </view>
     </view>

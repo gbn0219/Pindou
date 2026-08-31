@@ -202,37 +202,89 @@
 .nudge-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
 }
-.nudge-label {
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
+.nudge-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
   flex: 1;
+  min-width: 0;
 }
-.nudge-group {
+.nudge-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.nudge-tools {
   display: flex;
   gap: var(--space-2xs);
 }
-.nudge-btn {
-  min-width: 68rpx;
-  height: 60rpx;
+.mini-btn {
+  height: 56rpx;
+  padding: 0 var(--space-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--space-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-paper);
+  border: 2rpx solid var(--color-rule);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  transition: transform var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out);
+}
+.mini-btn--pressed {
+  transform: translateY(2rpx) scale(0.95);
+  background: var(--color-paper-3);
+}
+
+/* 十字方向键：四个箭头用 CSS chevron，等大、跨端一致（不用平台 Unicode 箭头） */
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 60rpx);
+  grid-template-rows: repeat(3, 60rpx);
+  gap: 6rpx;
+  flex: none;
+}
+.dpad-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-input);
   background: var(--color-paper);
   border: 2rpx solid var(--color-rule);
-  font-size: var(--text-sm);
-  color: var(--color-ink);
+  transition: transform var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out);
 }
+.dpad-btn--up { grid-column: 2; grid-row: 1; }
+.dpad-btn--left { grid-column: 1; grid-row: 2; }
+.dpad-btn--right { grid-column: 3; grid-row: 2; }
+.dpad-btn--down { grid-column: 2; grid-row: 3; }
+.dpad-btn--pressed {
+  transform: translateY(2rpx) scale(0.93);
+  background: var(--color-paper-3);
+}
+.chev {
+  width: 16rpx;
+  height: 16rpx;
+  border-right: 4rpx solid var(--color-ink);
+  border-bottom: 4rpx solid var(--color-ink);
+  border-radius: 2rpx;
+}
+.chev--right { transform: rotate(-45deg); }
+.chev--left { transform: rotate(135deg); }
+.chev--up { transform: rotate(-135deg); }
+.chev--down { transform: rotate(45deg); }
 
-.action-row {
+.footer-actions {
   display: flex;
   gap: var(--space-sm);
-  margin-top: var(--space-sm);
+  margin-top: var(--space-md);
 }
-.action-btn {
+.footer-btn {
   flex: 1;
+}
+.footer-btn--main {
+  flex: 1.4; /* 主 CTA 更宽，与次动作形成层级 */
 }

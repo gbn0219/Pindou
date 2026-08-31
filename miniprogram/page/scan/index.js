@@ -13,7 +13,7 @@ const gesture = require('../../utils/gesture.js')
 
 const MAX_DIM = 2048 // 工作图最大边长（内存与采样速度折中）
 const FIT_PAD = 16 // 网格与画布四边留白（视口 px），避免画到/滑出屏幕边缘
-const NUDGE_FRAC = 0.1 // 对齐微调步长 = 网格格边长 × 该比例
+const NUDGE_FRAC = 0.02 // 对齐微调步长 = 网格格边长 × 该比例（1/50 格）
 const MIN_CELLS = 5 // 网格格数可调范围（仅对齐参考）
 const MAX_CELLS = 50
 const MIN_SCALE = 0.02
