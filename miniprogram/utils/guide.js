@@ -4,7 +4,7 @@
 
 const STORAGE_PREFIX = 'guideTipsSeen_'
 // TODO 测试用开关：true = 每次进入页面都显示引导（方便定位/交互调试）；改回 false 恢复一次性记忆
-const ALWAYS_SHOW_GUIDE = true
+const ALWAYS_SHOW_GUIDE = false
 
 // 各页提示：selector 为页面内查询目标（类名）；text 为气泡文案；
 // interactive 表示高亮区域可点击（点按后由页面处理，如打开选项弹层）；

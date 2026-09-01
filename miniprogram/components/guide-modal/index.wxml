@@ -32,7 +32,7 @@
           <view class="gm-flow-line">
             <view class="gm-chip">图纸</view>
             <view class="gm-arrow">→</view>
-            <view class="gm-chip">修改 / 智能拼豆·一键跟拼</view>
+            <view class="gm-chip">修改 / 一键跟拼</view>
             <view class="gm-arrow">→</view>
             <view class="gm-chip">图库 / 导出</view>
           </view>

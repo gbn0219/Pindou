@@ -25,19 +25,20 @@
         <view class="fs-ico"><view class="fs-ico-inner"></view></view>
       </view>
       <view wx:if="{{fullscreen}}" class="fs-close" catchtap="exitFullscreen">×</view>
-      <view wx:if="{{fullscreen && guideMode === 'build'}}" class="fs-progress-pill">已点亮 {{buildDoneCount}}/{{fuseLegend.length}} 色</view>
+      <view wx:if="{{fullscreen}}" class="fs-progress-pill">已点亮 {{buildDoneCount}}/{{fuseLegend.length}} 色</view>
     </view>
     <view wx:if="{{!fullscreen && !cropActive}}" class="tool-row">
       <view class="mode-chip {{mode === 'paint' ? 'mode-chip--on' : ''}}" data-mode="paint" bindtap="pickEditMode">涂色</view>
       <view class="mode-chip {{mode === 'replace' ? 'mode-chip--on' : ''}}" data-mode="replace" bindtap="pickEditMode">换色</view>
       <view class="mode-chip {{mode === 'pick' ? 'mode-chip--on' : ''}}" data-mode="pick" bindtap="pickEditMode">吸色</view>
     </view>
-    <view wx:if="{{!fullscreen && !cropActive}}" class="canvas-hint">双指缩放 - 点击右下角放大进入智能拼豆板</view>
-    <view wx:if="{{fullscreen}}" class="beading-bar">
-            <view class="beading-top">
+    <view wx:if="{{!fullscreen && !cropActive}}" class="canvas-hint">双指缩放 - 点击右下角放大进入一键跟拼</view>
+    <view wx:if="{{fullscreen}}" class="beading-bar {{beadingDragging ? 'beading-bar--drag' : ''}}" style="height: {{beadingSheetH}}px;">
+            <view class="beading-top" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
+        <view class="beading-handle"></view>
         <view class="beading-heading">
           <view class="beading-title">全屏拼豆</view>
-          <view class="beading-subtitle">选择一个模式开始</view>
+          <view class="beading-subtitle">点颜色看位置，拼完固定到图纸</view>
         </view>
         <view class="beading-sort">
           <view class="beading-sort-label">排序方式</view>
@@ -47,28 +48,8 @@
           </view>
         </view>
       </view>
-      <view class="beading-modes">
-        <view class="beading-mode {{guideMode === 'spot' ? 'beading-mode--on' : ''}}" data-mode="spot" bindtap="pickGuideMode">智能拼豆</view>
-        <view class="beading-mode {{guideMode === 'build' ? 'beading-mode--on' : ''}}" data-mode="build" bindtap="pickGuideMode">一键跟拼</view>
-      </view>
-            <view wx:if="{{guideMode === 'spot'}}" class="beading-context">
-        <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === fuseSelected}}">
-          <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
-          <view>
-            <view class="beading-color-code">{{item.code}}</view>
-            <view class="beading-color-sub">{{item.count}} 格</view>
-          </view>
-        </view>
-        <view class="beading-color" wx:if="{{!fuseSelected}}">
-          <view class="beading-color-swatch beading-color-swatch--empty"></view>
-          <view>
-            <view class="beading-color-code">未选择</view>
-            <view class="beading-color-sub">点下方颜色</view>
-          </view>
-        </view>
-        <view class="beading-context-text">满色描边 · 其他减淡</view>
-      </view>
-      <view wx:if="{{guideMode === 'build'}}" class="beading-context">
+
+            <view class="beading-context">
         <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
           <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
           <view>
@@ -90,7 +71,7 @@
           <view
             wx:for="{{fuseLegend}}"
             wx:key="code"
-            class="fuse-chip {{guideMode === 'spot' && fuseSelected === item.code ? 'fuse-chip--on' : ''}} {{guideMode === 'build' && buildCurrent === item.code ? 'fuse-chip--on' : ''}} {{guideMode === 'build' && doneMap[item.code] && buildCurrent !== item.code ? 'fuse-chip--done' : ''}}"
+            class="fuse-chip {{buildCurrent === item.code ? 'fuse-chip--on' : ''}} {{doneMap[item.code] && buildCurrent !== item.code ? 'fuse-chip--done' : ''}}"
             hover-class="fuse-chip--pressed"
             data-code="{{item.code}}"
             bindtap="onFuseChip"
@@ -98,7 +79,7 @@
             <view class="fuse-swatch" style="background: {{item.hex}}"></view>
             <text class="fuse-code">{{item.code}}</text>
             <text class="fuse-count">× {{item.count}}</text>
-            <view wx:if="{{guideMode === 'build' && doneMap[item.code]}}" class="fuse-done-badge">✓</view>
+            <view wx:if="{{doneMap[item.code]}}" class="fuse-done-badge">✓</view>
           </view>
         </view>
       </scroll-view>

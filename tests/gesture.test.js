@@ -93,6 +93,18 @@ function screenOf(view, localX, localY) {
   assert.strictEqual(r.scale, gesture.MIN_SCALE, '应夹到最小缩放')
 }
 
+// 缩放上限可覆盖：默认夹到 MAX_SCALE，opts.maxScale 可允许更高
+{
+  const start = { dist: 100, midX: 100, midY: 100, scale: 4, ox: 0, oy: 0 }
+  const [t1, t2] = touches(100, 100, 200, 0) // dist = 400 → 理论 16 倍
+  const def = gesture.viewportPinchStep(start, start, t1, t2)
+  assert.strictEqual(def.scale, gesture.MAX_SCALE, '默认应夹到 MAX_SCALE')
+  const over = gesture.viewportPinchStep(start, start, t1, t2, { maxScale: 128 })
+  assert.strictEqual(over.scale, 16, 'opts.maxScale 允许超过默认上限')
+  const capped = gesture.viewportPinchStep(start, start, t1, t2, { maxScale: 8 })
+  assert.strictEqual(capped.scale, 8, 'opts.maxScale 作为新上限生效')
+}
+
 // 大尺寸盘面（208，画布按 displayCell 自适应）：初始视图应完整落在区域内
 {
   const total = 208 * (pattern.displayCell(208) + pattern.GAP) - pattern.GAP

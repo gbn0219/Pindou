@@ -272,6 +272,18 @@
   border-bottom: 4rpx solid var(--color-ink);
   border-radius: 2rpx;
 }
+.zoom-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  flex: none;
+}
+.zoom-symbol {
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-ink);
+}
 .chev--right { transform: rotate(-45deg); }
 .chev--left { transform: rotate(135deg); }
 .chev--up { transform: rotate(-135deg); }

@@ -18,8 +18,10 @@ const DEFAULT_LABEL_MIN_RATIO = 0.01 // 中心黑像素占比 ≥ 1% 视为“�
 const DEFAULT_WHITE_MIN = 225 // 白色系判定下限（RGB 三通道）
 const DEFAULT_MAX_DIM = 512 // 网格线检测降采样最大边长
 const DEFAULT_BAND_FRAC = 0.5 // 网格线检测只取图像中间区域（避开边缘/边距干扰）
-const DEFAULT_MIN_LINES = 3 // 至少检测到这么多条网格线才算识别成功
-const DEFAULT_LINE_MAX_W = 4 // 网格线在降采样图上的最大宽度（排除深色色块列）
+const DEFAULT_MIN_LINES = 5 // 至少这么多条网格线在同一个晶格上才算识别成功（避免一两行对上但整体偏移）
+const DEFAULT_LINE_MAX_W = 4 // 边缘带在降采样图上的最大宽度（排除大色块）
+const DEFAULT_EDGE_THRESH = 40 // 边缘阈值：与邻像素任一通道差 ≥ 该值视为颜色突变（不限于黑线）
+const DEFAULT_MIN_PITCH = 3 // 网格格距下限（降采样块），避免把线宽/边缘距当成格距
 
 /**
  * 单格采样：返回 { rgb, darkRatio }。
@@ -218,33 +220,54 @@ function finalizePattern(rgbGrid, bgMask, setKey) {
 
 // ---- 网格线检测（投影峰值法，自动对齐用）----
 
-// 降采样暗图：f×f 块内任一像素暗即记暗（max-pooling 保住细网格线）
-function downscaleDarkMap(imageData, maxDim, darkLum) {
+// 降采样边缘图：f×f 块内任一像素与左邻/上邻有明显色差即记边缘（max-pooling 保住细线）。
+// 不限定线色：黑/白/灰/彩色线都会在色块交界处产生颜色突变。
+// 返回 edgeX（竖线检测用：左右差分）与 edgeY（横线检测用：上下差分）。
+function downscaleEdgeMap(imageData, maxDim, edgeThresh) {
   const srcW = imageData.width
   const srcH = imageData.height
   const f = Math.max(1, Math.round(Math.max(srcW, srcH) / maxDim))
   const w = Math.max(1, Math.round(srcW / f))
   const h = Math.max(1, Math.round(srcH / f))
   const data = imageData.data
-  const dark = new Uint8Array(w * h)
+  const edgeX = new Uint8Array(w * h)
+  const edgeY = new Uint8Array(w * h)
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      let any = 0
-      for (let dy = 0; dy < f && !any; dy++) {
+      let anyX = 0
+      let anyY = 0
+      for (let dy = 0; dy < f && (!anyX || !anyY); dy++) {
         const sy = y * f + dy
         if (sy >= srcH) continue
-        for (let dx = 0; dx < f && !any; dx++) {
+        for (let dx = 0; dx < f && (!anyX || !anyY); dx++) {
           const sx = x * f + dx
           if (sx >= srcW) continue
           const i = (sy * srcW + sx) * 4
-          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
-          if (lum < darkLum) any = 1
+          if (!anyX && sx > 0) {
+            const j = i - 4
+            const d = Math.max(
+              Math.abs(data[i] - data[j]),
+              Math.abs(data[i + 1] - data[j + 1]),
+              Math.abs(data[i + 2] - data[j + 2])
+            )
+            if (d >= edgeThresh) anyX = 1
+          }
+          if (!anyY && sy > 0) {
+            const j = i - srcW * 4
+            const d = Math.max(
+              Math.abs(data[i] - data[j]),
+              Math.abs(data[i + 1] - data[j + 1]),
+              Math.abs(data[i + 2] - data[j + 2])
+            )
+            if (d >= edgeThresh) anyY = 1
+          }
         }
       }
-      dark[y * w + x] = any
+      edgeX[y * w + x] = anyX
+      edgeY[y * w + x] = anyY
     }
   }
-  return { dark, w, h, f }
+  return { edgeX, edgeY, w, h, f }
 }
 
 function medianDiffs(sorted) {
@@ -282,7 +305,8 @@ function fitLattice(centers, minLines) {
   return { pitch, origin }
 }
 
-function projectBands(dark, w, h, axis, bandFrac, lineMaxW, minLines) {
+// 投影出边缘带：连续高分列/行合并为一条带，仅保留细带，返回各带中心（降采样块坐标）
+function projectEdgeBands(map, w, h, axis, bandFrac, lineMaxW) {
   const isX = axis === 'x' // 'x': 竖直线 → 列投影；'y': 水平线 → 行投影
   const len = isX ? w : h
   const span = isX ? h : w
@@ -291,7 +315,7 @@ function projectBands(dark, w, h, axis, bandFrac, lineMaxW, minLines) {
   const score = new Array(len).fill(0)
   for (let s = b0; s < b1; s++) {
     for (let t = 0; t < len; t++) {
-      score[t] += dark[isX ? s * w + t : t * w + s]
+      score[t] += map[isX ? s * w + t : t * w + s]
     }
   }
   const thresh = Math.max(1, (b1 - b0) * 0.35)
@@ -305,22 +329,95 @@ function projectBands(dark, w, h, axis, bandFrac, lineMaxW, minLines) {
       start = -1
     }
   }
+  return bands
+}
+
+// 用边缘带位置的自相关估计格距：粗线一个周期内会有两条边缘带，但整体仍以格距为周期
+function estimatePitch(positions, minPitch) {
+  const n = positions.length
+  if (n < 3) return 0
+  const span = positions[n - 1] - positions[0]
+  const maxLag = Math.min(Math.floor(span / 2), 100)
+  let bestLag = 0
+  let bestScore = 0
+  for (let lag = minPitch; lag <= maxLag; lag++) {
+    const tol = Math.max(1, lag * 0.08)
+    let score = 0
+    for (let i = 0; i < n; i++) {
+      const target = positions[i] + lag
+      for (let j = i + 1; j < n; j++) {
+        const d = positions[j] - positions[i]
+        if (d > target + tol) break
+        if (Math.abs(d - lag) <= tol) {
+          score++
+          break
+        }
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score
+      bestLag = lag
+    }
+  }
+  return bestLag
+}
+
+// 把边缘带归到每个格距周期内，取周期内首尾边缘带的中点作为线位（细线=带本身，粗线=两边缘中点）
+// 返回 [{ pos, w }]：pos 为线中心，w 为线宽（降采样块）
+function linePositions(positions, pitch) {
+  if (!pitch || positions.length < 1) return []
+  const start = positions[0]
+  const lines = []
+  let groupStart = 0
+  let groupSlot = Math.round((positions[0] - start) / pitch)
+  for (let i = 1; i <= positions.length; i++) {
+    const s = i < positions.length ? Math.round((positions[i] - start) / pitch) : groupSlot + 1
+    if (s !== groupSlot) {
+      const first = positions[groupStart]
+      const last = positions[i - 1]
+      lines.push({ pos: (first + last) / 2, w: Math.max(1, last - first) })
+      if (i < positions.length) {
+        groupStart = i
+        groupSlot = s
+      }
+    }
+  }
+  return lines
+}
+
+// 由边缘带拟合网格：自相关估格距 → 周期内取线中点 → 等距拟合验证，并带出第一条线的线宽
+function fitGridLines(bands, minLines, minPitch) {
   if (bands.length < minLines) return null
-  return fitLattice(bands, minLines)
+  const pitch = estimatePitch(bands, minPitch)
+  if (!pitch) return null
+  const lines = linePositions(bands, pitch)
+  if (lines.length < minLines) return null
+  const fit = fitLattice(lines.map((l) => l.pos), minLines)
+  if (!fit) return null
+  let firstW = 1
+  const tol = Math.max(1, fit.pitch * 0.08)
+  for (const l of lines) {
+    if (Math.abs(l.pos - fit.origin) <= tol) {
+      firstW = l.w
+      break
+    }
+  }
+  return { pitch: fit.pitch, origin: fit.origin, firstW }
 }
 
 /**
  * 第一条网格线左侧/上方区域是否“有内容”（非近白）：有 → 前面还藏着一列/一行，原点要再往前退一个格宽。
  * 解决“图纸最左列没有外框线时，检测到的第一条线其实是第 1/2 列的分隔线”导致的整体偏移一格。
  */
-function contentRatioBefore(imageData, linePos, pitch, isX, bandFrac, whiteMin) {
+function contentRatioBefore(imageData, linePos, pitch, isX, bandFrac, whiteMin, lineW) {
   const iw = imageData.width
   const ih = imageData.height
   const data = imageData.data
-  const x0 = isX ? Math.max(0, Math.floor(linePos - pitch)) : Math.floor(iw * (0.5 - bandFrac / 2))
-  const x1 = isX ? Math.max(0, Math.floor(linePos - 1)) : Math.floor(iw * (0.5 + bandFrac / 2))
-  const y0 = isX ? Math.floor(ih * (0.5 - bandFrac / 2)) : Math.max(0, Math.floor(linePos - pitch))
-  const y1 = isX ? Math.floor(ih * (0.5 + bandFrac / 2)) : Math.max(0, Math.floor(linePos - 1))
+  const halfW = (lineW || 0) / 2
+  const x0 = isX ? Math.max(0, Math.floor(linePos - pitch + halfW)) : Math.floor(iw * (0.5 - bandFrac / 2))
+  const x1 = isX ? Math.max(0, Math.floor(linePos - halfW)) : Math.floor(iw * (0.5 + bandFrac / 2))
+  const y0 = isX ? Math.floor(ih * (0.5 - bandFrac / 2)) : Math.max(0, Math.floor(linePos - pitch + halfW))
+  const y1 = isX ? Math.floor(ih * (0.5 + bandFrac / 2)) : Math.max(0, Math.floor(linePos - halfW))
   let total = 0
   let content = 0
   for (let y = Math.max(0, y0); y < y1; y++) {
@@ -340,27 +437,31 @@ function contentRatioBefore(imageData, linePos, pitch, isX, bandFrac, whiteMin) 
  */
 function detectGridLines(imageData, opts) {
   const maxDim = (opts && opts.maxDim) || DEFAULT_MAX_DIM
-  const darkLum = (opts && opts.darkLum) || DEFAULT_DARK_LUM
   const bandFrac = (opts && opts.bandFrac) || DEFAULT_BAND_FRAC
   const minLines = (opts && opts.minLines) || DEFAULT_MIN_LINES
   const lineMaxW = (opts && opts.lineMaxW) || DEFAULT_LINE_MAX_W
-  const { dark, w, h, f } = downscaleDarkMap(imageData, maxDim, darkLum)
-  const colFit = projectBands(dark, w, h, 'x', bandFrac, lineMaxW, minLines)
-  const rowFit = projectBands(dark, w, h, 'y', bandFrac, lineMaxW, minLines)
+  const edgeThresh = (opts && opts.edgeThresh) || DEFAULT_EDGE_THRESH
+  const minPitch = (opts && opts.minPitch) || DEFAULT_MIN_PITCH
+  const { edgeX, edgeY, w, h, f } = downscaleEdgeMap(imageData, maxDim, edgeThresh)
+  const colFit = fitGridLines(projectEdgeBands(edgeX, w, h, 'x', bandFrac, lineMaxW), minLines, minPitch)
+  const rowFit = fitGridLines(projectEdgeBands(edgeY, w, h, 'y', bandFrac, lineMaxW), minLines, minPitch)
   if (!colFit || !rowFit) return null
   const Lx = colFit.origin * f
   const Ly = rowFit.origin * f
   const pitchX = colFit.pitch * f
   const pitchY = rowFit.pitch * f
+  const wx = colFit.firstW * f
+  const wy = rowFit.firstW * f
   const whiteMin = (opts && opts.whiteMin) || DEFAULT_WHITE_MIN
-  const beforeX = contentRatioBefore(imageData, Lx, pitchX, true, bandFrac, whiteMin) > 0.05
-  const beforeY = contentRatioBefore(imageData, Ly, pitchY, false, bandFrac, whiteMin) > 0.05
+  const beforeX = contentRatioBefore(imageData, Lx, pitchX, true, bandFrac, whiteMin, wx) > 0.05
+  const beforeY = contentRatioBefore(imageData, Ly, pitchY, false, bandFrac, whiteMin, wy) > 0.05
   return {
     ok: true,
     cellW: pitchX,
     cellH: pitchY,
-    originX: beforeX ? Lx - pitchX : Lx,
-    originY: beforeY ? Ly - pitchY : Ly
+    // 线位是“线中心”：格子角 = 线中心 - 半个线宽（对齐到可见的线，而不是线内侧边缘）
+    originX: beforeX ? Lx - pitchX + wx / 2 : Lx + wx / 2,
+    originY: beforeY ? Ly - pitchY + wy / 2 : Ly + wy / 2
   }
 }
 

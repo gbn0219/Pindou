@@ -20,9 +20,10 @@ const MAX_SCALE = 4
  * @param {object} current 当前视图：{ scale, ox, oy }
  * @param {object} t1 触点 1：{ x, y }（canvas 像素）
  * @param {object} t2 触点 2：{ x, y }
+ * @param {object} [opts] 可选 { minScale, maxScale }，覆盖默认缩放上下限（默认 MIN_SCALE/MAX_SCALE）
  * @returns {{ scale: number, ox: number, oy: number }}
  */
-function viewportPinchStep(start, current, t1, t2) {
+function viewportPinchStep(start, current, t1, t2, opts) {
   const dist = Math.sqrt((t1.x - t2.x) * (t1.x - t2.x) + (t1.y - t2.y) * (t1.y - t2.y))
   if (!dist || !start.dist) {
     return { scale: current.scale, ox: current.ox, oy: current.oy }
@@ -30,7 +31,9 @@ function viewportPinchStep(start, current, t1, t2) {
   const midX = (t1.x + t2.x) / 2
   const midY = (t1.y + t2.y) / 2
   let scale = start.scale * (dist / start.dist)
-  scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale))
+  const minScale = opts && typeof opts.minScale === 'number' ? opts.minScale : MIN_SCALE
+  const maxScale = opts && typeof opts.maxScale === 'number' ? opts.maxScale : MAX_SCALE
+  scale = Math.max(minScale, Math.min(maxScale, scale))
   // 起点双指中点下的画布内容点
   const c0X = (start.midX - start.ox) / start.scale
   const c0Y = (start.midY - start.oy) / start.scale

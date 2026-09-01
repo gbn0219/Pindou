@@ -3,12 +3,12 @@
   <block wx:if="{{stage === 'import'}}">
     <view class="hero">
       <view class="hero-title">识别已有图纸</view>
-      <view class="hero-sub">截图导入，自动对齐网格后识别成色号网格</view>
+      <view class="hero-sub">上传图纸原图，自动对齐网格后识别成色号网格</view>
     </view>
     <view class="card import-card" hover-class="import-card--pressed" bindtap="chooseImage">
       <view class="bead" aria-hidden="true"></view>
       <view class="import-title">点击导入图纸图片</view>
-      <view class="import-sub">从相册选择，或拍一张</view>
+      <view class="import-sub">请从相册选择原图，或拍一张清晰的照片</view>
     </view>
   </block>
 
@@ -79,6 +79,10 @@
             <view class="dpad-btn dpad-btn--left" hover-class="dpad-btn--pressed" data-dir="left" bindtap="onNudge"><view class="chev chev--left"></view></view>
             <view class="dpad-btn dpad-btn--down" hover-class="dpad-btn--pressed" data-dir="down" bindtap="onNudge"><view class="chev chev--down"></view></view>
             <view class="dpad-btn dpad-btn--right" hover-class="dpad-btn--pressed" data-dir="right" bindtap="onNudge"><view class="chev chev--right"></view></view>
+          </view>
+          <view class="zoom-col">
+            <view class="dpad-btn" hover-class="dpad-btn--pressed" data-dir="in" bindtap="onZoomStep"><view class="zoom-symbol">＋</view></view>
+            <view class="dpad-btn" hover-class="dpad-btn--pressed" data-dir="out" bindtap="onZoomStep"><view class="zoom-symbol">−</view></view>
           </view>
         </view>
 

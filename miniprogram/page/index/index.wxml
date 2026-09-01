@@ -7,7 +7,7 @@
   <view class="card scan-entry" hover-class="scan-entry--pressed" bindtap="goScan">
     <view class="scan-entry-body">
       <view class="scan-entry-title">识别已有图纸</view>
-      <view class="scan-entry-sub">截图导入拼豆图纸，识别成可编辑的色号网格</view>
+      <view class="scan-entry-sub">上传图纸原图，识别成可编辑的色号网格</view>
     </view>
     <view class="scan-entry-arrow">›</view>
   </view>

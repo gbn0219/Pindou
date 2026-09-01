@@ -240,7 +240,7 @@ function luminance(hex) {
 }
 
 /**
- * 颜色减淡：把 hex 向白色按 ratio（0~1）混合，用于"智能拼豆"模式弱化非选中色。
+ * 颜色减淡：把 hex 向白色按 ratio（0~1）混合，用于"一键跟拼"模式弱化未点亮色。
  */
 function mixWhite(hex, ratio) {
   const r = parseInt(hex.slice(1, 3), 16)
@@ -253,24 +253,15 @@ function mixWhite(hex, ratio) {
 
 /**
  * 单格强调决策（纯函数，可在 Node 中测试）：
- * - spot（智能拼豆）：选中色描边+强制色号，其余色减淡隐号；背景格随减淡（白色不变）
- * - build（一键跟拼）：已点亮色按普通规则，当前色描边+强制色号，未点亮格画成白色空格
+ * - build（一键跟拼）：已点亮色按普通规则，当前色描边+强制色号，未点亮格淡化显示为图纸底图
  * 返回 null 表示按普通规则绘制。
  */
 function cellEmphasis(code, em, isBg) {
-  if (!em) return null
-  if (em.mode === 'spot') {
-    if (!em.code) return null
-    if (isBg) return { dim: true }
-    return code === em.code ? { outline: true } : { dim: true }
-  }
-  if (em.mode === 'build') {
-    if (isBg) return null
-    if (em.doneSet && em.doneSet.has(code)) return null
-    if (code === em.code) return { outline: true }
-    return { empty: true }
-  }
-  return null
+  if (!em || em.mode !== 'build') return null
+  if (isBg) return null
+  if (em.doneSet && em.doneSet.has(code)) return null
+  if (code === em.code) return { outline: true }
+  return { dim: true }
 }
 
 /**
@@ -294,7 +285,6 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   let hex = noCode ? '#ffffff' : cellItem(palette, code).hex
   let showCode = showCodeOpt && !noCode
   let outline = false
-  let emptySlot = false
   if (em) {
     if (em.outline) {
       showCode = true
@@ -302,10 +292,6 @@ function drawCell(ctx, grid, r, c, palette, opts) {
     } else if (em.dim) {
       hex = mixWhite(hex, 0.8)
       showCode = false
-    } else if (em.empty) {
-      hex = '#ffffff'
-      showCode = false
-      emptySlot = true
     }
   }
   const x = c * (cellSize + gap)
@@ -314,11 +300,6 @@ function drawCell(ctx, grid, r, c, palette, opts) {
   ctx.fillRect(x, y, cellSize, cellSize)
   if (noCode) {
     // 背景格：不显示编号，但画浅灰格子线，保证白色区域能看到格子
-    ctx.strokeStyle = BG_GRID_COLOR
-    ctx.lineWidth = 1
-    ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1)
-  } else if (emptySlot) {
-    // 一键跟拼：未点亮格画浅灰空格线，呈现"空板待拼"观感
     ctx.strokeStyle = BG_GRID_COLOR
     ctx.lineWidth = 1
     ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1)

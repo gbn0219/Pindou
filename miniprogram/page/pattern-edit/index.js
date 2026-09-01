@@ -44,10 +44,10 @@ Page({
     cropActive: false,
     fullscreen: false,
     fsLeaving: false,
-    guideMode: 'spot',
+    beadingSheetH: 0,
+    beadingDragging: false,
     fuseLegend: [],
     fuseSort: 'count',
-    fuseSelected: '',
     buildCurrent: '',
     buildDoneCount: 0,
     doneMap: {},
@@ -125,12 +125,15 @@ Page({
   draw() {
     const p = this.pattern
     if (!p) return
+    const token = (this._drawToken = (this._drawToken || 0) + 1)
     this.createSelectorQuery()
       .select('#canvasArea')
       .boundingClientRect()
       .select('#editCanvas')
       .fields({ node: true, size: true })
       .exec((res) => {
+        // 丢弃过期测量：全屏/退出全屏期间旧尺寸查询结果晚到会覆盖新居中视图
+        if (token !== this._drawToken) return
         const area = res && res[0]
         const canvas = res && res[1] && res[1].node
         if (!canvas || !area || !area.width || !area.height) {
@@ -202,6 +205,12 @@ Page({
     this.ctx.strokeStyle = '#ff3a5d'
     this.ctx.lineWidth = Math.max(2, Math.round(cellPx / 6))
     this.ctx.strokeRect(x, y, cellPx - 2, cellPx - 2)
+  },
+
+  clearCanvas() {
+    if (!this.canvas || !this.ctx) return
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
   },
 
   applyView() {
@@ -401,7 +410,9 @@ Page({
         this.tapCell = null
         this.paintStroke = false
         this.strokePushed = false
-        this.startPan(this.normTouch(touches[0]))
+        const p = this.normTouch(touches[0])
+        this.fsTap = { x: p.x, y: p.y, time: Date.now(), moved: false }
+        this.startPan(p)
       }
       return
     }
@@ -455,7 +466,13 @@ Page({
       return
     }
     if (this.data.fullscreen) {
-      if (touches.length === 1) this.handlePan(this.normTouch(touches[0]))
+      if (touches.length === 1) {
+        const p = this.normTouch(touches[0])
+        if (this.fsTap && (Math.abs(p.x - this.fsTap.x) > 16 || Math.abs(p.y - this.fsTap.y) > 16)) {
+          this.fsTap.moved = true
+        }
+        this.handlePan(p)
+      }
       return
     }
     if (this.data.cropActive) {
@@ -507,9 +524,17 @@ Page({
   onTouchEnd(e) {
     if (this.data.fullscreen) {
       if (e.touches && e.touches.length > 0) return
+      const tap = this.fsTap
+      const wasPinch = this.pinchActive
+      this.fsTap = null
       this.pan = null
       this.pinchActive = false
       this.pinch = null
+      // 全屏拼豆：轻点画布色块直接切换当前预览颜色
+      if (!wasPinch && tap && !tap.moved && Date.now() - tap.time <= 400) {
+        const t = e.changedTouches && e.changedTouches[0]
+        this.onFullscreenCellTap(t ? this.normTouch(t) : { x: tap.x, y: tap.y })
+      }
       return
     }
     // 仍有手指按着（双指变一指）：保持手势状态，等全部抬起再清理
@@ -546,6 +571,7 @@ Page({
 
   onTouchCancel() {
     this.pan = null
+    this.fsTap = null
     this.tapStart = null
     this.pinch = null
     this.pinchActive = false
@@ -558,6 +584,7 @@ Page({
     const dx = t1.x - t2.x
     const dy = t1.y - t2.y
     const v = this.view
+    this.fsTap = null
     this.pinch = {
       dist: Math.sqrt(dx * dx + dy * dy),
       midX: (t1.x + t2.x) / 2,
@@ -583,6 +610,25 @@ Page({
       this.codeShown = show
     }
     this.scheduleRedraw()
+  },
+
+  // 全屏拼豆：点画布上的色块直接切换当前预览颜色（已选中再点取消），背景格不响应
+  onFullscreenCellTap(pos) {
+    if (!this.view || !this.pattern || !this.pattern.grid) return
+    const step = (this.cellPx || pattern.CELL) + pattern.GAP
+    const lx = (pos.x - this.view.ox) / this.view.scale
+    const ly = (pos.y - this.view.oy) / this.view.scale
+    const col = Math.floor(lx / step)
+    const row = Math.floor(ly / step)
+    const size = this.pattern.grid.length
+    if (row < 0 || col < 0 || row >= size || col >= size) return
+    if (this.bgMask && this.bgMask[row] && this.bgMask[row][col]) return
+    const code = this.pattern.grid[row][col]
+    if (!code) return
+    this.offscreenDirty = true
+    const next = this.data.buildCurrent === code ? '' : code
+    this.setData({ buildCurrent: next }, () => this.drawGrid())
+    if (wx.vibrateShort) wx.vibrateShort({ type: 'light' })
   },
 
   // 捏合期间用 rAF 合并重绘，避免每帧全量重绘把主线程占满（否则按钮会显得失灵）
@@ -779,11 +825,22 @@ Page({
     this.buildDone = beading.loadDone(p)
     const doneMap = {}
     this.buildDone.forEach((code) => { doneMap[code] = true })
+    // 底部色板：默认展开（约 45% 屏高），可下滑收起留出全屏画板
+    let winH = 640
+    let winW = 375
+    try {
+      const info = wx.getSystemInfoSync() || {}
+      winH = info.windowHeight || 640
+      winW = info.windowWidth || 375
+    } catch (err) {}
+    this.beadingMaxH = Math.max(240, Math.round(winH * 0.45))
+    // 折叠高度按屏宽自适应（约 260rpx）：露出当前颜色与“拼完了”按钮
+    this.beadingMinH = Math.round(260 * winW / 750)
     this.setData({
       fullscreen: true,
-      guideMode: 'build',
+      beadingSheetH: this.beadingMaxH,
+      beadingDragging: false,
       fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, this.data.fuseSort),
-      fuseSelected: '',
       buildCurrent: '',
       doneMap,
       buildDoneCount: this.buildDone.length
@@ -793,7 +850,9 @@ Page({
       this.pan = null
       this.view = null
       this.offscreenDirty = true
-      this.draw()
+      this.clearCanvas()
+      // 等全屏布局稳定再测量绘制，避免用非全屏的旧尺寸算初始视图导致图纸偏左上
+      setTimeout(() => this.draw(), 260)
       setTimeout(() => guide.start(this, 'beading', guide.TIPS.beading), 400)
     })
   },
@@ -805,27 +864,52 @@ Page({
       this.setData({
         fullscreen: false,
         fsLeaving: false,
-        guideMode: 'build',
-        fuseSelected: '',
-        buildCurrent: ''
+        buildCurrent: '',
+        beadingSheetH: 0,
+        beadingDragging: false
       }, () => {
         this.pinchActive = false
         this.pinch = null
         this.pan = null
         this.view = null
         this.offscreenDirty = true
-        this.draw()
+        this.clearCanvas()
+        // 等卡片布局稳定再测量绘制，避免用全屏尺寸算初始视图导致图纸偏移
+        setTimeout(() => this.draw(), 120)
       })
     }, 140)
   },
 
-  pickGuideMode(e) {
-    const mode = e.currentTarget.dataset.mode
-    const patch = { guideMode: mode }
-    if (mode === 'spot') patch.buildCurrent = ''
-    if (mode === 'build') patch.fuseSelected = ''
-    this.offscreenDirty = true
-    this.setData(patch, () => this.drawGrid())
+  // 底部色板：按住顶部条上下拖动，松手自动吸附（展开/收起），收起后保留顶部条可再拖出
+  onBeadingSheetStart(e) {
+    if (!this.data.fullscreen || !this.beadingMaxH) return
+    const t = e.touches && e.touches[0]
+    if (!t) return
+    this._sheet = { y: t.clientY, h: this.data.beadingSheetH }
+    this.setData({ beadingDragging: true })
+  },
+
+  onBeadingSheetMove(e) {
+    const s = this._sheet
+    if (!s) return
+    const t = e.touches && e.touches[0]
+    if (!t) return
+    const h = Math.max(this.beadingMinH, Math.min(this.beadingMaxH, s.h + (s.y - t.clientY)))
+    this.setData({ beadingSheetH: h })
+  },
+
+  onBeadingSheetEnd(e) {
+    const s = this._sheet
+    this._sheet = null
+    if (!s) return
+    const t = e.changedTouches && e.changedTouches[0]
+    const dy = t ? t.clientY - s.y : 0
+    const h = this.data.beadingSheetH
+    let target
+    if (dy > 40) target = this.beadingMinH
+    else if (dy < -40) target = this.beadingMaxH
+    else target = h >= (this.beadingMinH + this.beadingMaxH) / 2 ? this.beadingMaxH : this.beadingMinH
+    this.setData({ beadingSheetH: target, beadingDragging: false })
   },
 
   pickFuseSort(e) {
@@ -847,16 +931,10 @@ Page({
   onFuseChip(e) {
     const code = e.currentTarget.dataset.code
     if (!code) return
-    const mode = this.data.guideMode
-    if (mode === 'spot') {
-      this.offscreenDirty = true
-      this.setData({ fuseSelected: this.data.fuseSelected === code ? '' : code }, () => this.drawGrid())
-      return
-    }
     this.offscreenDirty = true
-    // build 模式：已拼完的颜色不再直接撤回——点它只是设为“当前色”，按钮变为“撤回”；再点当前色则取消选中
+    // 已拼完的颜色不再直接撤回——点它只是设为“当前色”，按钮变为“撤回”；再点当前色则取消选中
     const next = this.data.buildCurrent === code ? '' : code
-    this.setData({ guideMode: 'build', buildCurrent: next }, () => this.drawGrid())
+    this.setData({ buildCurrent: next }, () => this.drawGrid())
   },
 
   finishColor() {

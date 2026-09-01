@@ -1,6 +1,6 @@
 // miniprogram/utils/beading.js
 /**
- * 智能拼豆 / 一键跟拼（全屏引导）纯逻辑：图例构建、进度存取、强调参数。
+ * 一键跟拼（全屏引导）纯逻辑：图例构建、进度存取、强调参数。
  * 页面只负责 setData 与绘制；本模块可在 Node 中测试。
  */
 const pattern = require('./pattern.js')
@@ -51,13 +51,10 @@ function saveDone(p, done) {
 }
 
 /**
- * 绘制强调参数：非全屏或普通模式返回 null；智能拼豆返回 spot，一键跟拼返回 build。
+ * 绘制强调参数：非全屏返回 null；全屏跟拼：已点亮色实色、当前色描边、其余淡化底图。
  */
 function emphasisOpts(data, done) {
-  if (!data.fullscreen || data.guideMode === 'none') return null
-  if (data.guideMode === 'spot') {
-    return data.fuseSelected ? { mode: 'spot', code: data.fuseSelected } : null
-  }
+  if (!data.fullscreen) return null
   return { mode: 'build', code: data.buildCurrent || '', doneCodes: done || [] }
 }
 

@@ -1,6 +1,6 @@
 // tests/beading.test.js
 /**
- * 智能拼豆/一键跟拼 纯逻辑测试。运行: node tests/beading.test.js
+ * 一键跟拼 纯逻辑测试。运行: node tests/beading.test.js
  */
 const assert = require('assert')
 const color = require('../miniprogram/utils/color.js')
@@ -40,19 +40,16 @@ const grid = [
 
 // ---- emphasisOpts ----
 {
-  assert.strictEqual(beading.emphasisOpts({ fullscreen: false, guideMode: 'build', buildCurrent: 'A6' }, []), null, '非全屏不强调')
-  assert.strictEqual(beading.emphasisOpts({ fullscreen: true, guideMode: 'none' }, []), null, '普通模式不强调')
-  assert.deepStrictEqual(beading.emphasisOpts({ fullscreen: true, guideMode: 'spot', fuseSelected: 'C1' }, []), { mode: 'spot', code: 'C1' }, '智能拼豆参数')
-  assert.strictEqual(beading.emphasisOpts({ fullscreen: true, guideMode: 'spot', fuseSelected: '' }, []), null, '智能拼豆未选色不强调')
+  assert.strictEqual(beading.emphasisOpts({ fullscreen: false, buildCurrent: 'A6' }, []), null, '非全屏不强调')
   assert.deepStrictEqual(
-    beading.emphasisOpts({ fullscreen: true, guideMode: 'build', buildCurrent: 'A6' }, ['B1']),
+    beading.emphasisOpts({ fullscreen: true, buildCurrent: 'A6' }, ['B1']),
     { mode: 'build', code: 'A6', doneCodes: ['B1'] },
     '一键跟拼参数'
   )
   assert.deepStrictEqual(
-    beading.emphasisOpts({ fullscreen: true, guideMode: 'build', buildCurrent: '' }, []),
+    beading.emphasisOpts({ fullscreen: true, buildCurrent: '' }, []),
     { mode: 'build', code: '', doneCodes: [] },
-    '一键跟拼未选当前色时仅显示已点亮'
+    '未选当前色时仅已点亮实色、其余为淡化底图'
   )
 }
 

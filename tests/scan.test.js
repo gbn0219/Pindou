@@ -19,10 +19,11 @@ function makeImageData(width, height, fill) {
 }
 
 // 合成 R×C 拼豆图：每格 cell 像素填充色 + 四周 thin 像素深色格线 + outer 白色边距
-function buildGridImage(rows, cols, colors, cell, thin, outer) {
+function buildGridImage(rows, cols, colors, cell, thin, outer, line) {
   const pitch = cell + thin
   const W = outer * 2 + cols * pitch - thin
   const H = outer * 2 + rows * pitch - thin
+  const lineColor = line || [20, 20, 20, 255]
   return makeImageData(W, H, (x, y) => {
     const gx = x - outer
     const gy = y - outer
@@ -30,7 +31,7 @@ function buildGridImage(rows, cols, colors, cell, thin, outer) {
     const c = Math.floor(gx / pitch)
     const r = Math.floor(gy / pitch)
     if (gx - c * pitch < cell && gy - r * pitch < cell) return colors[r * cols + c]
-    return [20, 20, 20, 255] // 深色格线
+    return lineColor // 格线（默认深色，可传白线等任意颜色）
   })
 }
 
@@ -257,6 +258,50 @@ function paintFrame(img, outer) {
   assert.ok(det, 'grid lines with frame should be detected')
   assert.ok(Math.abs(det.originX - outer) <= 2, 'frame originX ' + det.originX)
   assert.ok(Math.abs(det.originY - outer) <= 2, 'frame originY ' + det.originY)
+}
+
+// detectGridLines：线条太少（4×4 格只有 3 条线）不足以确定网格 → null
+{
+  const cell = 18
+  const thin = 2
+  const outer = 0
+  const bright = [[240, 180, 120], [180, 240, 140], [160, 200, 240], [250, 240, 150]]
+  const colors = []
+  for (let i = 0; i < 4 * 4; i++) colors.push([bright[i % bright.length][0], bright[i % bright.length][1], bright[i % bright.length][2], 255])
+  const img = buildGridImage(4, 4, colors, cell, thin, outer)
+  assert.strictEqual(scan.detectGridLines(img), null, '只有 3 条线不应自动对齐')
+}
+
+// detectGridLines：白色粗网格线（6px）也能检测，线位取两边缘中点
+{
+  const cell = 18
+  const thin = 6
+  const outer = 3
+  const bright = [[240, 180, 120], [180, 240, 140], [160, 200, 240], [250, 240, 150]]
+  const colors = []
+  for (let i = 0; i < 7 * 7; i++) colors.push([bright[i % bright.length][0], bright[i % bright.length][1], bright[i % bright.length][2], 255])
+  const img = buildGridImage(7, 7, colors, cell, thin, outer, [255, 255, 255, 255])
+  const det = scan.detectGridLines(img)
+  assert.ok(det, '白色粗线应能检测')
+  assert.ok(Math.abs(det.cellW - (cell + thin)) <= 2, 'cellW ' + det.cellW)
+  assert.ok(Math.abs(det.cellH - (cell + thin)) <= 2, 'cellH ' + det.cellH)
+  assert.ok(Math.abs(det.originX - outer) <= 2, 'originX ' + det.originX)
+  assert.ok(Math.abs(det.originY - outer) <= 2, 'originY ' + det.originY)
+}
+
+// detectGridLines：深色粗网格线（6px）同样取线中点
+{
+  const cell = 18
+  const thin = 6
+  const outer = 3
+  const bright = [[240, 180, 120], [180, 240, 140], [160, 200, 240], [250, 240, 150]]
+  const colors = []
+  for (let i = 0; i < 7 * 7; i++) colors.push([bright[i % bright.length][0], bright[i % bright.length][1], bright[i % bright.length][2], 255])
+  const img = buildGridImage(7, 7, colors, cell, thin, outer)
+  const det = scan.detectGridLines(img)
+  assert.ok(det, '深色粗线应能检测')
+  assert.ok(Math.abs(det.cellW - (cell + thin)) <= 2, 'cellW ' + det.cellW)
+  assert.ok(Math.abs(det.originX - outer) <= 2, 'originX ' + det.originX)
 }
 
 // detectGridLines：纯色无网格图返回 null

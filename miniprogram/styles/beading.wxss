@@ -1,4 +1,4 @@
-/* 智能拼豆 / 一键跟拼：全屏引导浮层（pattern / pattern-edit 共用） */
+/* 一键跟拼：全屏引导浮层（pattern / pattern-edit 共用） */
 
 .canvas-area {
   position: relative;
@@ -85,10 +85,11 @@
 }
 .canvas-shell--fs .canvas-area {
   width: 100%;
+  height: 100%;
   max-width: none;
-  flex: 0 0 auto;
-  aspect-ratio: 1 / 1;
-  margin: 0 auto;
+  flex: 1 1 auto;
+  aspect-ratio: auto;
+  margin: 0;
   min-height: 0;
   border-radius: 0;
   background: #ffffff;
@@ -131,26 +132,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-}
-.beading-modes {
-  flex: 1;
-  display: flex;
-  gap: var(--space-2xs);
-}
-.beading-mode {
-  flex: 1;
-  text-align: center;
-  padding: 14rpx 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-paper-2);
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
-  white-space: nowrap;
-}
-.beading-mode--on {
-  background: var(--color-ink);
-  color: var(--color-paper);
-  font-weight: 600;
 }
 .beading-sort {
   flex-shrink: 0;
@@ -289,24 +270,6 @@
   color: var(--color-paper);
   font-weight: 600;
 }
-.beading-modes {
-  display: flex;
-  gap: 12rpx;
-  margin-top: 20rpx;
-}
-.beading-mode {
-  flex: 1;
-  padding: 16rpx 0;
-  text-align: center;
-  background: var(--color-paper-2);
-  font-size: 24rpx;
-  color: var(--color-ink-2);
-}
-.beading-mode--on {
-  background: var(--color-ink);
-  color: var(--color-paper);
-  font-weight: 600;
-}
 .fuse-strip {
   margin-top: 16rpx;
   height: 96rpx;
@@ -329,20 +292,6 @@
 .beading-subtitle {
   margin-top: 8rpx;
   font-size: 24rpx;
-}
-.beading-modes {
-  gap: 10rpx;
-  margin-top: 0;
-  padding: 6rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-paper-2);
-}
-.beading-mode {
-  padding: 18rpx 0;
-  border-radius: var(--radius-pill);
-}
-.beading-mode--on {
-  box-shadow: 0 10rpx 22rpx -14rpx rgba(18, 23, 27, 0.65);
 }
 .beading-context {
   display: flex;
@@ -447,19 +396,29 @@
 }
 .canvas-shell--fs .canvas-area {
   width: 100%;
+  height: 100%;
   max-width: none;
-  flex: 0 0 auto;
-  aspect-ratio: 1 / 1;
-  margin: 0 auto;
+  flex: 1 1 auto;
+  aspect-ratio: auto;
+  margin: 0;
   min-height: 0;
   border-radius: 0;
   background: #ffffff;
 }
 .canvas-shell--fs .beading-bar {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  transition: height 220ms var(--ease-out);
+  will-change: height;
+}
+.canvas-shell--fs .beading-bar--drag {
+  transition: none;
 }
 .canvas-shell--fs .fuse-strip {
   flex: 1;
@@ -467,17 +426,27 @@
   height: auto;
   margin-top: 12rpx;
 }
-.canvas-shell--fs .beading-modes {
-  flex: 0 0 auto;
-}
-
-
 /* 兼容性兜底：显式四边定位 */
 .canvas-shell--fs {
   left: 0;
   top: 0;
   right: 0;
   bottom: 0;
+}
+
+/* 底部色板：顶部抓取条（手柄 + 标题行），收起后保留这条“白边”可拖出 */
+.beading-top {
+  position: relative;
+}
+.beading-handle {
+  position: absolute;
+  top: -18rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: var(--color-rule);
 }
 
 /* 全屏拼豆：色卡一行固定 3 个，等宽填满，内容居左 */

@@ -15,10 +15,12 @@ const guide = require('../../utils/guide.js')
 const MAX_DIM = 2048 // 工作图最大边长（内存与采样速度折中）
 const FIT_PAD = 16 // 网格与画布四边留白（视口 px），避免画到/滑出屏幕边缘
 const NUDGE_FRAC = 0.02 // 对齐微调步长 = 网格格边长 × 该比例（1/50 格）
+const ZOOM_FRAC = 0.015 // 缩放微调步长 = 当前缩放 × 该比例（细粒度，便于 104 格在两个档之间对齐）
+const MIN_DETECT_PX = 48 // 自动对齐可见区域的最小边长（px），太小无法可靠检测
 const MIN_CELLS = 5 // 网格格数可调范围（仅对齐参考）
 const MAX_CELLS = 50
 const MIN_SCALE = 0.02
-const MAX_SCALE = 8
+const MAX_SCALE = 128
 
 Page({
   data: {
@@ -126,7 +128,7 @@ Page({
       this.setData({
         imagePath: path,
         stage: 'calibrate',
-        hint: '缩放/拖动图片，让色块对齐网格'
+        hint: '缩放/拖动图片，让色块对齐网格（可用 ＋/− 微调）'
       })
       this.initCanvas()
       setTimeout(() => guide.start(this, 'scan', guide.TIPS.scan), 600)
@@ -205,18 +207,32 @@ Page({
     this.setData({ autoAligning: true })
     try {
       const ctx = this.fullCanvas.getContext('2d')
-      const imageData = ctx.getImageData(0, 0, this.wImg.width, this.wImg.height)
+      // 只对当前可见画面检测网格线：用户放大后细网格不会被全图降采样吞掉，
+      // 也不会被每几格加粗的粗网格线带偏成非最细粒度网格
+      const crop = this.visibleCrop(this.view, this.area)
+      if (!crop) {
+        if (!silent) wx.showToast({ title: '画面内可见范围太小，请调整缩放后重试', icon: 'none' })
+        return
+      }
+      const imageData = ctx.getImageData(crop.x, crop.y, crop.w, crop.h)
       const det = scan.detectGridLines(imageData)
       if (!det) {
-        if (!silent) wx.showToast({ title: '未识别到网格线，请手动对齐', icon: 'none' })
+        if (!silent) wx.showToast({ title: '网格线太少或未识别到，请调整缩放后重试或手动对齐', icon: 'none' })
         return
       }
       const cell = this.grid.cell
       const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, cell / det.cellW))
+      // 优先从中间对齐：把可见区域中心最近的网格线，对齐到屏幕网格中心线，
+      // 而不是锚定左上角——边缘检测误差不会把整张图带偏，对齐后也停留在用户查看的区域
+      const midJ = Math.round(this.data.cells / 2)
+      const imgOX = det.originX + crop.x
+      const imgOY = det.originY + crop.y
+      const kx = Math.round((crop.x + crop.w / 2 - imgOX) / det.cellW)
+      const ky = Math.round((crop.y + crop.h / 2 - imgOY) / det.cellH)
       this.view = {
         scale,
-        ox: this.grid.gx - det.originX * scale,
-        oy: this.grid.gy - det.originY * scale
+        ox: (this.grid.gx + midJ * cell) - (imgOX + kx * det.cellW) * scale,
+        oy: (this.grid.gy + midJ * cell) - (imgOY + ky * det.cellH) * scale
       }
       this.draw()
       this.setData({ hint: '已自动对齐，可缩放/拖动微调' })
@@ -229,6 +245,24 @@ Page({
     }
   },
 
+  // 当前可见画面（含少量外扩，保证边缘线完整）映射回工作图坐标；太小返回 null
+  visibleCrop(view, area) {
+    if (!view || !view.scale || !this.wImg || !area) return null
+    const s = view.scale
+    const x0 = Math.floor(-view.ox / s)
+    const y0 = Math.floor(-view.oy / s)
+    const x1 = Math.ceil((area.width - view.ox) / s)
+    const y1 = Math.ceil((area.height - view.oy) / s)
+    const padX = Math.max(0, Math.round((x1 - x0) * 0.2))
+    const padY = Math.max(0, Math.round((y1 - y0) * 0.2))
+    const cx = Math.max(0, x0 - padX)
+    const cy = Math.max(0, y0 - padY)
+    const cw = Math.min(this.wImg.width, x1 + padX) - cx
+    const ch = Math.min(this.wImg.height, y1 + padY) - cy
+    if (cw < MIN_DETECT_PX || ch < MIN_DETECT_PX) return null
+    return { x: cx, y: cy, w: cw, h: ch }
+  },
+
   onAutoAlign() {
     this.doAutoAlign(false)
   },
@@ -236,7 +270,7 @@ Page({
   resetAlign() {
     if (!this.wImg) return
     this.view = this.fitView(this.wImg.width, this.wImg.height)
-    this.setData({ hint: '缩放/拖动图片，让色块对齐网格' })
+    this.setData({ hint: '缩放/拖动图片，让色块对齐网格（可用 ＋/− 微调）' })
     this.draw()
   },
 
@@ -318,7 +352,8 @@ Page({
         this._gesture,
         { scale: this._gesture.scale, ox: this._gesture.ox, oy: this._gesture.oy },
         { x: t1.x, y: t1.y },
-        { x: t2.x, y: t2.y }
+        { x: t2.x, y: t2.y },
+        { minScale: MIN_SCALE, maxScale: MAX_SCALE }
       )
       next.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next.scale))
       this.view = next
@@ -353,6 +388,20 @@ Page({
     else if (dir === 'right') this.view.ox += step
     else if (dir === 'up') this.view.oy -= step
     else if (dir === 'down') this.view.oy += step
+    this.draw()
+  },
+
+  // 缩放微调：以画面中心为锚点，一点一点放大/缩小，便于把图片格子精确对到网格大小
+  onZoomStep(e) {
+    if (!this.view || !this.area) return
+    const dir = e.currentTarget.dataset.dir
+    const factor = dir === 'in' ? 1 + ZOOM_FRAC : 1 - ZOOM_FRAC
+    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, this.view.scale * factor))
+    const cx = this.area.width / 2
+    const cy = this.area.height / 2
+    const lx = (cx - this.view.ox) / this.view.scale
+    const ly = (cy - this.view.oy) / this.view.scale
+    this.view = { scale, ox: cx - lx * scale, oy: cy - ly * scale }
     this.draw()
   },
 
