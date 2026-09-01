@@ -284,6 +284,9 @@
 }
 .footer-btn {
   flex: 1;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  padding: 0 var(--space-xs);
 }
 .footer-btn--main {
   flex: 1.4; /* 主 CTA 更宽，与次动作形成层级 */

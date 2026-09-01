@@ -10,6 +10,7 @@ const color = require('../../utils/color.js')
 const pattern = require('../../utils/pattern.js')
 const image = require('../../utils/image.js')
 const gesture = require('../../utils/gesture.js')
+const guide = require('../../utils/guide.js')
 
 const MAX_DIM = 2048 // 工作图最大边长（内存与采样速度折中）
 const FIT_PAD = 16 // 网格与画布四边留白（视口 px），避免画到/滑出屏幕边缘
@@ -29,7 +30,12 @@ Page({
     recognizing: false,
     autoAligning: false,
     autoBg: true, // 背景自动识别（无标号白格置空）
-    hint: ''
+    hint: '',
+    guideShow: false,
+    guideTips: [],
+    guideIndex: 0,
+    guideAnchor: null,
+    guideInteractive: false
   },
 
   onLoad() {
@@ -123,6 +129,7 @@ Page({
         hint: '缩放/拖动图片，让色块对齐网格'
       })
       this.initCanvas()
+      setTimeout(() => guide.start(this, 'scan', guide.TIPS.scan), 600)
     } catch (err) {
       console.error(err)
       wx.showToast({ title: '图片加载失败', icon: 'none' })
@@ -374,6 +381,14 @@ Page({
 
   onAutoBgChange(e) {
     this.setData({ autoBg: e.detail.value })
+  },
+
+  onGuideNext() {
+    guide.next(this)
+  },
+
+  onGuideSkip() {
+    guide.skip(this)
   },
 
   async recognize() {

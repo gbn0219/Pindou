@@ -5,23 +5,52 @@
       <view class="pair-thumbs">
         <view class="thumb-box">
           <image class="thumb" src="{{item.originalThumbFileID || item.originalFileID}}" mode="aspectFit" lazy-load data-fileid="{{item.originalFileID}}" bindtap="onPreview" />
+          <view class="thumb-tag">原图</view>
         </view>
         <view class="thumb-box">
           <image class="thumb" src="{{item.patternThumbFileID || item.patternFileID}}" mode="aspectFit" lazy-load data-id="{{item._id}}" bindtap="onPatternPreview" />
+          <view class="thumb-tag">图纸</view>
         </view>
       </view>
       <view class="pair-meta">
-        <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>
+        <view class="pair-style-row">
+          <view class="mode-dot mode-dot--{{item.mode}}"></view>
+          <text class="pair-style">{{item.mode === 'ai' ? '创意生成 · ' + item.styleShort : '照片还原'}}</text>
+        </view>
         <text class="pair-sub">{{item.timeText}} · {{item.size}}×{{item.size}} · {{item.set}} 色</text>
       </view>
       <view class="pair-actions">
         <view class="pair-primary">
-          <button class="btn btn--primary pair-btn" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onBeading">去拼豆</button>
-          <button class="btn btn--primary pair-btn" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onEdit">去修改</button>
+          <view class="pair-act" hover-class="pair-act--pressed" data-id="{{item._id}}" bindtap="onBeading">
+            <view class="pair-btn pair-btn--primary">
+              <view class="ico ico-star">
+                <view class="star star--lg"></view>
+                <view class="star star--md"></view>
+                <view class="star star--sm"></view>
+              </view>
+            </view>
+            <text class="pair-label">去拼豆</text>
+          </view>
+          <view class="pair-act" hover-class="pair-act--pressed" data-id="{{item._id}}" bindtap="onEdit">
+            <view class="pair-btn">
+              <view class="ico ico-edit"></view>
+            </view>
+            <text class="pair-label">去修改</text>
+          </view>
         </view>
         <view class="pair-secondary">
-          <button class="btn btn--soft btn--sm" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onExport">导出</button>
-          <button class="btn btn--soft btn--sm btn--danger" hover-class="btn--pressed" data-id="{{item._id}}" bindtap="onDelete">删除</button>
+          <view class="pair-act" hover-class="pair-act--pressed" data-id="{{item._id}}" bindtap="onExport">
+            <view class="pair-btn">
+              <view class="ico ico-export"></view>
+            </view>
+            <text class="pair-label">导出</text>
+          </view>
+          <view class="pair-act" hover-class="pair-act--pressed" data-id="{{item._id}}" bindtap="onDelete">
+            <view class="pair-btn pair-btn--danger">
+              <view class="ico ico-trash"></view>
+            </view>
+            <text class="pair-label">删除</text>
+          </view>
         </view>
       </view>
     </view>
@@ -39,4 +68,14 @@
     >{{item}}</view>
     <view class="pager-btn {{page === totalPages ? 'pager-btn--disabled' : ''}}" data-page="{{page + 1}}" bindtap="goPage">下一页</view>
   </view>
+
+  <guide-tip
+    show="{{guideShow}}"
+    tips="{{guideTips}}"
+    index="{{guideIndex}}"
+    anchor="{{guideAnchor}}"
+    interactive="{{guideInteractive}}"
+    bind:next="onGuideNext"
+    bind:skip="onGuideSkip"
+  />
 </view>

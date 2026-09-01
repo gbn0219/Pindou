@@ -4,6 +4,7 @@ const pager = require('../../utils/pager.js')
 const pattern = require('../../utils/pattern.js')
 const color = require('../../utils/color.js')
 const exportUtil = require('../../utils/export.js')
+const guide = require('../../utils/guide.js')
 const PAGE_SIZE = 10
 
 function downloadFile(fileID, ms) {
@@ -30,7 +31,12 @@ Page({
     totalPages: 1,
     total: 0,
     pageNos: [1],
-    loading: false
+    loading: false,
+    guideShow: false,
+    guideTips: [],
+    guideIndex: 0,
+    guideAnchor: null,
+    guideInteractive: false
   },
   onShow() {
     this.load(1)
@@ -55,12 +61,26 @@ Page({
         pageNos: pager.pageWindow(r.totalPages || 1, p)
       })
       this.backfillThumbs(items)
+      this.maybeStartGuide()
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '图库加载失败', icon: 'none' })
     } finally {
       this.setData({ loading: false })
     }
   },
+  maybeStartGuide() {
+    if (!this.data.items.length) return
+    guide.start(this, 'gallery', guide.TIPS.gallery)
+  },
+
+  onGuideNext() {
+    guide.next(this)
+  },
+
+  onGuideSkip() {
+    guide.skip(this)
+  },
+
   goPage(e) {
     const n = Number(e.currentTarget.dataset.page)
     if (!n || isNaN(n) || n === this.data.page || n < 1 || n > this.data.totalPages) return

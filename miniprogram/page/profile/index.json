@@ -1,6 +1,1 @@
-{
-  "usingComponents": {
-    "guide-modal": "/components/guide-modal/index"
-  },
-  "navigationBarTitleText": "我的"
-}
+{ "usingComponents": { "guide-modal": "/components/guide-modal/index", "guide-tip": "/components/guide-tip/index" }, "navigationBarTitleText": "我的" }

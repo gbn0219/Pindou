@@ -1,4 +1,1 @@
-{
-  "navigationBarTitleText": "图纸识别",
-  "usingComponents": {}
-}
+{ "navigationBarTitleText": "图纸识别", "usingComponents": { "guide-tip": "/components/guide-tip/index" } }

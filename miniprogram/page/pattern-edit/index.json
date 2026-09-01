@@ -1,5 +1,1 @@
-{
-  "navigationBarTitleText": "修改图纸",
-  "navigationBarBackgroundColor": "#f7f5ec",
-  "navigationBarTextStyle": "black"
-}
+{ "navigationBarTitleText": "修改图纸", "navigationBarBackgroundColor": "#f7f5ec", "navigationBarTextStyle": "black", "usingComponents": { "guide-tip": "/components/guide-tip/index" } }

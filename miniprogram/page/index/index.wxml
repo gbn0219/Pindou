@@ -7,7 +7,7 @@
   <view class="card scan-entry" hover-class="scan-entry--pressed" bindtap="goScan">
     <view class="scan-entry-body">
       <view class="scan-entry-title">识别已有图纸</view>
-      <view class="scan-entry-sub">截图/拍照导入拼豆图纸，识别成可编辑的色号网格</view>
+      <view class="scan-entry-sub">截图导入拼豆图纸，识别成可编辑的色号网格</view>
     </view>
     <view class="scan-entry-arrow">›</view>
   </view>
@@ -22,20 +22,6 @@
       <image class="import-img" src="{{imagePath}}" mode="aspectFill" />
       <view class="import-again">重新选择</view>
     </block>
-  </view>
-
-  <view class="card section">
-    <view class="section-title">色系</view>
-    <view class="chip-row">
-      <view
-        wx:for="{{colorSets}}"
-        wx:key="*this"
-        class="chip {{set === item ? 'chip--on' : ''}}"
-        hover-class="chip--pressed"
-        data-value="{{item}}"
-        bindtap="pickSet"
-      >{{item}} 色</view>
-    </view>
   </view>
 
   <view class="card section">
@@ -54,76 +40,65 @@
         bindtap="pickMode"
       >照片还原</view>
     </view>
+    <view wx:if="{{mode === 'ai'}}" class="ai-summary" hover-class="ai-summary--pressed" bindtap="openAiSheet">
+      <text class="ai-summary-text">{{aiSummary}}</text>
+      <text class="ai-summary-edit">点此修改图纸选项</text>
+      <text class="ai-summary-arrow">›</text>
+    </view>
   </view>
 
-  <view class="card section">
-    <view class="section-title">拼豆盘大小</view>
-    <view class="chip-row">
-      <view
-        wx:for="{{boardSizes}}"
-        wx:key="*this"
-        class="chip {{size === item ? 'chip--on' : ''}}"
-        hover-class="chip--pressed"
-        data-value="{{item}}"
-        bindtap="pickSize"
-      >{{item}}×{{item}}</view>
+  <block wx:if="{{mode === 'photo'}}">
+    <view class="card section">
+      <view class="section-title">色系</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{colorSets}}"
+          wx:key="*this"
+          class="chip {{set === item ? 'chip--on' : ''}}"
+          hover-class="chip--pressed"
+          data-value="{{item}}"
+          bindtap="pickSet"
+        >{{item}} 色</view>
+      </view>
     </view>
-    <view class="size-controls">
-      <view class="size-btn" hover-class="size-btn--pressed" data-delta="-1" bindtap="onSizeStep">-</view>
-      <slider
-        class="size-slider"
-        min="15"
-        max="208"
-        step="1"
-        value="{{size}}"
-        activeColor="#f6ce00"
-        block-size="24"
-        bindchanging="onSizeChanging"
-        bindchange="onSizeChanging"
-      />
-      <view class="size-btn" hover-class="size-btn--pressed" data-delta="1" bindtap="onSizeStep">+</view>
-      <input
-        class="size-input"
-        type="number"
-        value="{{size}}"
-        bindblur="onSizeInput"
-        bindconfirm="onSizeInput"
-      />
-    </view>
-    <view class="section-hint">可拖动滑块或直接输入，范围 15~208</view>
-  </view>
 
-  <view class="card section" wx:if="{{mode === 'ai'}}">
-    <view class="section-title">风格</view>
-    <view class="chip-row chip-row--wrap">
-      <view
-        wx:for="{{styles}}"
-        wx:key="key"
-        class="chip chip--auto {{selectedStyle === item.key && !customStyle ? 'chip--on' : ''}} {{customStyle ? 'chip--disabled' : ''}}"
-        hover-class="chip--pressed"
-        data-value="{{item.key}}"
-        bindtap="pickStyle"
-      >{{item.name}}</view>
+    <view class="card section">
+      <view class="section-title">拼豆盘大小</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{boardSizes}}"
+          wx:key="*this"
+          class="chip {{size === item ? 'chip--on' : ''}}"
+          hover-class="chip--pressed"
+          data-value="{{item}}"
+          bindtap="pickSize"
+        >{{item}}×{{item}}</view>
+      </view>
+      <view class="size-controls">
+        <view class="size-btn" hover-class="size-btn--pressed" data-delta="-1" bindtap="onSizeStep">-</view>
+        <slider
+          class="size-slider"
+          min="15"
+          max="208"
+          step="1"
+          value="{{size}}"
+          activeColor="#f6ce00"
+          block-size="24"
+          bindchanging="onSizeChanging"
+          bindchange="onSizeChanging"
+        />
+        <view class="size-btn" hover-class="size-btn--pressed" data-delta="1" bindtap="onSizeStep">+</view>
+        <input
+          class="size-input"
+          type="number"
+          value="{{size}}"
+          bindblur="onSizeInput"
+          bindconfirm="onSizeInput"
+        />
+      </view>
+      <view class="section-hint">可拖动滑块或直接输入，范围 15~208</view>
     </view>
-    <input
-      class="style-input"
-      placeholder="或输入自定义风格，如：赛博朋克霓虹"
-      value="{{customStyle}}"
-      bindinput="onCustomStyleInput"
-    />
-    <view class="section-hint">留空使用所选预设；填写自定义风格后以自定义为准，预设不可用</view>
-    <input
-      class="style-input"
-      placeholder="额外要求（可选），如：去掉画面中的眼镜、背景里的人物等"
-      value="{{extraReq}}"
-      bindinput="onExtraReqInput"
-    />
-    <view class="section-hint">附加在所选风格上，不会覆盖预设；可写删元素、改背景等要求</view>
-    <view class="switch-row">
-      <text class="switch-label">抠出主体（背景变白）</text>
-      <switch checked="{{aiCutout}}" color="#ff3a5d" bindchange="onCutoutChange" />
-    </view>
-  </view>
+  </block>
 
   <button
     class="btn btn--primary btn--lg generate"
@@ -131,6 +106,116 @@
     disabled="{{generating}}"
     bindtap="generate"
   >{{generating ? '生成中…' : '生成图纸'}}</button>
+
+  <!-- 创意生成选项弹层：点「创意生成」弹出，甜度选择式底部弹层 -->
+  <view wx:if="{{aiSheetShow || aiSheetLeaving}}" class="ai-sheet-mask {{aiSheetLeaving ? 'ai-sheet-mask--leave' : ''}}" catchtouchmove="noop" bindtap="closeAiSheet">
+    <view
+      class="ai-sheet {{aiSheetLeaving ? 'ai-sheet--leave' : ''}}"
+      style="transform: translateY({{sheetDragY}}px); transition: {{sheetDragging ? 'none' : 'transform 220ms cubic-bezier(0.32, 0.72, 0, 1)'}};"
+      catchtap="noop"
+    >
+      <view
+        class="ai-sheet-grab"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchCancel"
+      >
+        <view class="ai-sheet-handle"></view>
+        <view class="ai-sheet-head">
+          <view class="ai-sheet-title">创意生成 · 图纸选项</view>
+        </view>
+      </view>
+      <scroll-view scroll-y class="ai-sheet-scroll" scroll-into-view="{{aiSheetScrollInto}}" scroll-with-animation>
+        <view class="ai-sheet-section">
+          <view class="section-title">风格</view>
+          <view class="chip-row chip-row--wrap">
+            <view
+              wx:for="{{styles}}"
+              wx:key="key"
+              class="chip chip--auto {{selectedStyle === item.key && !customStyle ? 'chip--on' : ''}} {{customStyle ? 'chip--disabled' : ''}}"
+              hover-class="chip--pressed"
+              data-value="{{item.key}}"
+              bindtap="pickStyle"
+            >{{item.name}}</view>
+          </view>
+          <input
+            class="style-input"
+            placeholder="或输入自定义风格，如：赛博朋克霓虹"
+            value="{{customStyle}}"
+            bindinput="onCustomStyleInput"
+          />
+          <view class="section-hint">留空使用所选预设；填写自定义风格后以自定义为准，预设不可用</view>
+        </view>
+        <view class="ai-sheet-section">
+          <view class="section-title">额外要求（可选）</view>
+          <input
+            class="style-input"
+            placeholder="如：去掉画面中的眼镜、背景里的人物等"
+            value="{{extraReq}}"
+            bindinput="onExtraReqInput"
+          />
+          <view class="section-hint">附加在所选风格上，不会覆盖预设；可写删元素、改背景等要求</view>
+        </view>
+        <view class="ai-sheet-section">
+          <view class="switch-row">
+            <text class="switch-label">抠出主体（背景变白）</text>
+            <switch checked="{{aiCutout}}" color="#ff3a5d" bindchange="onCutoutChange" />
+          </view>
+        </view>
+        <view class="ai-sheet-section ai-set-section" id="ai-set">
+          <view class="section-title">色系</view>
+          <view class="chip-row">
+            <view
+              wx:for="{{colorSets}}"
+              wx:key="*this"
+              class="chip {{set === item ? 'chip--on' : ''}}"
+              hover-class="chip--pressed"
+              data-value="{{item}}"
+              bindtap="pickSet"
+            >{{item}} 色</view>
+          </view>
+        </view>
+        <view class="ai-sheet-section ai-size-section" id="ai-size">
+          <view class="section-title">拼豆盘大小</view>
+          <view class="chip-row">
+            <view
+              wx:for="{{boardSizes}}"
+              wx:key="*this"
+              class="chip {{size === item ? 'chip--on' : ''}}"
+              hover-class="chip--pressed"
+              data-value="{{item}}"
+              bindtap="pickSize"
+            >{{item}}×{{item}}</view>
+          </view>
+          <view class="size-controls">
+            <view class="size-btn" hover-class="size-btn--pressed" data-delta="-1" bindtap="onSizeStep">-</view>
+            <slider
+              class="size-slider"
+              min="15"
+              max="208"
+              step="1"
+              value="{{size}}"
+              activeColor="#f6ce00"
+              block-size="24"
+              bindchanging="onSizeChanging"
+              bindchange="onSizeChanging"
+            />
+            <view class="size-btn" hover-class="size-btn--pressed" data-delta="1" bindtap="onSizeStep">+</view>
+            <input
+              class="size-input"
+              type="number"
+              value="{{size}}"
+              bindblur="onSizeInput"
+              bindconfirm="onSizeInput"
+            />
+          </view>
+          <view class="section-hint">可拖动滑块或直接输入，范围 15~208</view>
+        </view>
+      </scroll-view>
+      <button class="btn btn--primary ai-sheet-done" hover-class="btn--pressed" bindtap="closeAiSheet">完成</button>
+    </view>
+  </view>
 
   <view wx:if="{{progressShow}}" class="progress-mask">
     <view class="progress-card">
@@ -141,5 +226,15 @@
       <view class="progress-pct">{{progressPct}}%</view>
     </view>
   </view>
-  <guide-modal show="{{guideShow}}" bind:close="onGuideClose" bind:start="onGuideStart" />
+
+  <guide-tip
+    show="{{guideShow}}"
+    tips="{{guideTips}}"
+    index="{{guideIndex}}"
+    anchor="{{guideAnchor}}"
+    interactive="{{guideInteractive}}"
+    bind:next="onGuideNext"
+    bind:skip="onGuideSkip"
+    bind:anchor-tap="onGuideAnchorTap"
+  />
 </view>

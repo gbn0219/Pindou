@@ -5,6 +5,7 @@ const color = require('../../utils/color.js')
 const gesture = require('../../utils/gesture.js')
 const exportUtil = require('../../utils/export.js')
 const user = require('../../utils/user.js')
+const guide = require('../../utils/guide.js')
 
 const MAX_HISTORY = 30 // 撤销/重做最大步数（单格修改、批量替换各算一步）
 
@@ -49,7 +50,12 @@ Page({
     fuseSelected: '',
     buildCurrent: '',
     buildDoneCount: 0,
-    doneMap: {}
+    doneMap: {},
+    guideShow: false,
+    guideTips: [],
+    guideIndex: 0,
+    guideAnchor: null,
+    guideInteractive: false
   },
 
   onLoad() {
@@ -103,8 +109,17 @@ Page({
     if (this.pattern && this.canvas) this.draw()
   },
 
+  onGuideNext() {
+    guide.next(this)
+  },
+
+  onGuideSkip() {
+    guide.skip(this)
+  },
+
   onReady() {
     this.draw()
+    setTimeout(() => guide.start(this, 'patternEdit', guide.TIPS.patternEdit), 600)
   },
 
   draw() {
@@ -779,6 +794,7 @@ Page({
       this.view = null
       this.offscreenDirty = true
       this.draw()
+      setTimeout(() => guide.start(this, 'beading', guide.TIPS.beading), 400)
     })
   },
 

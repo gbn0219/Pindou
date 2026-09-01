@@ -10,12 +10,6 @@
       <view class="import-title">点击导入图纸图片</view>
       <view class="import-sub">从相册选择，或拍一张</view>
     </view>
-    <view class="card hint-card">
-      <view class="section-title">使用方法</view>
-      <view class="hint-line">1. 导入图纸截图</view>
-      <view class="hint-line">2. 调整网格格数，仅对齐参考</view>
-      <view class="hint-line">3. 缩放/拖动图片让色块对齐网格，确认后识别</view>
-    </view>
   </block>
 
   <!-- 校准阶段：固定网格 + 移图 -->
@@ -96,4 +90,14 @@
       </view>
     </view>
   </block>
+
+  <guide-tip
+    show="{{guideShow}}"
+    tips="{{guideTips}}"
+    index="{{guideIndex}}"
+    anchor="{{guideAnchor}}"
+    interactive="{{guideInteractive}}"
+    bind:next="onGuideNext"
+    bind:skip="onGuideSkip"
+  />
 </view>

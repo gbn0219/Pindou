@@ -11,6 +11,10 @@
   background: #ffffff;
   border-top: 2rpx solid #e5e1d3;
   z-index: 999;
+  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.tab-bar--hidden {
+  transform: translateY(100%);
 }
 .tab-item {
   flex: 1;

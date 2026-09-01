@@ -1,8 +1,1 @@
-{
-  "navigationBarTitleText": "拼豆图纸",
-  "navigationBarBackgroundColor": "#f7f5ec",
-  "navigationBarTextStyle": "black",
-  "usingComponents": {
-    "guide-modal": "/components/guide-modal/index"
-  }
-}
+{ "navigationBarTitleText": "拼豆图纸", "navigationBarBackgroundColor": "#f7f5ec", "navigationBarTextStyle": "black", "usingComponents": { "guide-tip": "/components/guide-tip/index" } }

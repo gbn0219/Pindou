@@ -1,0 +1,27 @@
+<view wx:if="{{show || leaving}}" class="gt-layer {{leaving ? 'gt-layer--leave' : ''}}">
+  <view class="gt-mask" catchtouchstart="noop" catchtouchmove="noop" catchtap="noop"></view>
+  <view
+    wx:if="{{anchor}}"
+    class="gt-ring {{interactive ? 'gt-ring--pulse' : ''}}"
+    style="left: {{anchor.left - 6}}px; top: {{anchor.top - 6}}px; width: {{anchor.width + 12}}px; height: {{anchor.height + 12}}px;"
+  ></view>
+  <view
+    wx:if="{{interactive && anchor}}"
+    class="gt-tapzone"
+    style="left: {{anchor.left}}px; top: {{anchor.top}}px; width: {{anchor.width}}px; height: {{anchor.height}}px;"
+    catchtap="onAnchorTap"
+  ></view>
+  <view
+    wx:if="{{pos && tips.length > 0}}"
+    class="gt-bubble {{entered ? 'gt-bubble--in' : ''}}"
+    style="left: {{pos.left}}px; top: {{pos.top}}px; width: {{bubbleW}}px; transform-origin: {{pos.placement === 'top' ? '50% 100%' : '50% 0%'}};"
+  >
+    <view class="gt-arrow gt-arrow--{{pos.placement}}" style="left: {{pos.arrowLeft}}px;"></view>
+    <view class="gt-text">{{tips[index].text}}</view>
+    <view class="gt-foot">
+      <text class="gt-progress">{{index + 1}}/{{tips.length}}</text>
+      <view class="gt-btn" hover-class="gt-btn--pressed" catchtap="onNext">{{index === tips.length - 1 ? '完成' : '知道了'}}</view>
+    </view>
+  </view>
+  <text class="gt-skip" catchtap="onSkip">跳过</text>
+</view>

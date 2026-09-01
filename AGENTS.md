@@ -4,23 +4,24 @@
 
 拼豆图纸生成微信小程序：用户导入一张图片 →（可选裁剪）→ 选择生成方式 → 像素化并映射到拼豆标准色 → 生成、展示、修改、导出拼豆图纸。
 
-当前包含七个页面（均在主包，无分包；底部为原生 tabBar：首页 / 我的）：
+当前包含八个页面（均在主包，无分包；底部为自定义 tabBar：首页 / 我的）：
 
-1. 主页面 `miniprogram/page/index/index`（tab）：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成方式（照片还原 / 创意生成）、创意生成风格选择
+1. 主页面 `miniprogram/page/index/index`（tab）：图片导入、色系选择（48/72/144/221）、拼豆盘大小（52×52 / 78×78 / 104×104）、生成方式（创意生成 / 照片还原）、创意生成选项弹层（风格/色系/盘面/抠图/额外要求）
 2. 裁剪页 `miniprogram/page/crop/index`：选图后先裁剪（任意比例方框：拖动框内部移动位置，拖动四边/四角调整大小），完成后返回主页面，最终图纸仍为方形网格
 3. 图纸展示页 `miniprogram/page/pattern/index`：canvas 展示图纸（每格显示色号、可双指缩放/拖动）、色号豆子数量清单、导出 PNG 到相册、进入修改；创意生成结果先以"锁定预览"展示（纯色、不可交互），解锁后才进入完整交互
 4. 图纸修改页 `miniprogram/page/pattern-edit/index`：canvas 逐格改色，底部"小盒子陈列"取色面板（按 A/B/C/D/E/F/G/H/M 色系分区，仅显示当前套装颜色）
 5. 个人中心 `miniprogram/page/profile/index`（tab）：微信登录（云开发 openid）、头像昵称、菜单区（去生成/我的图库/常见问题/关于拼豆）
 6. 图库 `miniprogram/page/gallery/index`：原始图片-生成图纸对列表（页码分页、缩略图/预览图压缩、点击图片 cloud:// 直接预览、条目"编辑"进入修改页、"删除"移除条目及关联云存储文件；旧数据缺缩略图/预览图时后台回填）
 7. 意见反馈 `miniprogram/page/feedback/index`：反馈表单（textarea + 字数）+ 提交按钮，走 `feedback` 云函数
+8. 图纸识别 `miniprogram/page/scan/index`：导入图纸截图、固定网格对齐（格数仅作对齐参考）、自动对齐/微调后识别为色号网格
 
 ## 生成方式（核心）
 
-### 方式一：照片还原（默认，免费离线）
+### 方式一：照片还原（免费离线）
 
 选图 → 裁剪页（可选）→ 主页面用 `wx.createOffscreenCanvas` 建 **4N×4N** 中间画布，按 **contain** 方式画入（白底补齐、透明像素按白）→ **`averageBlocks`**：每 4×4 块求平均 RGB 得到 N×N 代表色（无平滑）→ **`mapRgb`**：CIELAB 最近色匹配，只输出当前套装内色号 → **后处理**（`postProcessGrid`：杂色/邻近色合并、去噪）→ grid。支持 52/78/104 三种盘面。
 
-### 方式二：创意生成（免费，登录后即可用，支持 52/78/104）
+### 方式二：创意生成（默认，免费，登录后即可用，支持 52/78/104）
 
 - 免费模式：仅登录用户可用；不再限制预览/生成次数（`ai_sessions` 不再作为配额计数字段）；生成后直接进入完整交互（缩放/色号/修改/导出），导出时自动入库图库
 - 重新生成：展示页可填写修改要求（如"嘴巴要微笑、人物比例再大一点"），重新生成时把**原图 + 上一版生成图（清洗后压缩 ~768px）+ 要求**一起发给 AI（仍只生成 1 张图）；候选保留最近 5 版，可上一版/下一版切换
@@ -113,7 +114,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 ## 验证
 
-- 运行单测：`node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js && node tests/user.test.js && node tests/progress.test.js`
+- 运行单测：`node tests/color.test.js && node tests/pattern.test.js && node tests/ai.test.js && node tests/user.test.js && node tests/progress.test.js && node tests/guide.test.js`
 - 新增/修改 JS 一律执行 `node --check <file>`；JSON 用 `node -e "JSON.parse(...)"` 校验
 - 微信开发者工具安装在 `D:\Tencent\Winxin_develop`（`cli.bat open --project D:\Code\Weixin\Pindou` 可打开项目），修改代码后在开发者工具点"编译"，在模拟器验证各页面
 - 本机有 `claude-vision-skill`（千问识图），开发中可截图并用 `node vision.js <图片路径> "描述..."` 辅助检查模拟器效果
@@ -123,6 +124,7 @@ docs/superpowers/             设计文档与实施计划（历史过程文档�
 
 ## 最近更新（开发进度）
 
+- **2026-09-01 · 新手引导与主页创意生成弹层**：新增 `utils/guide.js` + `components/guide-tip` 气泡式新手引导（每页 3~4 条、页面变暗锁定、右下角灰色「跳过」、一次性记忆，含全屏拼豆子引导）；主页面「创意生成」改为甜度选择式底部弹层（风格/额外要求/抠图/色系/盘面），照片还原保留页面选项；生成方式默认创意生成（与 AGENTS.md 同步）。
 - **2026-08-31 · 界面统一与全屏拼豆优化**（commit `20b2a7f`，分支 `codex/pindou-pattern`）：统一暖纸配色/卡片表面/选中态（黄主按钮、墨底选中、红强调），补齐未定义 CSS 变量；图纸展示/修改画布改 1:1 方寸、去掉四周坐标条、居中画板；全屏拼豆底部面板占满剩余高度、色卡一行 3 个等宽居左、新增网格选项（默认每 5 格）、一键跟拼改为两步撤回；修复编辑页放大键无响应、预览页非全屏双指缩放失效；新增 `beading` 逻辑/样式与单测。
 - 详细进度见 [`docs/开发进度.md`](docs/开发进度.md)。
 

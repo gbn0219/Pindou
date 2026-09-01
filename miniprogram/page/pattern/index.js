@@ -9,6 +9,7 @@ const user = require('../../utils/user.js')
 const session = require('../../utils/session.js')
 const progressUtil = require('../../utils/progress.js')
 const sec = require('../../utils/sec.js')
+const guide = require('../../utils/guide.js')
 
 const OFFSCREEN_MAX_SCALE = 0.4 // 低倍率（<=0.4）用离屏层贴图，超过后逐格直绘可见格子
 
@@ -36,7 +37,12 @@ Page({
     fuseSelected: '',
     buildCurrent: '',
     buildDoneCount: 0,
-    doneMap: {}
+    doneMap: {},
+    guideShow: false,
+    guideTips: [],
+    guideIndex: 0,
+    guideAnchor: null,
+    guideInteractive: false
   },
 
   onLoad(options) {
@@ -71,9 +77,21 @@ Page({
     if (this.canvas) this.drawPattern()
   },
 
+  onGuideNext() {
+    guide.next(this)
+  },
+
+  onGuideSkip() {
+    guide.skip(this)
+  },
+
   onReady() {
     this.drawPattern()
-    if (this.autoBeading) this.enterFullscreen()
+    if (this.autoBeading) {
+      this.enterFullscreen()
+    } else {
+      setTimeout(() => guide.start(this, 'pattern', guide.TIPS.pattern), 600)
+    }
   },
 
   onUnload() {
@@ -373,6 +391,7 @@ Page({
       this.view = null
       this.offscreenDirty = true
       this.drawPattern()
+      setTimeout(() => guide.start(this, 'beading', guide.TIPS.beading), 400)
     })
   },
 

@@ -1,5 +1,1 @@
-{
-  "usingComponents": {},
-  "navigationBarTitleText": "我的图库",
-  "enablePullDownRefresh": true
-}
+{ "usingComponents": { "guide-tip": "/components/guide-tip/index" }, "navigationBarTitleText": "我的图库", "enablePullDownRefresh": true }

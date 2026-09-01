@@ -61,6 +61,16 @@
         <button class="btn btn--primary modal-btn" hover-class="btn--pressed" bindtap="hideFaq">我知道了</button>
       </view>
     </view>
-    <guide-modal show="{{guideShow}}" bind:close="hideGuide" bind:start="onGuideStart" />
+    <guide-modal show="{{guideModalShow}}" bind:close="hideGuide" bind:start="onGuideStart" />
   </block>
+
+  <guide-tip
+    show="{{guideShow}}"
+    tips="{{guideTips}}"
+    index="{{guideIndex}}"
+    anchor="{{guideAnchor}}"
+    interactive="{{guideInteractive}}"
+    bind:next="onGuideNext"
+    bind:skip="onGuideSkip"
+  />
 </view>

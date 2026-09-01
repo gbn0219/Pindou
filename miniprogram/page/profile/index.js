@@ -1,6 +1,7 @@
 // miniprogram/page/profile/index.js
 const user = require('../../utils/user.js')
 const sec = require('../../utils/sec.js')
+const guide = require('../../utils/guide.js')
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -18,7 +19,12 @@ Page({
     avatarPreview: '',
     faqShow: false,
     aboutShow: false,
+    guideModalShow: false,
     guideShow: false,
+    guideTips: [],
+    guideIndex: 0,
+    guideAnchor: null,
+    guideInteractive: false,
     version: '1.0.0',
     faqList: [
       { q: '怎么生成一张图纸？', a: '首页导入图片 → 选生成方式（照片还原 / 创意生成）→ 选色系与盘面大小 → 生成。' },
@@ -27,11 +33,33 @@ Page({
       { q: '生成失败怎么办？', a: '请稍后再试，或更换图片重新生成。' }
     ]
   },
+  onLoad() {
+    // 首帧渲染前同步用缓存填充用户，已登录用户进入时不闪登录页
+    this.seedCachedUser()
+  },
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 1 })
     }
-    if (!this.data.user) this.refresh()
+    if (!this.data.user) {
+      this.refresh()
+    } else {
+      setTimeout(() => this.maybeStartGuide(), 500)
+    }
+  },
+  // 先同步用本地缓存的登录资料填充页面，避免刷新期间闪回登录页
+  seedCachedUser() {
+    try {
+      const app = getApp()
+      const loggedOut = app.globalData.loggedOut || wx.getStorageSync('loggedOut')
+      const u = loggedOut ? null : (app.globalData.user || wx.getStorageSync('user') || null)
+      if (u && (u.openid || u._openid)) {
+        if (!u.openid && u._openid) u.openid = u._openid
+        this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
+      }
+    } catch (e) {
+      // 缓存读取失败不影响登录流程
+    }
   },
   async refresh() {
     try {
@@ -39,8 +67,11 @@ Page({
       this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
     } catch (e) {
       console.error('登录状态刷新失败', e)
-      this.setData({ user: null, openidTail: '' })
+      // 刷新失败时保留缓存资料，已登录用户不会闪回登录页
+      const cached = getApp().globalData.user || (wx.getStorageSync('user') || null)
+      if (!cached) this.setData({ user: null, openidTail: '' })
     }
+    setTimeout(() => this.maybeStartGuide(), 500)
   },
   async onLogin() {
     this.setData({ loading: true })
@@ -50,6 +81,7 @@ Page({
       wx.removeStorageSync('loggedOut')
       const u = await app.ensureLogin()
       this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
+      setTimeout(() => this.maybeStartGuide(), 500)
     } catch (e) {
       wx.showToast({ title: (e && e.message) || '登录失败', icon: 'none' })
       console.error('登录失败', e)
@@ -155,13 +187,23 @@ Page({
     this.setData({ aboutShow: false })
   },
   showGuide() {
-    this.setData({ guideShow: true })
+    this.setData({ guideModalShow: true })
   },
   hideGuide() {
-    this.setData({ guideShow: false })
+    this.setData({ guideModalShow: false })
+  },
+  maybeStartGuide() {
+    const u = this.data.user
+    guide.start(this, u ? 'profile' : 'profileGuest', u ? guide.TIPS.profile : guide.TIPS.profileGuest)
+  },
+  onGuideNext() {
+    guide.next(this)
+  },
+  onGuideSkip() {
+    guide.skip(this)
   },
   onGuideStart() {
-    this.setData({ guideShow: false })
+    this.setData({ guideModalShow: false })
     wx.switchTab({ url: '/page/index/index' })
   },
   noop() {}

@@ -6,6 +6,7 @@
 Component({
   data: {
     selected: 0,
+    hidden: false,
     color: '#7a8189',
     selectedColor: '#f6ce00',
     list: [
@@ -14,6 +15,12 @@ Component({
     ]
   },
   methods: {
+    hide() {
+      this.setData({ hidden: true })
+    },
+    show() {
+      this.setData({ hidden: false })
+    },
     switchTab(e) {
       const index = Number(e.currentTarget.dataset.index)
       const item = this.data.list[index]

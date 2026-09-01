@@ -126,4 +126,14 @@
       </view>
     </scroll-view>
   </view>
+
+  <guide-tip
+    show="{{guideShow}}"
+    tips="{{guideTips}}"
+    index="{{guideIndex}}"
+    anchor="{{guideAnchor}}"
+    interactive="{{guideInteractive}}"
+    bind:next="onGuideNext"
+    bind:skip="onGuideSkip"
+  />
 </view>
