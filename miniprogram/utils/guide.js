@@ -15,7 +15,7 @@ const TIPS = {
     { key: 'i4', selector: '.ai-summary', text: '图纸选项' },
     { key: 'i2', selector: '.ai-set-section', text: '这里选择图纸颜色数量', scroll: false },
     { key: 'i3', selector: '.ai-size-section', text: '这里选择图纸大小', scroll: false },
-    { key: 's1', selector: '.scan-entry', text: '点这里识别已有图纸' }
+    { key: 's1', selector: '.mode-card--scan', text: '选已有图纸就选图纸识别' }
   ],
   scan: [
     { key: 's2', selector: '.cells-row', text: '格数作为对齐参考' },
@@ -24,6 +24,7 @@ const TIPS = {
   pattern: [
     { key: 'p1', selector: '.canvas-area', text: '双指缩放、单指拖动查看' },
     { key: 'p2', selector: '.legend-list', text: '用到的颜色清单' },
+    { key: 'p4', selector: '.merge-row', text: '拖动选择数量，点合并把零散颜色并入相近色' },
     { key: 'p3', selector: '.action-bar', text: '图纸支持修改和导出为图片' }
   ],
   patternEdit: [

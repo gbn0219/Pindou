@@ -9,7 +9,7 @@
   box-sizing: content-box;
   display: flex;
   background: #ffffff;
-  border-top: 2rpx solid #e5e1d3;
+  border-top: 4rpx solid #12171b;
   z-index: 999;
   transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }

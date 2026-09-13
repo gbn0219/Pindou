@@ -57,6 +57,25 @@
 .controls {
   padding-top: var(--space-sm);
 }
+.ratios {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: var(--space-sm);
+}
+.ratio-option {
+  flex: 1;
+  padding: 14rpx 0;
+  border-radius: var(--radius-pill);
+  background: rgba(247, 245, 236, 0.12);
+  color: var(--color-paper);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.ratio-option--on {
+  background: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
 .hint {
   font-size: var(--text-xs);
   color: var(--color-paper);

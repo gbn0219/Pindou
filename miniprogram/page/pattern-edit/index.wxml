@@ -34,38 +34,31 @@
     </view>
     <view wx:if="{{!fullscreen && !cropActive}}" class="canvas-hint">双指缩放 - 点击右下角放大进入一键跟拼</view>
     <view wx:if="{{fullscreen}}" class="beading-bar {{beadingDragging ? 'beading-bar--drag' : ''}}" style="height: {{beadingSheetH}}px;">
-            <view class="beading-top" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
-        <view class="beading-handle"></view>
-        <view class="beading-heading">
-          <view class="beading-title">全屏拼豆</view>
-          <view class="beading-subtitle">点颜色看位置，拼完固定到图纸</view>
-        </view>
-        <view class="beading-sort">
-          <view class="beading-sort-label">排序方式</view>
-          <view class="beading-sort-options">
-            <view class="beading-sort-option {{fuseSort === 'count' ? 'beading-sort-option--on' : ''}}" data-sort="count" bindtap="pickFuseSort">数量</view>
-            <view class="beading-sort-option {{fuseSort === 'color' ? 'beading-sort-option--on' : ''}}" data-sort="color" bindtap="pickFuseSort">颜色</view>
+        <view class="beading-handle" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd"></view>
+        <view class="beading-context" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
+          <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
+            <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
+            <view>
+              <view class="beading-color-code">{{item.code}}</view>
+              <view class="beading-color-sub">{{item.count}} 格</view>
+            </view>
+          </view>
+          <view class="beading-color" wx:if="{{!buildCurrent}}">
+            <view class="beading-color-swatch beading-color-swatch--empty"></view>
+            <view>
+              <view class="beading-color-code">未选择</view>
+              <view class="beading-color-sub">点下方颜色</view>
+            </view>
+          </view>
+          <button class="btn btn--primary beading-done-btn" hover-class="btn--pressed" disabled="{{!buildCurrent}}" bindtap="finishColor">{{buildCurrent && doneMap[buildCurrent] ? '撤回' : '拼完了'}}</button>
+          <view class="beading-sort">
+            <view class="beading-sort-label">排序方式</view>
+            <view class="beading-sort-options">
+              <view class="beading-sort-option {{fuseSort === 'count' ? 'beading-sort-option--on' : ''}}" data-sort="count" bindtap="pickFuseSort">数量</view>
+              <view class="beading-sort-option {{fuseSort === 'color' ? 'beading-sort-option--on' : ''}}" data-sort="color" bindtap="pickFuseSort">颜色</view>
+            </view>
           </view>
         </view>
-      </view>
-
-            <view class="beading-context">
-        <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
-          <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
-          <view>
-            <view class="beading-color-code">{{item.code}}</view>
-            <view class="beading-color-sub">{{item.count}} 格</view>
-          </view>
-        </view>
-        <view class="beading-color" wx:if="{{!buildCurrent}}">
-          <view class="beading-color-swatch beading-color-swatch--empty"></view>
-          <view>
-            <view class="beading-color-code">未选择</view>
-            <view class="beading-color-sub">点下方颜色</view>
-          </view>
-        </view>
-        <button class="btn btn--primary beading-done-btn" hover-class="btn--pressed" disabled="{{!buildCurrent}}" bindtap="finishColor">{{buildCurrent && doneMap[buildCurrent] ? '撤回' : '拼完了'}}</button>
-      </view>
       <scroll-view class="fuse-strip" scroll-y>
         <view class="fuse-row">
           <view

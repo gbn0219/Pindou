@@ -1,6 +1,12 @@
 // miniprogram/page/crop/index.js
 const MIN_SIZE = 40 // 裁剪框最小边长 px
 const HIT = 24 // 命中边/角的阈值 px
+const RATIOS = {
+  '1:1': [1, 1],
+  '4:3': [4, 3],
+  '3:4': [3, 4],
+  'free': [0, 0]
+}
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v))
@@ -14,7 +20,8 @@ Page({
     frameW: 0,
     frameH: 0,
     frameX: 0,
-    frameY: 0
+    frameY: 0,
+    ratio: 'free'
   },
 
   onLoad() {
@@ -49,6 +56,24 @@ Page({
       .exec((res) => {
         this.areaRect = (res && res[0]) || null
       })
+  },
+
+  onRatioTap(e) {
+    const ratio = e.currentTarget.dataset.ratio
+    if (!RATIOS[ratio] || ratio === this.data.ratio) return
+    this.setData({ ratio })
+    if (ratio === 'free') return
+    const d = this.data
+    const [rw, rh] = RATIOS[ratio]
+    const unit = Math.floor(Math.min(d.imgW / rw, d.imgH / rh))
+    const w = unit * rw
+    const h = unit * rh
+    this.setData({
+      frameW: w,
+      frameH: h,
+      frameX: Math.round((d.imgW - w) / 2),
+      frameY: Math.round((d.imgH - h) / 2)
+    })
   },
 
   onFrameTouchStart(e) {
@@ -98,6 +123,22 @@ Page({
       const x = clamp(drag.ox + dx, 0, d.imgW - d.frameW)
       const y = clamp(drag.oy + dy, 0, d.imgH - d.frameH)
       this.setData({ frameX: Math.round(x), frameY: Math.round(y) })
+      return
+    }
+    const ratioDims = RATIOS[d.ratio]
+    if (ratioDims[0]) {
+      const [rw, rh] = ratioDims
+      const horizontal = drag.left || drag.right
+      const vertical = drag.top || drag.bottom
+      const wFromX = drag.left ? drag.ow - dx : drag.ow + dx
+      const hFromY = drag.top ? drag.oh - dy : drag.oh + dy
+      let unit = horizontal && vertical ? Math.min(wFromX / rw, hFromY / rh) : (horizontal ? wFromX / rw : hFromY / rh)
+      unit = clamp(Math.round(unit), Math.ceil(MIN_SIZE / Math.max(rw, rh)), Math.floor(Math.min(d.imgW / rw, d.imgH / rh)))
+      const w = unit * rw
+      const h = unit * rh
+      const x = clamp(horizontal ? (drag.right ? drag.ox : drag.ox + drag.ow - w) : drag.ox + drag.ow / 2 - w / 2, 0, d.imgW - w)
+      const y = clamp(vertical ? (drag.bottom ? drag.oy : drag.oy + drag.oh - h) : drag.oy + drag.oh / 2 - h / 2, 0, d.imgH - h)
+      this.setData({ frameX: x, frameY: y, frameW: w, frameH: h })
       return
     }
     let x = drag.ox

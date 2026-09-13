@@ -128,11 +128,6 @@
   box-shadow: 0 -8rpx 24rpx -16rpx var(--color-shadow);
   padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
 }
-.beading-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
 .beading-sort {
   flex-shrink: 0;
   padding: 14rpx 22rpx;
@@ -220,28 +215,11 @@
   border-radius: 36rpx 36rpx 0 0;
   padding: 30rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
 }
-.beading-top {
-  display: flex;
-  align-items: flex-start;
-  gap: 24rpx;
-}
-.beading-heading {
-  flex: 1;
-  min-width: 0;
-}
-.beading-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-.beading-subtitle {
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: var(--color-ink-2);
-}
 .beading-sort {
-  display: block;
-  flex-shrink: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   border: 0;
   padding: 0;
 }
@@ -282,17 +260,6 @@
   border-top: 2rpx solid var(--color-rule);
   box-shadow: 0 -20rpx 40rpx -28rpx rgba(18, 23, 27, 0.45);
 }
-.beading-top {
-  align-items: center;
-  margin-bottom: 22rpx;
-}
-.beading-title {
-  font-size: 32rpx;
-}
-.beading-subtitle {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-}
 .beading-context {
   display: flex;
   align-items: center;
@@ -308,6 +275,7 @@
   display: flex;
   align-items: center;
   gap: 14rpx;
+  flex: 1;
   min-width: 0;
 }
 .beading-color-swatch {
@@ -339,13 +307,18 @@
   color: var(--color-ink-2);
   text-align: right;
 }
-.beading-done-btn {
-  min-width: 180rpx;
-  height: 64rpx;
+.beading-context .beading-done-btn {
+  width: auto;
+  min-width: 225rpx;
+  max-width: 225rpx;
+  min-height: 48rpx;
+  height: 48rpx;
+  max-height: 48rpx;
+  box-sizing: border-box;
   margin: 0;
-  padding: 0 28rpx;
+  padding: 0 14rpx;
   border-radius: var(--radius-pill);
-  font-size: 24rpx;
+  font-size: 12rpx;
   line-height: 1;
 }
 .fuse-strip {
@@ -434,13 +407,10 @@
   bottom: 0;
 }
 
-/* 底部色板：顶部抓取条（手柄 + 标题行），收起后保留这条“白边”可拖出 */
-.beading-top {
-  position: relative;
-}
+/* 底部色板：顶部抓取条（浮于面板上缘），收起后保留这条“白边”可拖出 */
 .beading-handle {
   position: absolute;
-  top: -18rpx;
+  top: 10rpx;
   left: 50%;
   transform: translateX(-50%);
   width: 72rpx;

@@ -79,6 +79,38 @@
   font-size: var(--text-xs);
   color: var(--color-ink-2);
 }
+.merge-row {
+  position: relative;
+  min-height: 48rpx;
+  margin-bottom: var(--space-sm);
+}
+.merge-slider {
+  width: 100%;
+}
+.merge-value {
+  position: absolute;
+  right: 100rpx;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.merge-row .merge-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  height: 48rpx;
+  min-width: 84rpx;
+  padding: 0 20rpx;
+  font-size: 20rpx;
+  transform: translateY(-50%);
+}
+.merge-row .merge-btn.btn--pressed {
+  transform: translateY(-50%) scale(0.94);
+}
 .legend-list {
   display: flex;
   flex-wrap: wrap;

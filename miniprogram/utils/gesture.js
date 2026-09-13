@@ -45,19 +45,35 @@ function viewportPinchStep(start, current, t1, t2, opts) {
 /**
  * 把视图约束在坐标条框内：内容不进入四周坐标条区域（不遮挡坐标）。
  * total 为内容世界尺寸（正方形网格边长）；ruler 为每侧坐标条宽高（屏幕 px）。
- * 内容小于内区时锁定居中；大于内区时平移范围受限在框内。
+ * free>0 为拖拽余量（全屏拼豆用，虚拟画布约 (1+2×free) 倍内容尺寸）：
+ * 内容小于内区时围绕居中位置两侧各可拖 free×内容尺寸；
+ * 内容大于内区时在贴边范围基础上两侧各放宽 free×内容尺寸（放大后仍可自由拖动）。
+ * free 缺省时保持原行为：小于内区锁定居中，大于内区贴边约束（不把内容拖丢）。
  */
-function clampView(view, total, areaW, areaH, ruler) {
+function clampView(view, total, areaW, areaH, ruler, free) {
   const innerW = areaW - ruler * 2
   const innerH = areaH - ruler * 2
   const w = total * view.scale
   const h = total * view.scale
+  const f = free > 0 ? free : 0
   let ox = view.ox
   let oy = view.oy
-  if (w <= innerW) ox = ruler + (innerW - w) / 2
-  else ox = Math.max(ruler + innerW - w, Math.min(ruler, ox))
-  if (h <= innerH) oy = ruler + (innerH - h) / 2
-  else oy = Math.max(ruler + innerH - h, Math.min(ruler, oy))
+  if (w <= innerW) {
+    const cx = ruler + (innerW - w) / 2
+    ox = f > 0 ? Math.max(cx - f * w, Math.min(cx + f * w, ox)) : cx
+  } else if (f > 0) {
+    ox = Math.max(ruler + innerW - w - f * w, Math.min(ruler + f * w, ox))
+  } else {
+    ox = Math.max(ruler + innerW - w, Math.min(ruler, ox))
+  }
+  if (h <= innerH) {
+    const cy = ruler + (innerH - h) / 2
+    oy = f > 0 ? Math.max(cy - f * h, Math.min(cy + f * h, oy)) : cy
+  } else if (f > 0) {
+    oy = Math.max(ruler + innerH - h - f * h, Math.min(ruler + f * h, oy))
+  } else {
+    oy = Math.max(ruler + innerH - h, Math.min(ruler, oy))
+  }
   return { scale: view.scale, ox, oy }
 }
 

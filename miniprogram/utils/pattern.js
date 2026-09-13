@@ -810,8 +810,9 @@ function mergeRareColors(grid, palette, opts) {
   if (!h || !w || !palette || !palette.length) return { removed: 0, mapping: {} }
   const bgMask = (opts && opts.bgMask) || null
   const { map, total } = countForeground(grid, bgMask)
-  const minCount = (opts && opts.minCount) || 4
-  const minRatio = opts && opts.minRatio ? opts.minRatio : 0.0006
+  // 显式传 0 表示关闭合并（生成管线默认关闭，预览页按滑块合并）
+  const minCount = opts && typeof opts.minCount === 'number' ? opts.minCount : 4
+  const minRatio = opts && typeof opts.minRatio === 'number' ? opts.minRatio : 0.0006
   const threshold = Math.max(minCount, Math.round(total * minRatio))
   const labByCode = {}
   for (const item of palette) labByCode[item.code] = item.lab

@@ -13,6 +13,8 @@ const guide = require('../../utils/guide.js')
 
 const OFFSCREEN_MAX_SCALE = 0.4 // 低倍率（<=0.4）用离屏层贴图，超过后逐格直绘可见格子
 
+const FS_PAN_FREE = 1.25 // 全屏拼豆拖拽余量：每侧可再拖 1.25 个图纸宽（虚拟画布约 3.5 倍）
+
 Page({
   data: {
     set: '221',
@@ -21,6 +23,8 @@ Page({
     styleShort: '', // 生成方式显示用：只保留风格名（去掉冒号后的描述）
     legend: [],
     total: 0,
+    mergeOn: false,
+    mergeN: 1,
     gridOn: true,
     gridEvery: 5,
     candIndex: 0,
@@ -101,10 +105,29 @@ Page({
     }
   },
 
-  updateLegend() {
+  // 合并预览视图：共享的 globalData 图纸始终保持未合并（修改页编辑不受影响）；
+  // 开启合并后在副本上把数量 ≤N 格的颜色并入最近的主体色，展示/清单/导出都用该副本
+  updateViewGrid() {
     const p = this.pattern
     this.refreshBgMask()
-    const counts = pattern.countColors(p.grid, this.palette.map((i) => i.code), this.bgMask)
+    if (!this.data.mergeOn) {
+      this.viewGrid = p.grid
+      return
+    }
+    const grid = p.grid.map((row) => row.slice())
+    pattern.mergeRareColors(grid, this.palette, {
+      minCount: this.data.mergeN + 1, // 阈值 = N+1，即数量 ≤N 格的颜色被并入
+      minRatio: 0,
+      bgMask: this.bgMask
+    })
+    this.viewGrid = grid
+    // 无固定背景掩码（照片还原）：合并可能把边缘零散色并入白色，按合并后视图重算
+    if (!p.bgMask) this.bgMask = pattern.findBackgroundMask(this.viewGrid, this.whiteCodes)
+  },
+
+  updateLegend() {
+    this.updateViewGrid()
+    const counts = pattern.countColors(this.viewGrid, this.palette.map((i) => i.code), this.bgMask)
     const hexByCode = {}
     this.palette.forEach((i) => {
       hexByCode[i.code] = i.hex
@@ -113,6 +136,33 @@ Page({
     this.setData({
       legend: counts.map((i) => ({ code: i.code, count: i.count, hex: hexByCode[i.code] })),
       total
+    })
+  },
+
+  // 拉动中只刷新数字；松手（bindchange）才按新阈值重新合并，避免拖动过程反复重算
+  onMergeSlide(e) {
+    const v = e.detail.value
+    if (v !== this.data.mergeN) this.setData({ mergeN: v })
+  },
+
+  onMergeSlideDone(e) {
+    const v = e.detail.value
+    if (!this.data.mergeOn) {
+      if (v !== this.data.mergeN) this.setData({ mergeN: v })
+      return
+    }
+    this.offscreenDirty = true
+    this.setData({ mergeN: v }, () => {
+      this.updateLegend()
+      this.redraw()
+    })
+  },
+
+  onToggleMerge() {
+    this.offscreenDirty = true
+    this.setData({ mergeOn: !this.data.mergeOn }, () => {
+      this.updateLegend()
+      this.redraw()
     })
   },
 
@@ -156,11 +206,21 @@ Page({
           const ruler = 0
           const innerW = areaW - ruler * 2
           const innerH = areaH - ruler * 2
-          const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
-          this.view = {
-            scale,
-            ox: ruler + (innerW - total * scale) / 2,
-            oy: ruler + (innerH - total * scale) / 2
+          if (this.data.fullscreen) {
+            // 全屏拼豆：铺满宽度并顶齐上边（下边可延伸到色板下方，可拖动查看）
+            const scale = Math.max(0.05, innerW / total)
+            this.view = {
+              scale,
+              ox: ruler + (innerW - total * scale) / 2,
+              oy: ruler
+            }
+          } else {
+            const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
+            this.view = {
+              scale,
+              ox: ruler + (innerW - total * scale) / 2,
+              oy: ruler + (innerH - total * scale) / 2
+            }
           }
         }
         const dpr = this.dpr || 1
@@ -177,7 +237,7 @@ Page({
     const cell = this.displayCell || pattern.CELL
     const total = this.pattern.size * (cell + pattern.GAP) - pattern.GAP
     const off = wx.createOffscreenCanvas({ type: '2d', width: total, height: total })
-    pattern.renderGrid(off.getContext('2d'), this.pattern.grid, this.palette, {
+    pattern.renderGrid(off.getContext('2d'), this.viewGrid, this.palette, {
       cellSize: cell,
       gap: pattern.GAP,
       code: false,
@@ -214,7 +274,10 @@ Page({
     const cell = this.displayCell || pattern.CELL
     const total = p.size * (cell + pattern.GAP) - pattern.GAP
     const area = this.cssAreaSize()
-    this.view = gesture.clampView(this.view, total, area.width, area.height, 0)
+    // 全屏拼豆：拖拽边界按色板上方可见区计算，并给足余量，几乎不会拖到头
+    const sheetH = this.data.fullscreen ? this.data.beadingSheetH || 0 : 0
+    const free = this.data.fullscreen ? FS_PAN_FREE : 0
+    this.view = gesture.clampView(this.view, total, area.width, area.height - sheetH, 0, free)
   },
 
   drawGrid() {
@@ -229,7 +292,7 @@ Page({
       this.ctx.drawImage(this.ensureOffscreen(), 0, 0)
     } else {
       // 高倍率：只重绘屏幕上可见的格子，任意放大不糊
-      pattern.renderGridView(this.ctx, this.pattern.grid, this.palette, {
+      pattern.renderGridView(this.ctx, this.viewGrid, this.palette, {
         cellSize: this.displayCell || pattern.CELL,
         gap: pattern.GAP,
         code: this.codeShown,
@@ -358,7 +421,7 @@ Page({
     this.view = gesture.viewportPinchStep(this.pinch, this.view, t1, t2)
     this.clampView()
     const area = this.cssAreaSize()
-    const range = pattern.visibleRange(this.view, this.pattern.grid.length, this.displayCell || pattern.CELL, pattern.GAP, area.width, area.height)
+    const range = pattern.visibleRange(this.view, this.viewGrid.length, this.displayCell || pattern.CELL, pattern.GAP, area.width, area.height)
     const show = range.c1 - range.c0 + 1 <= 30 && range.r1 - range.r0 + 1 <= 30
     if (show !== this.codeShown) {
       this.codeShown = show
@@ -368,16 +431,16 @@ Page({
 
   // 全屏拼豆：点画布上的色块直接切换当前预览颜色（已选中再点取消），背景格不响应
   onFullscreenCellTap(pos) {
-    if (!this.view || !this.pattern || !this.pattern.grid) return
+    if (!this.view || !this.viewGrid) return
     const step = (this.displayCell || pattern.CELL) + pattern.GAP
     const lx = (pos.x - this.view.ox) / this.view.scale
     const ly = (pos.y - this.view.oy) / this.view.scale
     const col = Math.floor(lx / step)
     const row = Math.floor(ly / step)
-    const size = this.pattern.grid.length
+    const size = this.viewGrid.length
     if (row < 0 || col < 0 || row >= size || col >= size) return
     if (this.bgMask && this.bgMask[row] && this.bgMask[row][col]) return
-    const code = this.pattern.grid[row][col]
+    const code = this.viewGrid[row][col]
     if (!code) return
     this.offscreenDirty = true
     const next = this.data.buildCurrent === code ? '' : code
@@ -431,13 +494,13 @@ Page({
       winW = info.windowWidth || 375
     } catch (err) {}
     this.beadingMaxH = Math.max(240, Math.round(winH * 0.45))
-    // 折叠高度按屏宽自适应（约 260rpx）：露出当前颜色与“拼完了”按钮
-    this.beadingMinH = Math.round(260 * winW / 750)
+    // 折叠高度按屏宽自适应（约 125rpx）：只露出当前颜色+拼完了+排序一行
+    this.beadingMinH = Math.round(125 * winW / 750)
     this.setData({
       fullscreen: true,
       beadingSheetH: this.beadingMaxH,
       beadingDragging: false,
-      fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, this.data.fuseSort),
+      fuseLegend: beading.buildLegend(this.viewGrid, this.palette, this.bgMask, this.data.fuseSort),
       buildCurrent: '',
       doneMap,
       buildDoneCount: this.buildDone.length
@@ -479,7 +542,7 @@ Page({
     }, 140)
   },
 
-  // 底部色板：按住顶部条上下拖动，松手自动吸附（展开/收起），收起后保留顶部条可再拖出
+  // 底部色板：按住「拼完了」行或顶部小白条上下拖动，松手自动吸附（展开/收起），收起后保留小白条可再拖出
   onBeadingSheetStart(e) {
     if (!this.data.fullscreen || !this.beadingMaxH) return
     const t = e.touches && e.touches[0]
@@ -514,10 +577,9 @@ Page({
   pickFuseSort(e) {
     const sort = e.currentTarget.dataset.sort
     if (!sort || sort === this.data.fuseSort) return
-    const p = this.pattern
     this.setData({
       fuseSort: sort,
-      fuseLegend: beading.buildLegend(p.grid, this.palette, this.bgMask, sort)
+      fuseLegend: beading.buildLegend(this.viewGrid, this.palette, this.bgMask, sort)
     })
   },
 
@@ -671,7 +733,7 @@ Page({
   },
 
   makeExportFile() {
-    return exportUtil.renderPatternExport(this.pattern.grid, this.palette, {
+    return exportUtil.renderPatternExport(this.viewGrid, this.palette, {
       bgMask: this.bgMask,
       gridEvery: this.data.gridOn ? this.data.gridEvery : 0
     })
@@ -681,7 +743,7 @@ Page({
     return exportUtil.renderSquareJpeg(src, px)
   },
   makeGridJpeg(px) {
-    return exportUtil.renderPatternJpeg(this.pattern.grid, this.palette, px, {
+    return exportUtil.renderPatternJpeg(this.viewGrid, this.palette, px, {
       bgMask: this.bgMask,
       gridEvery: this.data.gridOn ? this.data.gridEvery : 0
     })
@@ -716,7 +778,7 @@ Page({
         patternThumbFileID: patternThumbUp.fileID,
         originalPreviewFileID: originalPreviewUp.fileID,
         patternPreviewFileID: patternPreviewUp.fileID,
-        grid: pattern.serializeGrid(this.pattern.grid),
+        grid: pattern.serializeGrid(this.viewGrid),
         bgMask: this.pattern.bgMask ? pattern.serializeBgMask(this.bgMask) : undefined,
         mode: this.pattern.mode,
         style: this.pattern.style || '',

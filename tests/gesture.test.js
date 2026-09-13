@@ -134,4 +134,44 @@ function screenOf(view, localX, localY) {
   assert.strictEqual(big.ox, ruler, 'x 方向应被钳制在左边界')
   assert.strictEqual(big.oy, ruler + innerH - total * big.scale, 'y 方向应被钳制在下边界')
 }
+// clampView free 拖拽余量：内容小于内区时允许偏离居中 ±free×内容尺寸（虚拟画布 1+2×free 倍）
+{
+  const total = 100
+  const areaW = 300
+  const areaH = 300
+  // free=1.25：每侧余量 125 → 允许范围 [-25, 225]
+  const low = gesture.clampView({ scale: 1, ox: -100, oy: -100 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(low.ox, -25, 'free 余量下可拖出左/上边界至 -25')
+  assert.strictEqual(low.oy, -25, 'free 余量下可拖出左/上边界至 -25（y）')
+  const high = gesture.clampView({ scale: 1, ox: 500, oy: 500 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(high.ox, 225, 'free 余量下右/下边界为 225')
+  assert.strictEqual(high.oy, 225, 'free 余量下右/下边界为 225（y）')
+  const mid = gesture.clampView({ scale: 1, ox: 60, oy: 140 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(mid.ox, 60, 'free 余量内的位置不被吸附')
+  assert.strictEqual(mid.oy, 140, 'free 余量内的位置不被吸附（y）')
+  // 不传 free：保持原行为，锁定居中
+  const locked = gesture.clampView({ scale: 1, ox: 60, oy: 140 }, total, areaW, areaH, 0)
+  assert.strictEqual(locked.ox, 100, '无 free 时仍锁定居中（x）')
+  assert.strictEqual(locked.oy, 100, '无 free 时仍锁定居中（y）')
+}
+// clampView free 余量（放大态）：内容大于内区时在贴边范围两侧各放宽 free×内容尺寸
+{
+  const total = 100
+  const areaW = 300
+  const areaH = 300
+  // scale=6 → w=h=600 > 300；贴边范围 [-300, 0]，free=1.25 放宽 750 → [-1050, 750]
+  const high = gesture.clampView({ scale: 6, ox: 1000, oy: 1000 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(high.ox, 750, '放大态 free 余量下右/下边界 = 750')
+  assert.strictEqual(high.oy, 750, '放大态 free 余量下右/下边界 = 750（y）')
+  const low = gesture.clampView({ scale: 6, ox: -2000, oy: -2000 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(low.ox, -1050, '放大态 free 余量下左/上边界 = -1050')
+  assert.strictEqual(low.oy, -1050, '放大态 free 余量下左/上边界 = -1050（y）')
+  const mid = gesture.clampView({ scale: 6, ox: -100, oy: -100 }, total, areaW, areaH, 0, 1.25)
+  assert.strictEqual(mid.ox, -100, '放大态 free 余量内的位置不被吸附')
+  assert.strictEqual(mid.oy, -100, '放大态 free 余量内的位置不被吸附（y）')
+  // free=0：放大态保持原贴边约束
+  const edge = gesture.clampView({ scale: 6, ox: 1000, oy: 1000 }, total, areaW, areaH, 0)
+  assert.strictEqual(edge.ox, 0, '无 free 时放大态贴边（x）')
+  assert.strictEqual(edge.oy, 0, '无 free 时放大态贴边（y）')
+}
 console.log('gesture.test.js 全部通过 ✓')

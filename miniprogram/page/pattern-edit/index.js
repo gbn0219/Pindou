@@ -29,6 +29,8 @@ const MODE_HINTS = {
 
 const OFFSCREEN_MAX_SCALE = 0.4 // 低倍率（<=0.4）用离屏层贴图，超过后逐格直绘可见格子
 
+const FS_PAN_FREE = 1.25 // 全屏拼豆拖拽余量：每侧可再拖 1.25 个图纸宽（虚拟画布约 3.5 倍）
+
 Page({
   data: {
     groups: [],
@@ -160,11 +162,21 @@ Page({
             const ruler = 0
             const innerW = areaW - ruler * 2
             const innerH = areaH - ruler * 2
-            const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
-            this.view = {
-              scale,
-              ox: ruler + (innerW - total * scale) / 2,
-              oy: ruler + (innerH - total * scale) / 2
+            if (this.data.fullscreen) {
+              // 全屏拼豆：铺满宽度并顶齐上边（下边可延伸到色板下方，可拖动查看）
+              const scale = Math.max(0.05, innerW / total)
+              this.view = {
+                scale,
+                ox: ruler + (innerW - total * scale) / 2,
+                oy: ruler
+              }
+            } else {
+              const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
+              this.view = {
+                scale,
+                ox: ruler + (innerW - total * scale) / 2,
+                oy: ruler + (innerH - total * scale) / 2
+              }
             }
           }
           const dpr = this.dpr || 1
@@ -231,7 +243,10 @@ Page({
     const cell = this.cellPx || pattern.CELL
     const total = p.size * (cell + pattern.GAP) - pattern.GAP
     const area = this.cssAreaSize()
-    this.view = gesture.clampView(this.view, total, area.width, area.height, 0)
+    // 全屏拼豆：拖拽边界按色板上方可见区计算，并给足余量，几乎不会拖到头
+    const sheetH = this.data.fullscreen ? this.data.beadingSheetH || 0 : 0
+    const free = this.data.fullscreen ? FS_PAN_FREE : 0
+    this.view = gesture.clampView(this.view, total, area.width, area.height - sheetH, 0, free)
   },
 
   drawGrid() {
@@ -834,8 +849,8 @@ Page({
       winW = info.windowWidth || 375
     } catch (err) {}
     this.beadingMaxH = Math.max(240, Math.round(winH * 0.45))
-    // 折叠高度按屏宽自适应（约 260rpx）：露出当前颜色与“拼完了”按钮
-    this.beadingMinH = Math.round(260 * winW / 750)
+    // 折叠高度按屏宽自适应（约 125rpx）：只露出当前颜色+拼完了+排序一行
+    this.beadingMinH = Math.round(125 * winW / 750)
     this.setData({
       fullscreen: true,
       beadingSheetH: this.beadingMaxH,
@@ -880,7 +895,7 @@ Page({
     }, 140)
   },
 
-  // 底部色板：按住顶部条上下拖动，松手自动吸附（展开/收起），收起后保留顶部条可再拖出
+  // 底部色板：按住「拼完了」行或顶部小白条上下拖动，松手自动吸附（展开/收起），收起后保留小白条可再拖出
   onBeadingSheetStart(e) {
     if (!this.data.fullscreen || !this.beadingMaxH) return
     const t = e.touches && e.touches[0]

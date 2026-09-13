@@ -587,6 +587,44 @@ assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
   assert.strictEqual(g[1][2], 'A4', '前景杂色格应改为主体色')
   assert.strictEqual(g[0][0], 'H1', '背景格不应被改动')
 }
+{
+  // 显式 minCount/minRatio 为 0：不合并（生成管线默认关闭，预览页开关控制）
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4']
+  ]
+  pattern.mergeRareColors(g, pal, { minCount: 0, minRatio: 0 })
+  assert.strictEqual(g[1][1], 'A10', 'minCount/minRatio 为 0 时不应合并')
+}
+{
+  // 预览页合并：minCount=N+1、minRatio=0 → 数量 ≤N 格的颜色并入（N=1 阈值为 2）
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A4']
+  ]
+  const r = pattern.mergeRareColors(g, pal, { minCount: 2, minRatio: 0 })
+  assert.strictEqual(r.removed, 1, '数量 1 的杂色应被并入')
+  assert.strictEqual(r.mapping['A10'], 'A4', '应并入最近的锚点色')
+}
+{
+  // 数量等于阈值的颜色作为锚点保留（滑到 N=2 时用了 2 次的颜色不被并入）
+  const pal = color.buildPalette('48')
+  const g = [
+    ['A4', 'A4', 'A4', 'A4'],
+    ['A4', 'A10', 'A4', 'A4'],
+    ['A4', 'A4', 'A4', 'A10'],
+    ['A4', 'A4', 'A4', 'A4']
+  ]
+  pattern.mergeRareColors(g, pal, { minCount: 2, minRatio: 0 })
+  assert.strictEqual(g[1][1], 'A10', '数量等于阈值的颜色应保留')
+  assert.strictEqual(g[2][3], 'A10', '数量等于阈值的颜色应保留')
+}
 
 // ---- mergeNearColors（邻近色合并：穿插的近色并入数量更多的一方） ----
 {

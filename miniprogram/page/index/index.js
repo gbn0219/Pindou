@@ -274,16 +274,23 @@ Page({
 
   pickMode(e) {
     const v = e.currentTarget.dataset.value
-    if (v === this.data.mode) return
-    this.setData({ mode: v })
-    // 切到创意生成只切模式，选项弹层仅由「额外选项」摘要行打开
-    if (v === 'photo' && this.data.aiSheetShow) {
-      this.closeAiSheet()
+    if (v !== this.data.mode) this.setData({ mode: v })
+    // 创意/照片还原选中后直接展开选项；图纸识别无选项
+    if (v === 'scan') {
+      if (this.data.aiSheetShow) this.closeAiSheet()
+      this.syncAiSummary()
+      return
     }
     this.syncAiSummary()
+    this.openAiSheet()
   },
 
   goScan() {
+    if (!this.data.imagePath) {
+      wx.showToast({ title: '请先导入图片', icon: 'none' })
+      return
+    }
+    getApp().globalData.scanImage = { path: this.data.imagePath }
     wx.navigateTo({ url: '/page/scan/index' })
   },
 
@@ -326,7 +333,9 @@ Page({
       wx.showToast({ title: '请先导入图片', icon: 'none' })
       return
     }
-    if (this.data.mode === 'ai') {
+    if (this.data.mode === 'scan') {
+      this.goScan()
+    } else if (this.data.mode === 'ai') {
       this.generateByAi()
     } else {
       this.generateByPhoto()
@@ -478,6 +487,7 @@ Page({
     // 照片还原：4N 画布 → 4×4 块平均 → CIELAB 最近色 → 后处理（杂色/邻近色合并、去噪）
     const palette = color.buildPalette(setKey)
     const rgbArr = pattern.averageBlocks(imageData.data, size4, size, 4)
-    return pattern.postProcessGrid(pattern.mapRgb(rgbArr, size, palette), palette)
+    // 杂色合并默认关闭（预览页提供合并开关），保留邻近色合并与去噪
+    return pattern.postProcessGrid(pattern.mapRgb(rgbArr, size, palette), palette, { minCount: 0, minRatio: 0 })
   }
 })

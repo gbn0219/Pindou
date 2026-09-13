@@ -46,6 +46,14 @@ Page({
     this._autoAligned = false
     this.originalPath = '' // 上传的原图（重新裁剪用）
     this.originalDims = { width: 0, height: 0 }
+    // 主页共用导入入口：已选图后直接进入校准
+    const app = getApp()
+    const input = app.globalData.scanImage
+    if (input && input.path) {
+      delete app.globalData.scanImage
+      this.originalPath = input.path
+      this.setupImage(input.path)
+    }
   },
 
   onShow() {
@@ -98,12 +106,25 @@ Page({
       wx.showToast({ title: '还没有待裁剪的图片', icon: 'none' })
       return
     }
-    getApp().globalData.cropSource = {
-      path: this.originalPath,
-      width: this.originalDims.width,
-      height: this.originalDims.height
+    const openCrop = (width, height) => {
+      getApp().globalData.cropSource = {
+        path: this.originalPath,
+        width,
+        height
+      }
+      wx.navigateTo({ url: '/page/crop/index' })
     }
-    wx.navigateTo({ url: '/page/crop/index' })
+    if (this.originalDims.width && this.originalDims.height) {
+      openCrop(this.originalDims.width, this.originalDims.height)
+      return
+    }
+    wx.getImageInfo({
+      src: this.originalPath,
+      success: (info) => {
+        this.originalDims = { width: info.width, height: info.height }
+        openCrop(info.width, info.height)
+      }
+    })
   },
 
   async setupImage(path) {
@@ -464,7 +485,7 @@ Page({
         return
       }
       const palette = color.buildPalette(this.data.set)
-      res.grid = pattern.postProcessGrid(res.grid, palette, { bgMask: res.bgMask })
+      res.grid = pattern.postProcessGrid(res.grid, palette, { bgMask: res.bgMask, minCount: 0, minRatio: 0 })
       getApp().globalData.pattern = {
         grid: res.grid,
         size: res.size,

@@ -511,7 +511,7 @@ async function imageToGrid(dataUrl, size, setKey, opts) {
   if (opts && opts.cutout) {
     gridBgMask = background.ensureWhiteBackground(grid, color.buildPalette(setKey), gridBgMask)
   }
-  grid = pattern.postProcessGrid(grid, color.buildPalette(setKey), { bgMask: gridBgMask })
+  grid = pattern.postProcessGrid(grid, color.buildPalette(setKey), { bgMask: gridBgMask, minCount: 0, minRatio: 0 })
   let prevImage = ''
   if (opts && opts.savePrev) {
     // 保留"清洗后"的生成图（背景已为白色），供重新生成时作第二张参考图
