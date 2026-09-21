@@ -27,8 +27,8 @@
 .crop-frame {
   position: absolute;
   box-sizing: border-box;
-  border: 2rpx solid var(--color-accent);
-  background: rgba(247, 245, 236, 0.06);
+  border: 2rpx solid #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 .crop-grid {
   position: absolute;
@@ -45,10 +45,10 @@
   position: absolute;
   background: transparent;
 }
-.handle--tl { left: -14rpx; top: -14rpx; width: 28rpx; height: 28rpx; border-left: 6rpx solid var(--color-accent); border-top: 6rpx solid var(--color-accent); }
-.handle--tr { right: -14rpx; top: -14rpx; width: 28rpx; height: 28rpx; border-right: 6rpx solid var(--color-accent); border-top: 6rpx solid var(--color-accent); }
-.handle--bl { left: -14rpx; bottom: -14rpx; width: 28rpx; height: 28rpx; border-left: 6rpx solid var(--color-accent); border-bottom: 6rpx solid var(--color-accent); }
-.handle--br { right: -14rpx; bottom: -14rpx; width: 28rpx; height: 28rpx; border-right: 6rpx solid var(--color-accent); border-bottom: 6rpx solid var(--color-accent); }
+.handle--tl { left: -14rpx; top: -14rpx; width: 28rpx; height: 28rpx; border-left: 6rpx solid #ffffff; border-top: 6rpx solid #ffffff; }
+.handle--tr { right: -14rpx; top: -14rpx; width: 28rpx; height: 28rpx; border-right: 6rpx solid #ffffff; border-top: 6rpx solid #ffffff; }
+.handle--bl { left: -14rpx; bottom: -14rpx; width: 28rpx; height: 28rpx; border-left: 6rpx solid #ffffff; border-bottom: 6rpx solid #ffffff; }
+.handle--br { right: -14rpx; bottom: -14rpx; width: 28rpx; height: 28rpx; border-right: 6rpx solid #ffffff; border-bottom: 6rpx solid #ffffff; }
 .handle--l { left: -14rpx; top: 28rpx; bottom: 28rpx; width: 28rpx; }
 .handle--r { right: -14rpx; top: 28rpx; bottom: 28rpx; width: 28rpx; }
 .handle--t { top: -14rpx; left: 28rpx; right: 28rpx; height: 28rpx; }
@@ -66,14 +66,14 @@
   flex: 1;
   padding: 14rpx 0;
   border-radius: var(--radius-pill);
-  background: rgba(247, 245, 236, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   color: var(--color-paper);
   font-size: var(--text-xs);
   text-align: center;
 }
 .ratio-option--on {
   background: var(--color-accent);
-  color: #ffffff;
+  color: #12171b;
   font-weight: 600;
 }
 .hint {

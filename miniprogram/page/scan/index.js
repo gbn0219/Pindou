@@ -11,6 +11,7 @@ const pattern = require('../../utils/pattern.js')
 const image = require('../../utils/image.js')
 const gesture = require('../../utils/gesture.js')
 const guide = require('../../utils/guide.js')
+const user = require('../../utils/user.js')
 
 const MAX_DIM = 2048 // 工作图最大边长（内存与采样速度折中）
 const FIT_PAD = 16 // 网格与画布四边留白（视口 px），避免画到/滑出屏幕边缘
@@ -74,6 +75,7 @@ Page({
   },
 
   chooseImage() {
+    if (!user.requireLogin('登录后才能导入图纸，去「我的」页登录？')) return
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -91,7 +93,8 @@ Page({
             this.originalPath = file.tempFilePath
             this.originalDims = { width: info.width, height: info.height }
             // 上传后先走裁剪页（复用主流程裁剪页）
-            getApp().globalData.cropSource = { path: file.tempFilePath, width: info.width, height: info.height }
+            // cornerFirst：裁剪框初始只允许拖四角，拖角离开原位后才放开四边
+            getApp().globalData.cropSource = { path: file.tempFilePath, width: info.width, height: info.height, cornerFirst: true }
             wx.navigateTo({ url: '/page/crop/index' })
           },
           fail: () => this.setupImage(file.tempFilePath)
@@ -110,7 +113,8 @@ Page({
       getApp().globalData.cropSource = {
         path: this.originalPath,
         width,
-        height
+        height,
+        cornerFirst: true
       }
       wx.navigateTo({ url: '/page/crop/index' })
     }

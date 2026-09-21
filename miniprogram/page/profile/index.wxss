@@ -3,15 +3,15 @@
 
 .page {
   padding: var(--space-md);
-  padding-bottom: calc(100rpx + env(safe-area-inset-bottom) + var(--space-xl));
+  padding-bottom: calc(var(--space-tabbar) + env(safe-area-inset-bottom));
 }
 
 .card {
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
   padding: var(--space-lg);
-  box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
   margin-bottom: var(--space-md);
 }
 
@@ -71,12 +71,6 @@
   font-weight: 700;
   height: 72rpx;
 }
-.profile-tip {
-  font-size: var(--text-xs);
-  color: var(--color-neutral);
-  font-family: var(--font-label);
-}
-
 .menu-card {
   padding: var(--space-2xs);
 }
@@ -122,10 +116,10 @@
   width: 100%;
   max-width: 640rpx;
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
   padding: var(--space-lg);
-  box-shadow: 0 24rpx 48rpx -16rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
 }
 .modal-title {
   font-size: var(--text-md);
@@ -155,16 +149,17 @@
 .about-logo {
   width: 120rpx;
   height: 120rpx;
-  border-radius: 32rpx;
+  border-radius: var(--radius-card);
   background: var(--color-accent);
-  color: var(--color-accent-ink);
+  color: #12171b;
+  border: 5rpx solid #12171b;
   font-size: var(--text-md);
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto var(--space-sm);
-  box-shadow: 0 8rpx 0 0 var(--color-accent-deep);
+  box-shadow: 6rpx 6rpx 0 var(--color-cast);
 }
 .about-name {
   text-align: center;

@@ -27,6 +27,7 @@ function formatTime(d) {
 Page({
   data: {
     items: [],
+    needLogin: false,
     page: 1,
     totalPages: 1,
     total: 0,
@@ -39,7 +40,20 @@ Page({
     guideInteractive: false
   },
   onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({ selected: 1 }) // 图库为底部中间 tab
+    }
+    // 未登录直接展示登录引导（图库改为 tab 后未登录用户也会进入）
+    const u = getApp().globalData.user
+    if (!u || !(u.openid || u._openid)) {
+      this.setData({ needLogin: true, items: [] })
+      return
+    }
+    this.setData({ needLogin: false })
     this.load(1)
+  },
+  onGoLogin() {
+    wx.switchTab({ url: '/page/profile/index' })
   },
   async load(page) {
     if (this.data.loading) return

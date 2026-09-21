@@ -7,10 +7,10 @@
 
 .card {
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
   padding: var(--space-lg);
-  box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
   margin-bottom: var(--space-md);
 }
 
@@ -27,8 +27,8 @@
   padding: var(--space-sm);
   box-sizing: border-box;
   border-radius: var(--radius-input);
-  background: var(--color-paper-2);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-base);
   color: var(--color-ink);
 }

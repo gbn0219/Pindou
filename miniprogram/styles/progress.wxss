@@ -16,8 +16,8 @@
   padding: var(--space-lg) var(--space-md);
   border-radius: var(--radius-card);
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
-  box-shadow: 0 24rpx 64rpx -24rpx var(--color-shadow);
+  border: 5rpx solid #12171b;
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
   text-align: center;
 }
 .progress-label {

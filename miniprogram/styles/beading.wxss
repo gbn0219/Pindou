@@ -116,16 +116,15 @@
   top: 20rpx;
   padding: 10rpx 24rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-xs);
   color: var(--color-ink-2);
   z-index: 5;
 }
 
 .beading-bar {
-  background: var(--color-paper);
-  box-shadow: 0 -8rpx 24rpx -16rpx var(--color-shadow);
+  background: #ffffff;
   padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
 }
 .beading-sort {
@@ -213,7 +212,8 @@
 /* 新版全屏拼豆面板：更清晰的分组、排序说明和两个模式 */
 .beading-bar {
   border-radius: 36rpx 36rpx 0 0;
-  padding: 30rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-top: 5rpx solid #12171b;
+  padding: 0 28rpx calc(28rpx + env(safe-area-inset-bottom)); /* 顶部空间由通栏拖动区提供 */
 }
 .beading-sort {
   flex: 1;
@@ -244,8 +244,10 @@
   color: var(--color-ink-2);
 }
 .beading-sort-option--on {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
+  color: #12171b;
   font-weight: 600;
 }
 .fuse-strip {
@@ -256,9 +258,8 @@
 
 /* 按效果图强化：上下留白、卡片式上下文、更清楚的模式与颜色条 */
 .beading-bar {
-  background: linear-gradient(180deg, #fffdf7 0%, var(--color-paper) 100%);
-  border-top: 2rpx solid var(--color-rule);
-  box-shadow: 0 -20rpx 40rpx -28rpx rgba(18, 23, 27, 0.45);
+  background: #ffffff;
+  border-top: 5rpx solid #12171b;
 }
 .beading-context {
   display: flex;
@@ -407,12 +408,16 @@
   bottom: 0;
 }
 
-/* 底部色板：顶部抓取条（浮于面板上缘），收起后保留这条“白边”可拖出 */
+/* 底部色板：顶部通栏拖动区（整行宽热区，不再只有 8rpx 高的小灰条能拖） */
+.beading-drag-zone {
+  flex: none;
+  height: 44rpx;
+  margin: 0 -28rpx; /* 抵消面板左右内边距，热区通栏 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .beading-handle {
-  position: absolute;
-  top: 10rpx;
-  left: 50%;
-  transform: translateX(-50%);
   width: 72rpx;
   height: 8rpx;
   border-radius: 999rpx;
@@ -470,9 +475,18 @@
   border-radius: 999rpx;
 }
 .beading-grid-opt--on {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
+  color: #12171b;
   font-weight: 600;
+}
+
+/* 玻璃流光：多段渐变 + 背景位移动画（本文件内选中块与主页横条共用同一节奏） */
+@keyframes glass-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* 全屏拼豆进出动效：进入一次性动画（fs-enter），退出用 fsLeaving 类驱动 fs-leave */
@@ -511,4 +525,3 @@
   from { transform: scale(0.6); }
   to { transform: scale(1); }
 }
-

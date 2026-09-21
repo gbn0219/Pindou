@@ -8,6 +8,7 @@ const session = require('../../utils/session.js')
 const progressUtil = require('../../utils/progress.js')
 const sec = require('../../utils/sec.js')
 const guide = require('../../utils/guide.js')
+const user = require('../../utils/user.js')
 
 const MIN_SIZE = 15 // 拼豆盘最小边长
 const MAX_SIZE = 208 // 拼豆盘最大边长
@@ -215,6 +216,7 @@ Page({
   },
 
   chooseImage() {
+    if (!user.requireLogin('登录后才能导入图片，去「我的」页登录？')) return
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -275,14 +277,8 @@ Page({
   pickMode(e) {
     const v = e.currentTarget.dataset.value
     if (v !== this.data.mode) this.setData({ mode: v })
-    // 创意/照片还原选中后直接展开选项；图纸识别无选项
-    if (v === 'scan') {
-      if (this.data.aiSheetShow) this.closeAiSheet()
-      this.syncAiSummary()
-      return
-    }
+    // 切换模式只改选中态；具体选项通过下方「图纸选项」摘要条打开
     this.syncAiSummary()
-    this.openAiSheet()
   },
 
   goScan() {
@@ -329,6 +325,7 @@ Page({
 
   generate() {
     if (this.data.generating) return
+    if (!this.requireLogin()) return
     if (!this.data.imagePath) {
       wx.showToast({ title: '请先导入图片', icon: 'none' })
       return
@@ -340,6 +337,11 @@ Page({
     } else {
       this.generateByPhoto()
     }
+  },
+
+  // 未登录统一拦截：导入图片 / 生成 / 识别均需登录后使用
+  requireLogin() {
+    return user.requireLogin('登录后才能使用生成与识别功能，去「我的」页登录？')
   },
 
   async generateByPhoto() {
@@ -364,19 +366,6 @@ Page({
 
   generateByAi() {
     const style = this.getStyle()
-    const app = getApp()
-    const curUser = app.globalData.user
-    if (!(curUser && (curUser.openid || curUser._openid))) {
-      wx.showModal({
-        title: '需要登录',
-        content: '创意生成需要登录后使用，去「我的」页登录？',
-        confirmText: '去登录',
-        success: (r) => {
-          if (r.confirm) wx.switchTab({ url: '/page/profile/index' })
-        }
-      })
-      return
-    }
     wx.showModal({
       title: '创意生成图纸',
       content:

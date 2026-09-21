@@ -25,7 +25,9 @@
     </view>
     <view wx:if="{{!fullscreen}}" class="canvas-hint">双指缩放 - 点击右下角放大进入一键跟拼</view>
     <view wx:if="{{fullscreen}}" class="beading-bar {{beadingDragging ? 'beading-bar--drag' : ''}}" style="height: {{beadingSheetH}}px;">
-        <view class="beading-handle" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd"></view>
+        <view class="beading-drag-zone" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
+          <view class="beading-handle"></view>
+        </view>
         <view class="beading-context" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
           <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
             <view class="beading-color-swatch" style="background: {{item.hex}}"></view>
@@ -114,7 +116,7 @@
         max="10"
         step="1"
         value="{{mergeN}}"
-        activeColor="#f6ce00"
+        activeColor="#c4d3fe"
         block-size="20"
         bindchanging="onMergeSlide"
         bindchange="onMergeSlideDone"
@@ -122,6 +124,7 @@
       <text class="merge-value">≤{{mergeN}}格</text>
       <button class="btn btn--sm merge-btn {{mergeOn ? 'btn--primary' : 'btn--soft'}}" hover-class="btn--pressed" bindtap="onToggleMerge">{{mergeOn ? '取消合并' : '合并'}}</button>
     </view>
+    <view class="merge-hint">将使用格数 ≤ {{mergeN}} 格的零散颜色并入最接近的常用色，N 越大合并越多</view>
     <view class="legend-list">
       <view wx:for="{{legend}}" wx:key="code" class="legend-item">
         <view class="legend-swatch" style="background: {{item.hex}}"></view>

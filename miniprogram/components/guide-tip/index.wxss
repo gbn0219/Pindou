@@ -27,15 +27,15 @@
   z-index: 2;
   border: 4rpx solid var(--color-accent);
   border-radius: var(--radius-input);
-  box-shadow: 0 0 0 10rpx rgba(246, 206, 0, 0.22), 0 8rpx 24rpx rgba(18, 23, 27, 0.25);
+  box-shadow: 0 0 0 10rpx rgba(196, 211, 254, 0.35), 0 8rpx 24rpx rgba(18, 23, 27, 0.25);
   pointer-events: none;
 }
 .gt-ring--pulse {
   animation: gt-pulse 1.4s ease-in-out infinite;
 }
 @keyframes gt-pulse {
-  0%, 100% { box-shadow: 0 0 0 10rpx rgba(246, 206, 0, 0.22), 0 8rpx 24rpx rgba(18, 23, 27, 0.25); }
-  50% { box-shadow: 0 0 0 18rpx rgba(246, 206, 0, 0.34), 0 8rpx 24rpx rgba(18, 23, 27, 0.25); }
+  0%, 100% { box-shadow: 0 0 0 10rpx rgba(196, 211, 254, 0.35), 0 8rpx 24rpx rgba(18, 23, 27, 0.25); }
+  50% { box-shadow: 0 0 0 18rpx rgba(196, 211, 254, 0.55), 0 8rpx 24rpx rgba(18, 23, 27, 0.25); }
 }
 .gt-tapzone {
   position: absolute;
@@ -47,9 +47,9 @@
   box-sizing: border-box;
   padding: 24rpx 28rpx;
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 3rpx solid #12171b;
   border-radius: var(--radius-input);
-  box-shadow: 0 16rpx 48rpx -12rpx var(--color-shadow);
+  box-shadow: 6rpx 6rpx 0 var(--color-cast);
   opacity: 0;
   transform: scale(0.94);
   transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out), left 180ms var(--ease-out), top 180ms var(--ease-out);
@@ -97,13 +97,16 @@
   border-radius: var(--radius-pill);
   background: var(--color-accent);
   color: var(--color-accent-ink);
+  border: 3rpx solid #12171b;
+  box-shadow: 4rpx 4rpx 0 var(--color-cast);
   font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1;
   transition: transform var(--dur-micro) var(--ease-out);
 }
 .gt-btn--pressed {
-  transform: scale(0.94);
+  transform: translateY(2rpx) scale(0.94);
+  box-shadow: 1rpx 1rpx 0 var(--color-cast);
 }
 .gt-skip {
   position: fixed;

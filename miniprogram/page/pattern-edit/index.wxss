@@ -7,9 +7,9 @@
 }
 .card {
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
-  box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
   margin-bottom: var(--space-md);
   padding: var(--space-md);
 }
@@ -74,9 +74,8 @@
   margin: var(--space-sm) calc(-1 * var(--space-md)) 0;
   padding: var(--space-sm) var(--space-md) calc(var(--space-sm) + env(safe-area-inset-bottom));
   background: var(--color-card);
-  border-top: 2rpx solid var(--color-rule);
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
-  box-shadow: 0 -8rpx 24rpx -16rpx var(--color-shadow);
+  border-top: 5rpx solid #12171b;
+  border-radius: 24rpx 24rpx 0 0;
 }
 .palette-scroll {
   height: 100%;
@@ -109,9 +108,9 @@
   transition: transform var(--dur-micro) var(--ease-out), border-color var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out);
 }
 .palette-box--on {
-  border-color: var(--color-accent-3);
-  background: var(--color-paper);
-  box-shadow: 0 6rpx 16rpx -8rpx var(--color-shadow);
+  border-color: #12171b;
+  background: #ffffff;
+  box-shadow: 2rpx 2rpx 0 var(--color-cast);
 }
 .palette-box--pressed {
   transform: translateY(2rpx) scale(0.93);
@@ -138,8 +137,8 @@
   text-align: center;
   padding: 12rpx 0;
   border-radius: var(--radius-pill);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-xs);
   color: var(--color-ink-2);
   transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
@@ -148,16 +147,19 @@
   opacity: 0.4;
 }
 .mode-chip--on {
-  background: var(--color-ink);
+  /* 浅色磨砂玻璃：选中项不再纯黑 */
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
   border-color: var(--color-ink);
-  color: var(--color-paper);
+  color: #12171b;
   font-weight: 600;
 }
 .mode-chip--pressed {
   transform: translateY(2rpx) scale(0.94);
 }
 .palette-box--src {
-  border-color: var(--color-accent);
+  border-color: #12171b;
   box-shadow: 0 0 0 4rpx var(--color-accent);
 }
 

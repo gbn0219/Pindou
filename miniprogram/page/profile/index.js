@@ -12,7 +12,6 @@ function withTimeout(promise, ms) {
 Page({
   data: {
     user: null,
-    openidTail: '',
     loading: false,
     uploading: false,
     avatarBroken: false,
@@ -39,7 +38,7 @@ Page({
   },
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({ selected: 1 })
+      this.getTabBar().setData({ selected: 2 })
     }
     if (!this.data.user) {
       this.refresh()
@@ -55,7 +54,7 @@ Page({
       const u = loggedOut ? null : (app.globalData.user || wx.getStorageSync('user') || null)
       if (u && (u.openid || u._openid)) {
         if (!u.openid && u._openid) u.openid = u._openid
-        this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
+        this.setData({ user: u })
       }
     } catch (e) {
       // 缓存读取失败不影响登录流程
@@ -64,12 +63,12 @@ Page({
   async refresh() {
     try {
       const u = await getApp().ensureLogin()
-      this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
+      this.setData({ user: u })
     } catch (e) {
       console.error('登录状态刷新失败', e)
       // 刷新失败时保留缓存资料，已登录用户不会闪回登录页
       const cached = getApp().globalData.user || (wx.getStorageSync('user') || null)
-      if (!cached) this.setData({ user: null, openidTail: '' })
+      if (!cached) this.setData({ user: null })
     }
     setTimeout(() => this.maybeStartGuide(), 500)
   },
@@ -80,7 +79,7 @@ Page({
       app.globalData.loggedOut = false
       wx.removeStorageSync('loggedOut')
       const u = await app.ensureLogin()
-      this.setData({ user: u, openidTail: (u.openid || u._openid || '').slice(-6) })
+      this.setData({ user: u })
       setTimeout(() => this.maybeStartGuide(), 500)
     } catch (e) {
       wx.showToast({ title: (e && e.message) || '登录失败', icon: 'none' })
@@ -163,7 +162,7 @@ Page({
         app.globalData.user = null
         wx.removeStorageSync('user')
         wx.setStorageSync('loggedOut', true)
-        this.setData({ user: null, openidTail: '', avatarBroken: false, uploading: false, avatarPreview: '' })
+        this.setData({ user: null, avatarBroken: false, uploading: false, avatarPreview: '' })
         wx.showToast({ title: '已退出登录', icon: 'none' })
       }
     })
@@ -172,7 +171,8 @@ Page({
     wx.switchTab({ url: '/page/index/index' })
   },
   goGallery() {
-    wx.navigateTo({ url: '/page/gallery/index' })
+    // 图库已改为底部 tab（中间），切换过去并高亮中间栏
+    wx.switchTab({ url: '/page/gallery/index' })
   },
   showFaq() {
     this.setData({ faqShow: true })

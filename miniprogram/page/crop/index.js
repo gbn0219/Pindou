@@ -1,6 +1,9 @@
 // miniprogram/page/crop/index.js
 const MIN_SIZE = 40 // 裁剪框最小边长 px
 const HIT = 24 // 命中边/角的阈值 px
+
+const HINT_FREE = '拖动框内部移动，拖动四边或四角调整大小'
+const HINT_CORNER = '先拖四角缩小裁剪框，框离开原位后才能拖四边'
 const RATIOS = {
   '1:1': [1, 1],
   '4:3': [4, 3],
@@ -21,7 +24,9 @@ Page({
     frameH: 0,
     frameX: 0,
     frameY: 0,
-    ratio: 'free'
+    ratio: 'free',
+    hint: HINT_FREE,
+    edgesReady: true
   },
 
   onLoad() {
@@ -32,12 +37,14 @@ Page({
       return
     }
     this.source = src
+    this.cornerFirst = !!src.cornerFirst // 识别图纸：初始只允许拖四角，避免拖边把整框带偏
     const sys = wx.getSystemInfoSync()
     const stageW = sys.windowWidth - 32
     const stageH = sys.windowHeight - 64 - 180
     const scale = Math.min(stageW / src.width, stageH / src.height, 1)
     const imgW = Math.max(40, Math.round(src.width * scale))
     const imgH = Math.max(40, Math.round(src.height * scale))
+    this.startFrame = { x: 0, y: 0, w: imgW, h: imgH } // 初始裁剪框 = 整张图
     this.setData({
       sourcePath: src.path,
       imgW,
@@ -45,7 +52,9 @@ Page({
       frameW: imgW,
       frameH: imgH,
       frameX: 0,
-      frameY: 0
+      frameY: 0,
+      hint: this.cornerFirst ? HINT_CORNER : HINT_FREE,
+      edgesReady: !this.cornerFirst
     })
   },
 
@@ -74,6 +83,22 @@ Page({
       frameX: Math.round((d.imgW - w) / 2),
       frameY: Math.round((d.imgH - h) / 2)
     })
+    this.syncFrameHint()
+  },
+
+  // 裁剪框是否还停在初始位置（未动过）
+  atStartFrame() {
+    const d = this.data
+    const s = this.startFrame
+    return !!s && d.frameX === s.x && d.frameY === s.y && d.frameW === s.w && d.frameH === s.h
+  },
+
+  // 识别图纸：裁剪框离开初始位置后才放开四边（初始只认四角）
+  syncFrameHint() {
+    if (!this.cornerFirst) return
+    const ready = !this.atStartFrame()
+    if (ready === this.data.edgesReady) return
+    this.setData({ edgesReady: ready, hint: ready ? HINT_FREE : HINT_CORNER })
   },
 
   onFrameTouchStart(e) {
@@ -87,7 +112,11 @@ Page({
     const nearRight = lx >= d.frameW - HIT
     const nearTop = ly <= HIT
     const nearBottom = ly >= d.frameH - HIT
-    if (nearLeft || nearRight || nearTop || nearBottom) {
+    const corner = (nearLeft || nearRight) && (nearTop || nearBottom)
+    const edge = nearLeft || nearRight || nearTop || nearBottom
+    // cornerFirst（识别图纸）：框还铺在初始位置时只认四角，拖角缩小离开原位后才认四边
+    const canResize = this.cornerFirst ? corner || (edge && !this.atStartFrame()) : edge
+    if (canResize) {
       this._drag = {
         mode: 'resize',
         startX: t.clientX,
@@ -179,6 +208,7 @@ Page({
 
   onFrameTouchEnd() {
     this._drag = null
+    this.syncFrameHint()
   },
 
   cancel() {

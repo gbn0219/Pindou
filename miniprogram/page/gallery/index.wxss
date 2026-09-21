@@ -3,7 +3,8 @@
 
 .page {
   padding: var(--space-md);
-  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
+  /* 图库改为底部 tab：留出自定义 tabBar 高度 */
+  padding-bottom: calc(var(--space-tabbar) + env(safe-area-inset-bottom));
 }
 
 .gallery-head {
@@ -11,6 +12,26 @@
   color: var(--color-neutral);
   margin-bottom: var(--space-sm);
   flex: none;
+}
+
+/* 未登录空态：与「我的」页登录卡同款 */
+.login-card {
+  background: var(--color-card);
+  border: 5rpx solid #12171b;
+  border-radius: var(--radius-card);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
+  padding: var(--space-lg) var(--space-md);
+  text-align: center;
+}
+.login-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.login-sub {
+  margin: var(--space-2xs) 0 var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
 }
 
 .gallery-grid {
@@ -24,10 +45,10 @@
   width: 100%;
   max-width: 640rpx;
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
   padding: var(--space-xs);
-  box-shadow: 0 12rpx 24rpx -12rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
 }
 .pair-thumbs {
   display: flex;
@@ -119,24 +140,24 @@
   align-items: center;
   justify-content: center;
   color: var(--color-ink-2);
-  background: var(--color-paper-2);
-  border: 2rpx solid var(--color-rule);
-  box-shadow: 0 6rpx 0 0 var(--color-rule), 0 10rpx 20rpx -10rpx var(--color-shadow);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
+  box-shadow: 4rpx 4rpx 0 var(--color-cast);
 }
 .pair-btn .ico {
   transform: scale(1.3);
 }
 .pair-btn--primary {
-  color: var(--color-ink-2);
+  color: #12171b;
   background: var(--color-accent);
-  border-color: var(--color-accent-deep);
-  box-shadow: 0 8rpx 0 0 var(--color-accent-deep), 0 12rpx 24rpx -8rpx var(--color-cast);
+  border: 3rpx solid #12171b;
+  box-shadow: 4rpx 4rpx 0 var(--color-cast);
 }
 .pair-btn--danger {
   color: var(--color-accent-3);
-  background: rgba(255, 58, 93, 0.08);
-  border-color: rgba(255, 58, 93, 0.16);
-  box-shadow: 0 6rpx 0 0 rgba(255, 58, 93, 0.2), 0 10rpx 20rpx -10rpx var(--color-shadow);
+  background: rgba(255, 58, 93, 0.12);
+  border: 3rpx solid #ff3a5d;
+  box-shadow: 4rpx 4rpx 0 rgba(255, 58, 93, 0.35);
 }
 .pair-label {
   margin-top: 7rpx; /* 下移约 1/3 字高（字号 20rpx 的 1/3） */
@@ -220,15 +241,24 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
+  box-shadow: 3rpx 3rpx 0 var(--color-cast);
   font-size: var(--text-sm);
 }
 .pager-num--on {
-  background: var(--color-ink);
+  /* 浅色磨砂玻璃：选中页码不再纯黑 */
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
   border-color: var(--color-ink);
-  color: var(--color-paper);
+  color: #12171b;
   font-weight: 700;
+}
+@keyframes glass-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 .pager-btn--disabled {
   opacity: 0.4;

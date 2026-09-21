@@ -1,28 +1,38 @@
 /* custom-tab-bar/index.wxss */
+/* 悬浮胶囊：白底墨边、圆角胶囊、浮在安全区之上；选中项填充主色浅紫 */
 .tab-bar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 100rpx;
-  padding-bottom: env(safe-area-inset-bottom);
-  box-sizing: content-box;
+  left: 32rpx;
+  right: 32rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
   display: flex;
+  align-items: center;
+  padding: 10rpx;
+  box-sizing: border-box;
   background: #ffffff;
-  border-top: 4rpx solid #12171b;
+  border: 5rpx solid #12171b;
+  border-radius: 999rpx;
+  box-shadow: 0 16rpx 40rpx -14rpx rgba(18, 23, 27, 0.42);
   z-index: 999;
-  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1), opacity 240ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .tab-bar--hidden {
-  transform: translateY(100%);
+  transform: translateY(calc(100% + 64rpx));
+  opacity: 0;
 }
 .tab-item {
   flex: 1;
+  height: 104rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4rpx;
+  border-radius: 999rpx;
+  transition: background-color 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tab-item--on {
+  background: #c4d3fe;
 }
 .tab-icon {
   width: 48rpx;

@@ -207,13 +207,9 @@ Page({
           const innerW = areaW - ruler * 2
           const innerH = areaH - ruler * 2
           if (this.data.fullscreen) {
-            // 全屏拼豆：铺满宽度并顶齐上边（下边可延伸到色板下方，可拖动查看）
-            const scale = Math.max(0.05, innerW / total)
-            this.view = {
-              scale,
-              ox: ruler + (innerW - total * scale) / 2,
-              oy: ruler
-            }
+            // 全屏拼豆：图纸 + 四周各一圈编号格正好铺满画布宽度（编号环厚一格）
+            const fit = pattern.rulerFitView(total, cell, pattern.GAP, innerW)
+            this.view = { scale: fit.scale, ox: fit.ox, oy: fit.oy }
           } else {
             const scale = Math.max(0.05, Math.min(1, Math.min(innerW, innerH) / total))
             this.view = {
@@ -277,7 +273,9 @@ Page({
     // 全屏拼豆：拖拽边界按色板上方可见区计算，并给足余量，几乎不会拖到头
     const sheetH = this.data.fullscreen ? this.data.beadingSheetH || 0 : 0
     const free = this.data.fullscreen ? FS_PAN_FREE : 0
-    this.view = gesture.clampView(this.view, total, area.width, area.height - sheetH, 0, free)
+    // 全屏时四周有编号带，拖拽边界把带子一并算进内容
+    const band = this.data.fullscreen ? (cell + pattern.GAP) * 2 : 0
+    this.view = gesture.clampView(this.view, total + band, area.width, area.height - sheetH, 0, free)
   },
 
   drawGrid() {
@@ -305,8 +303,10 @@ Page({
         dpr: this.dpr || 1
       })
     }
-    // 坐标轴固定在画布四周（屏幕空间），不随内容缩放/移动；密度按可见格数自适应
-    // 坐标条已收起，让图纸铺满画布
+    // 四周行列号环（跟拼全屏）：贴画布四边、厚一格，逐格显示当前可视行列号（缩小时也不合并）
+    if (this.data.fullscreen) {
+      pattern.renderRulers(this.ctx, this.view, this.pattern.size, this.displayCell || pattern.CELL, pattern.GAP, area.width, area.height, this.dpr || 1)
+    }
   },
 
   redraw() {
@@ -494,8 +494,8 @@ Page({
       winW = info.windowWidth || 375
     } catch (err) {}
     this.beadingMaxH = Math.max(240, Math.round(winH * 0.45))
-    // 折叠高度按屏宽自适应（约 125rpx）：只露出当前颜色+拼完了+排序一行
-    this.beadingMinH = Math.round(125 * winW / 750)
+    // 折叠高度按屏宽自适应（约 140rpx，含顶部拖动条）：只露出当前颜色+拼完了+排序一行
+    this.beadingMinH = Math.round(140 * winW / 750)
     this.setData({
       fullscreen: true,
       beadingSheetH: this.beadingMaxH,

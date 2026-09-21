@@ -7,25 +7,36 @@
 
 .hero {
   padding: var(--space-lg) var(--space-md) var(--space-md);
+  /* 深色极光玻璃（与主页横条一致） */
+  background-image: linear-gradient(115deg, #1a2030 0%, #2c3a6e 16%, #5a4fc0 34%, #3e8fc9 52%, #7a5fd0 70%, #2c3a6e 86%, #1a2030 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.4);
+}
+@keyframes glass-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 .hero-title {
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 600;
   letter-spacing: -0.025em;
-  color: var(--color-ink);
+  color: #e6c4fe;
 }
 .hero-sub {
   margin-top: var(--space-2xs);
   font-size: var(--text-sm);
-  color: var(--color-ink-2);
+  color: rgba(255, 255, 255, 0.76);
 }
 
 .card {
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
-  box-shadow: 0 12rpx 32rpx -16rpx var(--color-shadow);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
   margin: 0 var(--space-md) var(--space-md);
   padding: var(--space-md);
   transition: transform var(--dur-micro) var(--ease-out);
@@ -37,10 +48,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 3rpx dashed var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
-  background: var(--color-paper-2);
-  box-shadow: none;
+  background: #ffffff;
+  box-shadow: 10rpx 10rpx 0 rgba(18, 23, 27, 0.42);
   overflow: hidden;
 }
 .import-card--pressed {
@@ -117,7 +128,7 @@
 .panel {
   padding: var(--space-sm) var(--space-md) calc(var(--space-md) + env(safe-area-inset-bottom));
   background: var(--color-card);
-  border-top: 2rpx solid var(--color-rule);
+  border-top: 5rpx solid #12171b;
 }
 
 .cells-row {
@@ -142,8 +153,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-input);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-md);
   color: var(--color-ink);
 }
@@ -172,16 +183,19 @@
   text-align: center;
   padding: 18rpx 0;
   border-radius: var(--radius-pill);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-sm);
   color: var(--color-ink-2);
   transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
 }
 .chip--on {
-  background: var(--color-ink);
+  /* 浅色磨砂玻璃：选中 chip 不再纯黑 */
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
   border-color: var(--color-ink);
-  color: var(--color-paper);
+  color: #12171b;
   font-weight: 600;
 }
 .chip--pressed {
@@ -229,8 +243,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   font-size: var(--text-xs);
   color: var(--color-ink-2);
   transition: transform var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out);
@@ -253,8 +267,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-input);
-  background: var(--color-paper);
-  border: 2rpx solid var(--color-rule);
+  background: #ffffff;
+  border: 3rpx solid #12171b;
   transition: transform var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out);
 }
 .dpad-btn--up { grid-column: 2; grid-row: 1; }

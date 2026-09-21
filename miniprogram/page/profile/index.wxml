@@ -22,7 +22,6 @@
           bindconfirm="onNicknameBlur"
           confirm-type="done"
         />
-        <view class="profile-tip">ID：{{openidTail}}</view>
       </view>
     </view>
 

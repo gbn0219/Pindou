@@ -2,7 +2,7 @@
   <view
     wx:for="{{list}}"
     wx:key="pagePath"
-    class="tab-item"
+    class="tab-item {{selected === index ? 'tab-item--on' : ''}}"
     data-index="{{index}}"
     bindtap="switchTab"
   >

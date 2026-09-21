@@ -88,7 +88,7 @@
   </view>
 
   <button
-    class="btn btn--lg generate {{mode === 'scan' ? 'btn--scan' : 'btn--primary'}}"
+    class="btn btn--lg generate btn--primary"
     hover-class="btn--pressed"
     disabled="{{generating}}"
     bindtap="generate"

@@ -25,10 +25,25 @@ function call(name, action, data) {
 }
 function login() { return call('account', 'login') }
 function saveProfile(payload) { return call('account', 'saveProfile', payload).then((r) => r.user) }
+// 未登录拦截（UI 层）：已登录返回 true；未登录弹窗提示并引导去「我的」页登录，返回 false
+function requireLogin(content) {
+  const app = getApp()
+  const u = (app && app.globalData && app.globalData.user) || null
+  if (u && (u.openid || u._openid)) return true
+  wx.showModal({
+    title: '需要登录',
+    content: content || '登录后才能使用该功能，去「我的」页登录？',
+    confirmText: '去登录',
+    success: (r) => {
+      if (r.confirm) wx.switchTab({ url: '/page/profile/index' })
+    }
+  })
+  return false
+}
 function submitFeedback(payload) { return call('feedback', 'submit', payload) }
 function saveGallery(payload) { return call('gallery', 'save', payload) }
 function listGallery(page, pageSize) { return call('gallery', 'list', { page, pageSize }) }
 function getGalleryItem(id) { return call('gallery', 'get', { id }) }
 function updateGallery(payload) { return call('gallery', 'update', payload) }
 function deleteGallery(id) { return call('gallery', 'delete', { id }) }
-module.exports = { call, login, saveProfile, submitFeedback, saveGallery, listGallery, getGalleryItem, updateGallery, deleteGallery }
+module.exports = { call, login, saveProfile, requireLogin, submitFeedback, saveGallery, listGallery, getGalleryItem, updateGallery, deleteGallery }

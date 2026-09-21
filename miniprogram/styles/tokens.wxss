@@ -3,26 +3,26 @@
  * 适配说明：WXSS 对 oklch() 支持不确定 → 已换算为 hex；小程序无法加载 Web 字体 → 系统圆体栈
  */
 page {
-  --color-paper: #f7f5ec;
-  --color-paper-2: #eeebdf;
-  --color-paper-3: #e5e1d3;
+  --color-paper: #e6c4fe;
+  --color-paper-2: rgba(255, 255, 255, 0.72);
+  --color-paper-3: rgba(255, 255, 255, 0.58);
   --color-ink: #12171b;
-  --color-ink-2: #4d5660;
-  --color-neutral: #7a8189;
-  --color-rule: #d1cec3;
-  --color-accent: #f6ce00;
-  --color-accent-deep: #e6b900;
+  --color-ink-2: rgba(18, 23, 27, 0.68);
+  --color-neutral: rgba(18, 23, 27, 0.48);
+  --color-rule: #12171b;
+  --color-accent: #c4d3fe;
+  --color-accent-deep: #12171b;
   --color-accent-3: #ff3a5d;
   --color-mint: #66da85;
   --color-lavender: #c28efb;
   --color-focus: #007cca;
   --color-accent-ink: #12171b;
-  --color-card: #fffdf7;
-  --color-bead-hi: #fff3b8;
-  --color-cast-strong: rgba(120, 90, 0, 0.28);
+  --color-card: #ffffff;
+  --color-bead-hi: #ffffff;
+  --color-cast-strong: rgba(18, 23, 27, 0.28);
   --color-shadow-inset: rgba(18, 23, 27, 0.1);
   --color-shadow: rgba(18, 23, 27, 0.12);
-  --color-cast: rgba(230, 185, 0, 0.45);
+  --color-cast: rgba(18, 23, 27, 0.42);
   --font-display: "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-body: "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-label: "SF Mono", Consolas, monospace;
@@ -34,14 +34,16 @@ page {
   --space-lg: 48rpx;
   --space-xl: 80rpx;
   --space-2xl: 128rpx;
+  /* 悬浮 tabBar 占位：上沿 158rpx + 空隙 32rpx，tab 页底部留白统一用它 */
+  --space-tabbar: 190rpx;
   --text-xs: 20rpx;
   --text-sm: 26rpx;
   --text-base: 32rpx;
   --text-md: 40rpx;
   --text-lg: 50rpx;
   --text-xl: 62rpx;
-  --radius-card: 40rpx;
-  --radius-input: 24rpx;
+  --radius-card: 20rpx;
+  --radius-input: 16rpx;
   --radius-pill: 999rpx;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
@@ -56,6 +58,7 @@ page {
   --z-sticky: 200;
   --z-modal: 400;
   background: var(--color-paper);
+  background-image: linear-gradient(140deg, #e6c4fe 0%, #c4d3fe 34%, #a8e6ff 68%, #d2c4fe 100%);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -87,33 +90,45 @@ page {
 .btn--primary {
   background: var(--color-accent);
   color: var(--color-accent-ink);
-  box-shadow: 0 8rpx 0 0 var(--color-accent-deep), 0 12rpx 24rpx -6rpx var(--color-cast);
-  transition: transform var(--dur-bounce) var(--ease-bounce), box-shadow var(--dur-micro) var(--ease-out);
+  border: 5rpx solid #12171b;
+  border-radius: 20rpx;
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
+  transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
 }
 .btn--primary.btn--pressed {
   transform: translateY(3rpx) scale(0.95);
-  transition: transform 70ms var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
-  box-shadow: 0 2rpx 0 0 var(--color-accent-deep), 0 10rpx 22rpx -10rpx var(--color-cast);
+  box-shadow: 2rpx 2rpx 0 var(--color-cast);
 }
 .btn--primary[disabled] {
-  opacity: 0.5;
-  box-shadow: 0 8rpx 0 0 var(--color-accent-deep);
+  background: #ddd9ea;
+  border-color: rgba(18, 23, 27, 0.32);
+  color: rgba(18, 23, 27, 0.42);
+  box-shadow: none;
 }
 .btn--soft {
-  background: var(--color-paper-2);
+  background: #ffffff;
   color: var(--color-ink);
-  border: 2rpx solid var(--color-rule);
-  transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-bounce) var(--ease-bounce);
+  border: 5rpx solid #12171b;
+  border-radius: 20rpx;
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
+  transition: transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-micro) var(--ease-out);
 }
 .btn--soft.btn--pressed {
-  background: var(--color-paper-3);
-  transform: translateY(2rpx) scale(0.94);
-  transition: background-color var(--dur-micro) var(--ease-out), transform 100ms var(--ease-out);
+  transform: translateY(3rpx) scale(0.95);
+  box-shadow: 2rpx 2rpx 0 var(--color-cast);
+}
+.btn--soft[disabled] {
+  opacity: 0.5;
+  box-shadow: none;
 }
 .btn--sm {
   height: 72rpx;
   padding: 0 var(--space-md);
   font-size: var(--text-sm);
+  box-shadow: 4rpx 4rpx 0 var(--color-cast);
+}
+.btn--sm.btn--pressed {
+  box-shadow: 1rpx 1rpx 0 var(--color-cast);
 }
 .btn--lg {
   width: 100%;

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>玻璃流光按钮预览 · 方案对比</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #eef0f4;
+    padding: 32px 16px 64px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 40px;
+  }
+  .panel { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .panel-title { font-size: 15px; font-weight: 700; color: #12171b; }
+  .panel-sub { font-size: 12px; color: #7a8189; }
+
+  /* 手机框：内部复刻小程序首页观感 */
+  .phone {
+    width: 375px;
+    height: 760px;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -24px rgba(18, 23, 27, 0.4), 0 0 0 1px rgba(18,23,27,0.08);
+    background: linear-gradient(140deg, #e6c4fe 0%, #c4d3fe 34%, #a8e6ff 68%, #d2c4fe 100%);
+    padding: 0 16px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .card {
+    background: #fff;
+    border: 2px solid #12171b;
+    border-radius: 10px;
+    box-shadow: 4px 4px 0 rgba(18, 23, 27, 0.42);
+    padding: 14px;
+    margin-top: 12px;
+  }
+
+  /* ===== 顶部横条：通栏顶到最上面 ===== */
+  .hero {
+    margin: 0 -16px;          /* 抵消手机左右留白 → 通栏 */
+    padding: 22px 16px 18px;  /* 顶部无任何空隙，贴住屏幕最上沿 */
+    background-size: 100% 100%;
+    animation: none;
+  }
+  .hero-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero-sub { margin-top: 4px; font-size: 12px; opacity: 0.76; }
+
+  /* ===== 玻璃流光（共用机制）：多段渐变 + 300% 尺寸 + background-position 缓慢循环 ===== */
+  @keyframes flow {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .glass {
+    background-size: 300% 300%;
+    animation: flow 8s ease-in-out infinite;
+    position: relative;
+    overflow: hidden;
+  }
+  /* 玻璃高光：顶部一条亮边 + 内侧柔光，不依赖 backdrop-filter */
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 42%);
+    pointer-events: none;
+  }
+
+  /* 方案一：深色极光玻璃（白字） */
+  .glass-dark {
+    background-image: linear-gradient(115deg,
+      #1a2030 0%, #2c3a6e 16%, #5a4fc0 34%, #3e8fc9 52%, #7a5fd0 70%, #2c3a6e 86%, #1a2030 100%);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      0 8px 20px -10px rgba(24, 28, 70, 0.6);
+  }
+
+  /* 方案二：浅色磨砂玻璃（深字） */
+  .glass-light {
+    background-image: linear-gradient(115deg,
+      rgba(255,255,255,0.78) 0%, rgba(216,206,255,0.72) 24%, rgba(178,224,255,0.66) 50%,
+      rgba(226,204,255,0.72) 76%, rgba(255,255,255,0.78) 100%);
+    color: #12171b;
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 8px 20px -12px rgba(18, 23, 27, 0.35);
+  }
+
+  /* ===== 首页元素复刻 ===== */
+  .mode-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px; margin-top: 10px;
+    background: #fff; border: 2px solid #12171b; border-radius: 10px;
+    box-shadow: 4px 4px 0 rgba(18, 23, 27, 0.42);
+  }
+  .mode-card.on { border-color: rgba(255,255,255,0.5); box-shadow: 4px 4px 0 rgba(18,23,27,0.28); }
+  .mode-ico { font-size: 18px; }
+  .mode-t { font-size: 15px; font-weight: 700; }
+  .mode-d { font-size: 11px; opacity: 0.68; margin-top: 2px; }
+  .mode-arrow { margin-left: auto; font-size: 20px; opacity: 0.6; }
+
+  .summary {
+    margin-top: 10px; padding: 9px 12px;
+    background: #fff; border: 2px solid #12171b; border-radius: 10px;
+    box-shadow: 4px 4px 0 rgba(18, 23, 27, 0.42);
+    font-size: 11px; color: rgba(18,23,27,0.68);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .summary b { font-weight: 600; }
+
+  .btn-main {
+    margin-top: 14px; height: 46px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600;
+  }
+  .chip-row { display: flex; gap: 8px; margin-top: 12px; }
+  .chip {
+    flex: 1; text-align: center; padding: 9px 0;
+    background: #fff; border: 1.5px solid #12171b; border-radius: 999px;
+    font-size: 12px; color: rgba(18,23,27,0.68);
+  }
+  .chip.on { font-weight: 600; border-color: rgba(255,255,255,0.55); box-shadow: 2px 2px 0 rgba(18,23,27,0.25); }
+  .note {
+    margin-top: auto; font-size: 11px; color: rgba(18,23,27,0.55);
+    padding: 14px 2px 0; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+  <div class="panel">
+    <div class="panel-title">方案一 · 深色极光玻璃（推荐）</div>
+    <div class="panel-sub">深蓝→紫→青流光 · 白字，对比强、可读性好</div>
+    <div class="phone">
+      <div class="hero glass glass-dark" style="border-left:0;border-right:0;border-top:0;">
+        <div class="hero-title">今天拼豆吗</div>
+        <div class="hero-sub">一张图，变成一盒豆。</div>
+      </div>
+
+      <div class="card" style="padding:26px 14px;text-align:center;">
+        <div style="font-size:14px;font-weight:600;">＋ 点击导入图片</div>
+        <div style="font-size:11px;color:rgba(18,23,27,0.55);margin-top:4px;">从相册选择，或拍一张</div>
+      </div>
+
+      <div class="mode-card on glass glass-dark">
+        <span class="mode-ico">✨</span>
+        <div><div class="mode-t">创意生成</div><div class="mode-d" style="opacity:.72;">创意生成拼豆图纸</div></div>
+        <span class="mode-arrow">›</span>
+      </div>
+      <div class="mode-card">
+        <span class="mode-ico">🖼️</span>
+        <div><div class="mode-t">照片还原</div><div class="mode-d">照片还原拼豆图纸</div></div>
+        <span class="mode-arrow">›</span>
+      </div>
+
+      <div class="summary"><span><b>卡通 · 抠出主体</b> · 221色 · 52×52</span><span>点此修改图纸选项 ›</span></div>
+
+      <div class="btn-main glass glass-dark">识别图纸</div>
+
+      <div class="chip-row">
+        <div class="chip">48 色</div><div class="chip">72 色</div><div class="chip">144 色</div>
+        <div class="chip on glass glass-dark">221 色</div>
+      </div>
+
+      <div class="note">顶部横条已演示「顶到最上面」；所有原纯黑元素（横条 / 选中模式卡 / 识别按钮 / 选中chip）统一为同一套流光玻璃。</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">方案二 · 浅色磨砂玻璃</div>
+    <div class="panel-sub">白/淡紫半透明流光 · 深字，整体更轻更“玻璃”</div>
+    <div class="phone">
+      <div class="hero glass glass-light" style="border-left:0;border-right:0;border-top:0;">
+        <div class="hero-title">今天拼豆吗</div>
+        <div class="hero-sub">一张图，变成一盒豆。</div>
+      </div>
+
+      <div class="card" style="padding:26px 14px;text-align:center;">
+        <div style="font-size:14px;font-weight:600;">＋ 点击导入图片</div>
+        <div style="font-size:11px;color:rgba(18,23,27,0.55);margin-top:4px;">从相册选择，或拍一张</div>
+      </div>
+
+      <div class="mode-card on glass glass-light">
+        <span class="mode-ico">✨</span>
+        <div><div class="mode-t">创意生成</div><div class="mode-d">创意生成拼豆图纸</div></div>
+        <span class="mode-arrow">›</span>
+      </div>
+      <div class="mode-card">
+        <span class="mode-ico">🖼️</span>
+        <div><div class="mode-t">照片还原</div><div class="mode-d">照片还原拼豆图纸</div></div>
+        <span class="mode-arrow">›</span>
+      </div>
+
+      <div class="summary"><span><b>卡通 · 抠出主体</b> · 221色 · 52×52</span><span>点此修改图纸选项 ›</span></div>
+
+      <div class="btn-main glass glass-light">识别图纸</div>
+
+      <div class="chip-row">
+        <div class="chip">48 色</div><div class="chip">72 色</div><div class="chip">144 色</div>
+        <div class="chip on glass glass-light">221 色</div>
+      </div>
+
+      <div class="note">浅色方案里选中卡与按钮的存在感更弱（靠描边/阴影区分）；白字按钮会改为深字。</div>
+    </div>
+  </div>
+
+</body>
+</html>

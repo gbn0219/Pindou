@@ -1,7 +1,6 @@
 <view class="page">
   <view class="top-bar">
     <block wx:if="{{!cropActive}}">
-      <button class="btn btn--soft btn--sm" wx:if="{{fromGallery}}" hover-class="btn--pressed" disabled="{{saving}}" bindtap="save">保存</button>
       <button class="btn btn--soft btn--sm" hover-class="btn--pressed" bindtap="finish">完成</button>
       <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canUndo}}" bindtap="undo">撤销</button>
       <button class="btn btn--soft btn--sm" hover-class="btn--pressed" disabled="{{!canRedo}}" bindtap="redo">重做</button>
@@ -34,7 +33,9 @@
     </view>
     <view wx:if="{{!fullscreen && !cropActive}}" class="canvas-hint">双指缩放 - 点击右下角放大进入一键跟拼</view>
     <view wx:if="{{fullscreen}}" class="beading-bar {{beadingDragging ? 'beading-bar--drag' : ''}}" style="height: {{beadingSheetH}}px;">
-        <view class="beading-handle" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd"></view>
+        <view class="beading-drag-zone" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
+          <view class="beading-handle"></view>
+        </view>
         <view class="beading-context" bindtouchstart="onBeadingSheetStart" catchtouchmove="onBeadingSheetMove" bindtouchend="onBeadingSheetEnd" bindtouchcancel="onBeadingSheetEnd">
           <view class="beading-color" wx:for="{{fuseLegend}}" wx:key="code" wx:if="{{item.code === buildCurrent}}">
             <view class="beading-color-swatch" style="background: {{item.hex}}"></view>

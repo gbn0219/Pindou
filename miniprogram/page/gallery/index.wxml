@@ -1,4 +1,10 @@
 <view class="page">
+  <view wx:if="{{needLogin}}" class="login-card">
+    <view class="login-title">登录后查看我的图库</view>
+    <view class="login-sub">登录后可保存图纸到图库，并随时查看</view>
+    <button class="btn btn--primary btn--lg" hover-class="btn--pressed" bindtap="onGoLogin">微信一键登录</button>
+  </view>
+  <block wx:else>
   <view class="gallery-head">我的图库 · 共 {{total}} 张 · 第 {{page}}/{{totalPages}} 页</view>
   <view wx:if="{{items.length}}" class="gallery-grid">
     <view wx:for="{{items}}" wx:key="_id" class="pair-card">
@@ -68,6 +74,7 @@
     >{{item}}</view>
     <view class="pager-btn {{page === totalPages ? 'pager-btn--disabled' : ''}}" data-page="{{page + 1}}" bindtap="goPage">下一页</view>
   </view>
+  </block>
 
   <guide-tip
     show="{{guideShow}}"

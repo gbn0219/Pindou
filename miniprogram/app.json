@@ -55,6 +55,12 @@
         "selectedIconPath": "images/tabbar/home-active.png"
       },
       {
+        "pagePath": "page/gallery/index",
+        "text": "我的图库",
+        "iconPath": "images/tabbar/gallery.png",
+        "selectedIconPath": "images/tabbar/gallery-active.png"
+      },
+      {
         "pagePath": "page/profile/index",
         "text": "个人中心",
         "iconPath": "images/tabbar/user.png",

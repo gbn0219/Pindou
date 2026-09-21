@@ -12,20 +12,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-lg);
+  padding: var(--space-lg) var(--space-lg) calc(var(--space-tabbar) + env(safe-area-inset-bottom));
   animation: gm-fade-in 160ms var(--ease-out);
 }
 .gm-card {
   width: 100%;
   max-width: 640rpx;
-  max-height: 80vh;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--color-card);
-  border: 2rpx solid var(--color-rule);
+  border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
-  box-shadow: 0 24rpx 64rpx -24rpx var(--color-shadow);
-  padding: var(--space-md);
+  box-shadow: 8rpx 8rpx 0 var(--color-cast);
+  padding: var(--space-sm);
   animation: gm-pop-in 260ms var(--ease-bounce);
   transform-origin: center;
 }
@@ -56,13 +56,13 @@
 .gm-scroll {
   flex: 1;
   min-height: 0;
-  margin-top: var(--space-sm);
+  margin-top: var(--space-xs);
 }
 .gm-item {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-sm) 0;
+  padding: var(--space-xs) 0;
   border-bottom: 2rpx solid var(--color-rule);
   animation: gm-item-in 300ms var(--ease-out) both;
 }
@@ -104,8 +104,8 @@
   line-height: 1.5;
 }
 .gm-flow {
-  margin-top: var(--space-sm);
-  padding: var(--space-sm);
+  margin-top: var(--space-xs);
+  padding: var(--space-xs);
   background: var(--color-paper-2);
   border-radius: var(--radius-input);
 }
@@ -142,5 +142,5 @@
 }
 .gm-start {
   flex: none;
-  margin-top: var(--space-sm);
+  margin-top: var(--space-xs);
 }

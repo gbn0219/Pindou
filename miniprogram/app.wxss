@@ -1,4 +1,4 @@
 /* 全局基础样式：页面级设计令牌见 miniprogram/styles/tokens.wxss（由各页面 @import） */
 page {
-  background-color: #f7f5ec;
+  background-color: #c4d3fe;
 }

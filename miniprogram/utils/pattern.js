@@ -15,14 +15,13 @@ const EXPORT_MAX_DIM = 2048 // 导出画布最大边长（含底部色号清单�
 const EXPORT_COORD = 16 // 导出图四周坐标边距 px（与导出格同宽，坐标格像网格的延伸）
 const COORD_COLOR = '#8a919c' // 排号/列号颜色（细字，避免挤压）
 const BG_GRID_COLOR = '#e2e4e8' // 背景格浅灰格线（无色号格仍显示格子）
-const RULER_SIZE = 34 // 坐标轴条宽高 px（屏幕空间，固定画布四周，缩放/拖动不跳动）
-const RULER_MAX_LABELS = 12 // 坐标轴每轴最多标签数（显示密度基准）
-const RULER_STEPS = [1, 2, 5, 10, 20, 50, 100, 200] // 显示密度档位（每 N 格一个标签）
-const RULER_BG = '#e8e9ec' // 坐标条灰色背景
-const RULER_LINE = '#aab0b8' // 坐标条分隔线/边框色（清晰可见）
-const RULER_TEXT = '#3f4750' // 坐标条文字色
-const RULER_BG_VIEW = '#f3f0e8' // 交互页坐标条背景（暖米色，与纸张观感一致）
-const RULER_LINE_VIEW = '#cfc9bc' // 交互页坐标条边框（暖灰细线）
+const RULER_SIZE = 34 // 坐标条参考厚度 px（导出图用）
+const RULER_FONT_MIN = 4 // 编号环字号下限 px：缩到每格只剩几像素也逐格标号，不做合并
+const RULER_FONT_MAX = 30 // 编号环字号上限 px
+const RULER_DIVIDER_MIN = 6 // 每格屏幕边长小于该值时不画编号格格线（避免缩小时灰带糊成一片）
+const RULER_BG = '#e8e9ec' // 编号环灰色格背景
+const RULER_LINE = '#aab0b8' // 编号格格线/边框色（清晰可见）
+const RULER_TEXT = '#3f4750' // 编号环文字色
 const WHITE_RGB_MIN = 230 // 判定为"白色系"的 RGB 下限（H1 纯白、H2 近白、奶油白等）
 
 // 底部色号清单布局（导出图）
@@ -540,60 +539,81 @@ function renderCoordinates(ctx, size, cellSize, gap, coord, opts) {
 }
 
 /**
- * 坐标轴显示密度：可见格数越多间隔越大，保证每轴标签不超过 RULER_MAX_LABELS。
+ * 初始视图：图纸 + 四周各一圈编号格正好铺满给定宽度（编号环厚一格，随缩放变化）。
+ * 返回 { scale, ox, oy }，ox/oy 让图纸从编号环内侧开始。
  */
-function rulerStep(visibleCount) {
-  const raw = Math.ceil((visibleCount || 1) / RULER_MAX_LABELS)
-  for (const s of RULER_STEPS) if (s >= raw) return s
-  return 500
+function rulerFitView(total, cellPx, gap, areaW) {
+  const pitch = (cellPx || CELL) + (gap || 0)
+  const scale = Math.max(0.05, areaW / (total + pitch * 2))
+  return { scale, ox: pitch * scale, oy: pitch * scale }
 }
 
 /**
- * 在画布四周绘制固定坐标轴（屏幕空间，不随内容缩放/移动）。
- * 固定厚度的暖米色坐标条 + 1px 细边框，只标编号（密度自适应），无格框，缩放/拖动时视觉稳定。
+ * 画布四周的行列号环（屏幕空间，跟拼全屏用）：四边各贴一条与图纸格同尺寸的编号格带，
+ * 浅灰底、逐格边框，格内写该行/该列的绝对序号（1..size）。
+ * 编号与所在格子对齐，随缩放/拖动实时反映当前可视行列；缩小时逐格显示、不做合并。
  */
 function renderRulers(ctx, view, size, cellPx, gap, areaW, areaH, dpr) {
   if (!view || !view.scale || !size || !cellPx) return
   const q = dpr || 1
-  const cell = cellPx + gap
-  const band = RULER_SIZE
-  const c0 = Math.max(0, Math.floor((0 - view.ox) / view.scale / cell))
-  const c1 = Math.min(size - 1, Math.floor((areaW - view.ox) / view.scale / cell))
-  const r0 = Math.max(0, Math.floor((0 - view.oy) / view.scale / cell))
-  const r1 = Math.min(size - 1, Math.floor((areaH - view.oy) / view.scale / cell))
-  const cStep = rulerStep(c1 - c0 + 1)
-  const rStep = rulerStep(r1 - r0 + 1)
-  const show = (i, step) => i === 0 || (i + 1) % step === 0
+  const stepPx = (cellPx + (gap || 0)) * view.scale // 一格在屏幕上的边长＝编号带厚度
+  if (!(stepPx > 0)) return
+  const band = stepPx
+  const font = Math.max(RULER_FONT_MIN, Math.min(RULER_FONT_MAX, Math.round(stepPx * 0.6)))
+  // 编号带盖住的可视格子区间（带子本身贴在这些格子上）
+  const c0 = Math.max(0, Math.floor((0 - view.ox) / stepPx))
+  const c1 = Math.min(size - 1, Math.floor((areaW - view.ox) / stepPx))
+  const r0 = Math.max(0, Math.floor((0 - view.oy) / stepPx))
+  const r1 = Math.min(size - 1, Math.floor((areaH - view.oy) / stepPx))
   ctx.save()
   ctx.setTransform(q, 0, 0, q, 0, 0)
-  // 四周暖米色坐标条（固定厚度）
-  ctx.fillStyle = RULER_BG_VIEW
+  // 四边编号带（固定贴住画布四边，压在图纸之上）
+  ctx.fillStyle = RULER_BG
   ctx.fillRect(0, 0, areaW, band)
   ctx.fillRect(0, areaH - band, areaW, band)
   ctx.fillRect(0, 0, band, areaH)
   ctx.fillRect(areaW - band, 0, band, areaH)
-  // 内容区边框：1px 暖灰细线，分隔坐标条与格子
-  ctx.strokeStyle = RULER_LINE_VIEW
-  ctx.lineWidth = 1
-  ctx.strokeRect(band + 0.5, band + 0.5, areaW - band * 2 - 1, areaH - band * 2 - 1)
-  // 编号（密度自适应，居中于对应格子；不做格框，缩放时更干净）
+  // 逐格边框（与图纸格子对齐）：缩到每格只剩几像素时省略，避免灰带糊成一片
+  if (stepPx >= RULER_DIVIDER_MIN) {
+    ctx.strokeStyle = RULER_LINE
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let c = c0; c <= c1 + 1; c++) {
+      const x = view.ox + c * stepPx + 0.5
+      if (x < band || x > areaW - band) continue
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, band)
+      ctx.moveTo(x, areaH - band)
+      ctx.lineTo(x, areaH)
+    }
+    for (let r = r0; r <= r1 + 1; r++) {
+      const y = view.oy + r * stepPx + 0.5
+      if (y < band || y > areaH - band) continue
+      ctx.moveTo(0, y)
+      ctx.lineTo(band, y)
+      ctx.moveTo(areaW - band, y)
+      ctx.lineTo(areaW, y)
+    }
+    ctx.stroke()
+  }
+  // 行列号：逐格标、不合并（哪怕一格只剩几像素）
   ctx.fillStyle = RULER_TEXT
-  ctx.font = '600 13px sans-serif'
+  ctx.font = '600 ' + font + 'px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (let c = c0; c <= c1; c++) {
-    if (!show(c, cStep)) continue
-    const x = view.ox + c * cell * view.scale + (cellPx * view.scale) / 2
+    const label = String(c + 1)
+    const x = view.ox + c * stepPx + band / 2
     if (x < band || x > areaW - band) continue
-    ctx.fillText(String(c + 1), x, band / 2)
-    ctx.fillText(String(c + 1), x, areaH - band / 2)
+    ctx.fillText(label, x, band / 2)
+    ctx.fillText(label, x, areaH - band / 2)
   }
   for (let r = r0; r <= r1; r++) {
-    if (!show(r, rStep)) continue
-    const y = view.oy + r * cell * view.scale + (cellPx * view.scale) / 2
+    const label = String(r + 1)
+    const y = view.oy + r * stepPx + band / 2
     if (y < band || y > areaH - band) continue
-    ctx.fillText(String(r + 1), band / 2, y)
-    ctx.fillText(String(r + 1), areaW - band / 2, y)
+    ctx.fillText(label, band / 2, y)
+    ctx.fillText(label, areaW - band / 2, y)
   }
   ctx.restore()
 }
@@ -945,11 +965,11 @@ module.exports = {
   renderGrid,
   renderGridView,
   visibleRange,
+  rulerFitView,
   renderLegend,
   renderExport,
   renderCoordinates,
   renderRulers,
-  rulerStep,
   layoutExport,
   mixWhite,
   cellEmphasis,

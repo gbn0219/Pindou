@@ -14,10 +14,10 @@
         <view class="handle handle--tr"></view>
         <view class="handle handle--bl"></view>
         <view class="handle handle--br"></view>
-        <view class="handle handle--l"></view>
-        <view class="handle handle--r"></view>
-        <view class="handle handle--t"></view>
-        <view class="handle handle--b"></view>
+        <view wx:if="{{edgesReady}}" class="handle handle--l"></view>
+        <view wx:if="{{edgesReady}}" class="handle handle--r"></view>
+        <view wx:if="{{edgesReady}}" class="handle handle--t"></view>
+        <view wx:if="{{edgesReady}}" class="handle handle--b"></view>
       </view>
     </view>
   </view>
@@ -29,7 +29,7 @@
     <view class="ratio-option {{ratio === '3:4' ? 'ratio-option--on' : ''}}" data-ratio="3:4" bindtap="onRatioTap">3:4</view>
     <view class="ratio-option {{ratio === 'free' ? 'ratio-option--on' : ''}}" data-ratio="free" bindtap="onRatioTap">自由</view>
   </view>
-  <view class="hint">拖动框内部移动，拖动四边或四角调整大小</view>
+  <view class="hint">{{hint}}</view>
     <view class="actions">
       <button class="btn btn--soft" hover-class="btn--pressed" bindtap="cancel">取消</button>
       <button class="btn btn--primary" hover-class="btn--pressed" bindtap="confirm">完成</button>

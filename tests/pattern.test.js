@@ -479,14 +479,6 @@ assert.strictEqual(pattern.layoutExport(one, { cellSize: 16, gap: 1 }).height, 1
 
 assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
 
-// ---- renderRulers 显示密度 ----
-{
-  assert.strictEqual(pattern.rulerStep(12), 1, '少量可见格每格都标')
-  assert.strictEqual(pattern.rulerStep(52), 5, '52 盘可见时每 5 格标一个')
-  assert.strictEqual(pattern.rulerStep(104), 10, '104 盘每 10 格标一个')
-  assert.strictEqual(pattern.rulerStep(208), 20, '208 盘每 20 格标一个')
-}
-
 // ---- serializeGrid / parseGrid（图库 grid 存储） ----
 {
   const g = [
@@ -714,4 +706,77 @@ assert.ok(pattern.EXPORT_MAX_DIM > 0, '应暴露导出最大边长常量')
   )
 }
 
+// renderRulers：画布四周固定坐标条（屏幕空间）——不随缩放/拖动移动，字号随放大变大
+// renderRulers：跟拼四周行列号环（屏幕空间）——厚一格、逐格标号、缩小时不合并
+{
+  function mockCtx() {
+    const calls = []
+    return {
+      calls,
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+      save() {},
+      restore() {},
+      setTransform() {},
+      fillRect(x, y, w, h) { calls.push({ op: 'fill', x, y, w, h }) },
+      beginPath() {},
+      moveTo(x, y) { calls.push({ op: 'line', x, y }) },
+      lineTo(x, y) { calls.push({ op: 'line', x, y }) },
+      stroke() {},
+      fillText(label, x, y) { calls.push({ op: 'text', label, x, y }) }
+    }
+  }
+  const size = 4
+  const cell = 20
+  const gap = 1
+  const step = cell + gap
+  const total = size * step - gap
+  const AW = 200
+  // 初始视图：图纸 + 四周各一圈编号格正好铺满画布宽度，编号环厚一格
+  const fit = pattern.rulerFitView(total, cell, gap, AW)
+  assert.ok(Math.abs(fit.ox - step * fit.scale) < 1e-9, '图纸起点应在编号环内侧（环厚一格）')
+  assert.ok(Math.abs((total + step * 2) * fit.scale - AW) < 1e-6, '图纸 + 一圈编号格应正好铺满画布宽度')
+  // 铺满视图下：四边各 4 个编号格，逐格标号
+  const ctx1 = mockCtx()
+  const view1 = { scale: fit.scale, ox: fit.ox, oy: fit.oy }
+  pattern.renderRulers(ctx1, view1, size, cell, gap, AW, AW, 1)
+  const bands = ctx1.calls.filter((c) => c.op === 'fill')
+  assert.strictEqual(bands.length, 4, '应固定绘制四边编号带')
+  assert.strictEqual(bands[0].w, AW, '上边编号带应横跨整个画布')
+  assert.strictEqual(bands[0].h, step * fit.scale, '编号带厚度应等于一格（与图纸格同尺寸）')
+  let texts = ctx1.calls.filter((c) => c.op === 'text')
+  assert.strictEqual(texts.length, 16, '铺满视图下每行每列都逐格标号（上下各 4 + 左右各 4）')
+  texts.forEach((t) => {
+    const inTopBottom = t.y < step || t.y > AW - step
+    const inLeftRight = t.x < step || t.x > AW - step
+    assert.ok(inTopBottom !== inLeftRight, '每个编号只应落在一条编号带上（四角留空）')
+  })
+  // 平移到第 3~4 列可见：只标当前可视行列，编号即绝对行号/列号
+  const ctx2 = mockCtx()
+  pattern.renderRulers(ctx2, { scale: 1, ox: step - 2 * step, oy: step }, size, cell, gap, AW, AW, 1)
+  const top = ctx2.calls.filter((c) => c.op === 'text' && Math.abs(c.y - step / 2) < 1e-9)
+  assert.deepStrictEqual(top.map((t) => t.label), ['3', '4'], '平移后上下带的列号应是被带子盖住的第 3~4 列')
+  // 缩到每格只剩几像素：仍逐格标号（不合并），且不再画格线避免糊成一片
+  const ctx3 = mockCtx()
+  pattern.renderRulers(ctx3, { scale: 0.05, ox: 50, oy: 50 }, size, cell, gap, AW, AW, 1)
+  const tiny = ctx3.calls.filter((c) => c.op === 'text')
+  assert.strictEqual(tiny.length, 16, '每格只剩几像素时仍逐格标号，不做合并')
+  assert.deepStrictEqual(tiny.filter((t) => t.y < 1).map((t) => t.label), ['1', '2', '3', '4'], '极小缩放下上边仍标全部列号')
+  assert.deepStrictEqual(tiny.filter((t) => t.x < 1).map((t) => t.label), ['1', '2', '3', '4'], '极小缩放下左边仍标全部行号')
+  assert.strictEqual(ctx3.calls.filter((c) => c.op === 'line').length, 0, '每格不足 RULER_DIVIDER_MIN 像素时不画编号格格线')
+  // 固定性：编号带贴住画布四边，内容平移不改变带子位置
+  const bands1 = ctx2.calls.filter((c) => c.op === 'fill')
+  const ctx4 = mockCtx()
+  pattern.renderRulers(ctx4, { scale: 1, ox: -30, oy: -30 }, size, cell, gap, AW, AW, 1)
+  assert.deepStrictEqual(ctx4.calls.filter((c) => c.op === 'fill'), bands1, '内容平移不影响编号带')
+  // 网格完全移出屏幕：编号带仍固定，无编号
+  const ctx5 = mockCtx()
+  pattern.renderRulers(ctx5, { scale: 1, ox: -10000, oy: -10000 }, size, cell, gap, AW, AW, 1)
+  assert.strictEqual(ctx5.calls.filter((c) => c.op === 'text').length, 0, '网格在屏幕外时无编号')
+  assert.strictEqual(ctx5.calls.filter((c) => c.op === 'fill').length, 4, '网格在屏幕外时编号带仍固定显示')
+}
 console.log('pattern.test.js 全部通过 ✓')

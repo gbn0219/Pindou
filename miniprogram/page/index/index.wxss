@@ -24,29 +24,37 @@ page {
 }
 
 .page {
-  min-height: 100vh;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(140deg, #e6c4fe 0%, #c4d3fe 34%, #a8e6ff 68%, #d2c4fe 100%) !important;
-  padding: var(--space-xl) var(--space-md) calc(100rpx + env(safe-area-inset-bottom) + var(--space-lg));
+  padding: var(--space-xl) var(--space-md) calc(var(--space-tabbar) + env(safe-area-inset-bottom));
 }
 
 .hero {
-  position: relative;
-  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-md)) var(--space-lg);
+  flex: none;
+  margin: calc(-1 * var(--space-xl)) calc(-1 * var(--space-md)) var(--space-md); /* 负边距 = 页面顶部留白 → 顶部与屏幕对齐（不再画深色横条） */
   padding: var(--space-lg) var(--space-md);
-  background: #12171b;
-  border-bottom: 5rpx solid #12171b;
+}
+/* 玻璃流光动画（选中态控件共用同一节奏） */
+@keyframes glass-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 .hero-title {
   font-family: var(--font-display);
-  font-size: 64rpx;
+  font-size: 52rpx;
   font-weight: 700;
   letter-spacing: -0.025em;
-  color: #e6c4fe;
+  color: #12171b;
 }
 .hero-sub {
   margin-top: var(--space-2xs);
   font-size: var(--text-sm);
-  color: rgba(255, 255, 255, 0.76);
+  color: rgba(18, 23, 27, 0.68);
 }
 .card {
   background: #ffffff;
@@ -59,7 +67,9 @@ page {
 }
 
 .import-card {
-  min-height: 320rpx;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: var(--space-sm);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -83,7 +93,8 @@ page {
   align-items: center;
   justify-content: center;
   gap: 20rpx;
-  min-height: 184rpx;
+  min-height: 0;
+  overflow: hidden;
   width: 100%;
 }
 .import-mark .mark-frame { width: 96rpx; height: 84rpx; position: relative; flex: none; }
@@ -114,7 +125,7 @@ page {
 .import-mark .mark-cell--on { background: #c4d3fe; }
 .import-title {
   margin-top: var(--space-md);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-ink);
 }
@@ -125,7 +136,8 @@ page {
 }
 .import-img {
   width: 100%;
-  height: 420rpx;
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: var(--radius-input);
 }
 .import-again {
@@ -135,15 +147,16 @@ page {
 }
 
 .mode-list {
-  margin-bottom: var(--space-md);
+  flex: none;
+  margin-bottom: var(--space-xs);
 }
 .mode-card {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   width: 100%;
-  padding: var(--space-sm);
-  margin-bottom: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-xs);
   background: #ffffff;
   border: 5rpx solid #12171b;
   border-radius: var(--radius-card);
@@ -155,31 +168,27 @@ page {
   transform: translateY(2rpx) scale(0.985);
 }
 .mode-card--on {
-  background: #12171b;
-  color: #ffffff;
+  /* 浅色磨砂玻璃（方案二）：选中态不再纯黑 */
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
+  color: #12171b;
 }
 .mode-icon {
   flex: none;
-  width: 76rpx;
-  height: 76rpx;
+  width: 68rpx;
+  height: 68rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4rpx solid #12171b;
-  border-radius: 18rpx;
-  background: transparent;
-  font-size: 36rpx;
-}
-.mode-card--on .mode-icon {
-  background: transparent;
-  border-color: #d2c4fe;
+  font-size: 32rpx;
 }
 .mode-text {
   min-width: 0;
   flex: 1;
 }
 .mode-title {
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: 1.25;
   color: #12171b;
@@ -190,20 +199,20 @@ page {
   color: rgba(18, 23, 27, 0.68);
 }
 .mode-card--on .mode-title {
-  color: #ffffff;
+  color: #12171b;
 }
 .mode-card--on .mode-desc {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(18, 23, 27, 0.68);
 }
 .mode-arrow {
   flex: none;
-  font-size: 48rpx;
+  font-size: 40rpx;
   line-height: 1;
   color: rgba(18, 23, 27, 0.68);
   padding-left: var(--space-xs);
 }
 .mode-card--on .mode-arrow {
-  color: #e6c4fe;
+  color: rgba(18, 23, 27, 0.68);
 }
 
 .section-title {
@@ -229,9 +238,12 @@ page {
   transition: background-color var(--dur-short) var(--ease-out), color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
 }
 .chip--on {
-  background: #12171b;
+  /* 浅色磨砂玻璃：选中 chip 不再纯黑 */
+  background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(219, 209, 255, 0.78) 24%, rgba(181, 226, 255, 0.72) 50%, rgba(228, 206, 255, 0.78) 76%, rgba(255, 255, 255, 0.85) 100%);
+  background-size: 300% 300%;
+  animation: glass-flow 8s ease-in-out infinite;
   border-color: #12171b;
-  color: #d2c4fe;
+  color: #12171b;
   font-weight: 600;
 }
 .chip--pressed {
@@ -239,7 +251,9 @@ page {
 }
 
 .generate {
-  margin-top: var(--space-lg);
+  flex: none;
+  margin-top: var(--space-sm);
+  font-size: var(--text-base); /* 主页大按钮字号整体降一号 */
 }
 .progress-card {
   background: #ffffff;
@@ -265,22 +279,6 @@ page {
   background: #ddd9ea !important;
   border-color: rgba(18, 23, 27, 0.32) !important;
   color: rgba(18, 23, 27, 0.42) !important;
-  box-shadow: none !important;
-}
-.btn--scan {
-  background: #12171b !important;
-  color: #ffffff !important;
-  border: 5rpx solid #12171b !important;
-  border-radius: 20rpx !important;
-  box-shadow: 8rpx 8rpx 0 rgba(18, 23, 27, 0.42) !important;
-}
-.btn--scan.btn--pressed {
-  transform: translateY(3rpx) scale(0.95);
-  box-shadow: 2rpx 2rpx 0 rgba(18, 23, 27, 0.42) !important;
-}
-.btn--scan[disabled] {
-  background: rgba(18, 23, 27, 0.28) !important;
-  color: rgba(255, 255, 255, 0.72) !important;
   box-shadow: none !important;
 }
 
@@ -337,7 +335,7 @@ page {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.72);
   border: 3rpx solid #12171b;
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: 600;
   color: #12171b;
   transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out);
@@ -364,7 +362,8 @@ page {
 
 /* ---- 创意生成选项弹层（甜度选择式底部弹层）---- */
 .ai-summary {
-  margin-top: var(--space-sm);
+  flex: none;
+  margin-top: var(--space-xs);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -406,7 +405,8 @@ page {
   line-height: 1;
 }
 .scan-summary {
-  margin-top: var(--space-sm);
+  flex: none;
+  margin-top: var(--space-xs);
   padding: 22rpx 26rpx;
   background: #ffffff;
   border: 5rpx solid #12171b;
@@ -482,7 +482,7 @@ page {
   padding: var(--space-sm) 0 var(--space-xs);
 }
 .ai-sheet-title {
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: 700;
   color: #12171b;
 }
@@ -501,4 +501,10 @@ page {
 .ai-sheet-done {
   flex: none;
   margin-top: var(--space-sm);
+}
+
+/* 矮屏兜底（可视高 ≤660px，如 iPhone SE/8）：一屏放不下时插图让位，保证文字与按钮完整 */
+@media (max-height: 660px) {
+  .import-mark { display: none; }
+  .mode-card { padding: var(--space-2xs) var(--space-sm); }
 }

@@ -11,6 +11,7 @@ Component({
     selectedColor: '#12171b',
     list: [
       { pagePath: '/page/index/index', text: '首页', iconPath: '/images/tabbar/home.png', selectedIconPath: '/images/tabbar/home-active.png' },
+      { pagePath: '/page/gallery/index', text: '我的图库', iconPath: '/images/tabbar/gallery.png', selectedIconPath: '/images/tabbar/gallery-active.png' },
       { pagePath: '/page/profile/index', text: '个人中心', iconPath: '/images/tabbar/user.png', selectedIconPath: '/images/tabbar/user-active.png' }
     ]
   },
